@@ -13,156 +13,44 @@
 
 - **Language:** TypeScript (strict mode)
 - **Runtime:** Node.js
+- **Package manager:** pnpm
 - **TUI framework:** Ink (React-based terminal UI)
-- **Build tool:** tsup (fast, zero-config bundler)
+- **Build tool:** tsup (esbuild-based bundler)
+- **Test runner:** Vitest
 - **Config format:** YAML
 - **Session storage:** JSON files on disk
+- **Distribution:** Node SEA standalone binary → Homebrew
 
-## Architecture Overview
+## Goals
 
-```
-┌──────────────────────────────────────────────┐
-│                  Ink TUI Layer                │
-│  (input, message display, status bar, menus) │
-└──────────────┬───────────────────────────────┘
-               │
-┌──────────────▼───────────────────────────────┐
-│              Core Engine                      │
-│  ┌─────────────┐  ┌──────────────────────┐   │
-│  │ Conversation │  │   Slash Command      │   │
-│  │ Manager      │  │   Router             │   │
-│  └──────┬──────┘  └──────────────────────┘   │
-│         │                                     │
-│  ┌──────▼──────┐  ┌──────────────────────┐   │
-│  │  Provider    │  │   Tool Registry      │   │
-│  │  Client      │  │   & Dispatcher       │   │
-│  └─────────────┘  └──────────────────────┘   │
-│                                               │
-│  ┌─────────────┐  ┌──────────────────────┐   │
-│  │  Config      │  │   Session            │   │
-│  │  Loader      │  │   Store              │   │
-│  └─────────────┘  └──────────────────────┘   │
-└──────────────────────────────────────────────┘
-               │                 │
-     ┌─────────▼──┐    ┌────────▼─────────┐
-     │   Ollama /  │    │  Tool Handlers   │
-     │   LLM API   │    │  (search, exec)  │
-     └────────────┘    └──────────────────┘
-```
+### Chat with local LLMs
 
-## Config Structure
+Connect to Ollama or any OpenAI-compatible endpoint. Stream responses token-by-token. Extract and display thinking text (e.g. `<think>` tags from Qwen3/DeepSeek R1) separately from the main response. Render markdown in the terminal (code blocks with syntax highlighting, inline formatting, lists, headings).
 
-### Global config: `~/.tomo/config.yaml`
+### Session persistence
 
-```yaml
-defaultProvider: local-ollama
+Save conversations to disk as JSON. Resume previous sessions. Support slash commands for session management (`/new`, `/sessions`, `/rename`). Handle context window limits by truncating oldest messages from the request while preserving the full history on disk.
 
-providers:
-  local-ollama:
-    endpoint: http://localhost:11434/v1
-    defaultModel: qwen3-coder:30b
+### Multiple providers and models
 
-  llama-cpp:
-    endpoint: http://localhost:8080/v1
-    defaultModel: default
+Configure multiple named providers in YAML. Switch between providers and models at runtime via `/use`. Query available models from the provider's `/v1/models` endpoint. Display active provider and model in a status bar.
 
-tools:
-  exec:
-    timeout: 30000
-    allowlist: []
-    denylist: []
+### Pluggable tool system
 
-thinking:
-  # default parser for models that emit <think> tags
-  parser: think-tags
-```
+Tool registry maps tool names to OpenAI function schemas and async handlers. Provider client includes tool definitions in requests. Full tool-calling loop: model requests a tool call → dispatch to handler → return result → model synthesises final response. Multiple sequential tool calls per turn.
 
-### Local override: `./.tomo/config.yaml`
+### Web search
 
-Merges on top of global config. Useful for per-project model or tool settings.
+Hit `lite.duckduckgo.com` via HTTP, parse HTML to extract results (title, URL, snippet). No API keys. Registered as a `web_search` tool in the registry.
 
-### Session files: `~/.tomo/sessions/<id>.json`
+### CLI command execution
 
-```json
-{
-  "id": "a1b2c3d4",
-  "name": null,
-  "createdAt": "2026-03-18T10:00:00Z",
-  "updatedAt": "2026-03-18T10:05:00Z",
-  "provider": "local-ollama",
-  "model": "qwen3-coder:30b",
-  "messages": [
-    { "role": "user", "content": "hello" },
-    { "role": "assistant", "content": "Hi! How can I help?" }
-  ]
-}
-```
+Guarded `run_command` tool with an approval prompt before execution. Configurable timeout (default 30s). Output truncation for long results. Allowlist/denylist for auto-approve/auto-reject by command prefix.
 
-## Thinking Text Handling
+### Config
 
-Not standardised across models. Tomo uses a configurable parser approach:
+Global config at `~/.tomo/config.yaml`, local overrides at `./.tomo/config.yaml`. YAML format. Validated against a schema with clear error messages. Default config created on first run.
 
-| Model Family | Thinking Format                             | Parser       |
-| ------------ | ------------------------------------------- | ------------ |
-| Qwen3        | `<think>...</think>` tags in content stream | `think-tags` |
-| DeepSeek R1  | `<think>...</think>` tags in content stream | `think-tags` |
-| Most others  | No dedicated thinking output                | `none`       |
+### Distribution
 
-The `think-tags` parser splits the streamed content in real-time, routing text inside `<think>` tags to a separate "thinking" display area (dimmed/italic) and everything else to the main response area.
-
-## Tool Calling Flow
-
-```
-User sends message
-        │
-        ▼
-Provider receives messages + tool definitions
-        │
-        ▼
-Model responds ─── normal content ──► render to UI
-   │
-   └── tool_calls array
-        │
-        ▼
-Tool dispatcher resolves handler
-        │
-        ▼
-[If exec tool] ──► Show approval prompt ──► User approves/rejects
-        │
-        ▼
-Execute handler, capture result
-        │
-        ▼
-Append tool_call message + tool result to history
-        │
-        ▼
-Re-send to provider for model to synthesise final response
-```
-
-## DuckDuckGo Search Approach
-
-Hit `lite.duckduckgo.com` via HTTP, parse the HTML response to extract search results. No API keys, no third-party search providers. Returns structured results (title, URL, snippet) to the model as tool content.
-
----
-
-## Work Breakdown
-
-Six epics, ordered by dependency. Each epic has its own detailed spec:
-
-| Epic | Name                                                        | Dependencies |
-| ---- | ----------------------------------------------------------- | ------------ |
-| 1    | [Project Scaffolding & Basic Chat](./epic-01-scaffolding.md) | —            |
-| 2    | [Session Management & Chat History](./epic-02-sessions.md)   | Epic 1       |
-| 3    | [Provider & Model Configuration](./epic-03-providers.md)     | Epic 2       |
-| 4    | [Tool System](./epic-04-tool-system.md)                      | Epic 1       |
-| 5    | [Web Search Tool](./epic-05-web-search.md)                   | Epic 4       |
-| 6    | [CLI Command Execution](./epic-06-cli-execution.md)          | Epic 4       |
-
-```
-Epic 1 ──► Epic 2 ──► Epic 3
-  │
-  └──────► Epic 4 ──► Epic 5
-                 └──► Epic 6
-```
-
-Epics 2/3 and 4/5/6 can be worked in parallel once Epic 1 is complete.
+Standalone binary via Node SEA (no Node.js required on target). GitHub release automation with checksums. Homebrew formula for `brew install`. npm package as a fallback install method.
