@@ -3,9 +3,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "build": "tsup",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }
