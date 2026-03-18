@@ -2,8 +2,12 @@
   "name": "tomo",
   "version": "0.0.0",
   "type": "module",
+  "bin": {
+    "tomo": "dist/tomo.js"
+  },
   "scripts": {
     "build": "tsup",
+    "dev": "tsx src/index.tsx",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
@@ -14,8 +18,11 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",
+    "@types/react": "^19.2.14",
+    "ink-testing-library": "^4.0.0",
     "lefthook": "^2.1.4",
     "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   },
@@ -24,5 +31,9 @@
       "esbuild",
       "lefthook"
     ]
+  },
+  "dependencies": {
+    "ink": "^6.8.0",
+    "react": "^19.2.4"
   }
 }
