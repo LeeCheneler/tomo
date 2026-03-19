@@ -1,5 +1,9 @@
+import { createRequire } from "module";
 import { useRef, useState } from "react";
 import { Box, Text } from "ink";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
 import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
 import type { DisplayMessage } from "./components/message-list";
@@ -95,7 +99,7 @@ export function App() {
         <Text dimColor> — your local AI companion</Text>
       </Text>
       <Text> </Text>
-      <Text dimColor>{"  v0.0.0"}</Text>
+      <Text dimColor>{`  v${version}`}</Text>
       <Text> </Text>
 
       <MessageList messages={messages} />
