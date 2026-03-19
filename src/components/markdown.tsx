@@ -85,8 +85,23 @@ interface MarkdownProps {
   children: string;
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+};
+
+function unescapeHtml(text: string): string {
+  return text.replace(
+    /&(?:amp|lt|gt|quot|#39);/g,
+    (match) => HTML_ENTITIES[match],
+  );
+}
+
 export function Markdown({ children }: MarkdownProps) {
   const rendered = md.parse(children, { async: false }) as string;
-  const trimmed = rendered.replace(/\n+$/, "");
+  const trimmed = unescapeHtml(rendered.replace(/\n+$/, ""));
   return <Text>{trimmed}</Text>;
 }
