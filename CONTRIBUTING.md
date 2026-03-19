@@ -51,3 +51,15 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `style`
 ## Pre-commit Hooks
 
 Lefthook runs lint, format check, and typecheck on every commit. These are installed automatically via the `prepare` script when you run `pnpm install`.
+
+## Architecture Decision Records
+
+Significant technical decisions are recorded as ADRs in `docs/adr/`. We use [adr-tools](https://github.com/npryce/adr-tools) to manage them.
+
+To create a new ADR:
+
+```bash
+adr new "Title of decision"
+```
+
+This creates a numbered markdown file in `docs/adr/` with the standard template. Fill in the Context, Decision, and Consequences sections.
