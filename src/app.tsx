@@ -8,6 +8,12 @@ import { env } from "./env";
 import type { ChatMessage } from "./provider/client";
 import { streamChatCompletion } from "./provider/client";
 
+const LOGO = `
+ ╔╦╗╔═╗╔╦╗╔═╗
+  ║ ║ ║║║║║ ║
+  ╩ ╚═╝╩ ╩╚═╝
+`;
+
 const BASE_URL = env.getOptional("TOMO_BASE_URL") ?? "http://localhost:11434";
 const MODEL = env.getOptional("TOMO_MODEL") ?? "qwen3:8b";
 
@@ -79,7 +85,7 @@ export function App() {
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text color="cyan" bold>
-        {" ╔╦╗╔═╗╔╦╗╔═╗\n  ║ ║ ║║║║║ ║\n  ╩ ╚═╝╩ ╩╚═╝"}
+        {LOGO}
       </Text>
       <Text> </Text>
       <Text>
