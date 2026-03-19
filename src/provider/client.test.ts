@@ -149,34 +149,6 @@ describe("streamChatCompletion", () => {
     expect(tokens).toEqual(["Hi"]);
   });
 
-  it("yields reasoning_content wrapped in think tags", async () => {
-    const reasoningChunk = JSON.stringify({
-      id: "1",
-      object: "chat.completion.chunk",
-      created: 1,
-      model: "test",
-      choices: [
-        {
-          index: 0,
-          delta: { reasoning_content: "thinking..." },
-          finish_reason: null,
-        },
-      ],
-    });
-    vi.mocked(fetch).mockResolvedValue(
-      createSSEResponse([
-        `data: ${reasoningChunk}\n\ndata: ${makeChunk("answer")}\n\ndata: [DONE]\n\n`,
-      ]),
-    );
-
-    const tokens: string[] = [];
-    for await (const token of streamChatCompletion(defaultOptions)) {
-      tokens.push(token);
-    }
-
-    expect(tokens).toEqual(["<think>thinking...</think>", "answer"]);
-  });
-
   it("passes abort signal to fetch", async () => {
     const controller = new AbortController();
     controller.abort();

@@ -7,7 +7,6 @@ import { MessageList } from "./components/message-list";
 import { env } from "./env";
 import type { ChatMessage } from "./provider/client";
 import { streamChatCompletion } from "./provider/client";
-import { extractThinking } from "./provider/thinking";
 
 const BASE_URL = env.getOptional("TOMO_BASE_URL") ?? "http://localhost:11434";
 const MODEL = env.getOptional("TOMO_MODEL") ?? "qwen3:8b";
@@ -15,7 +14,6 @@ const MODEL = env.getOptional("TOMO_MODEL") ?? "qwen3:8b";
 export function App() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
-  const [streamingThinking, setStreamingThinking] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -29,7 +27,6 @@ export function App() {
 
     setMessages((prev) => [...prev, userMsg]);
     setStreaming(true);
-    setStreamingThinking("");
     setStreamingContent("");
     setError(null);
 
@@ -41,25 +38,17 @@ export function App() {
       { role: "user" as const, content: text },
     ];
 
-    let thinking = "";
     let content = "";
 
     try {
-      const tokens = streamChatCompletion({
+      for await (const token of streamChatCompletion({
         baseUrl: BASE_URL,
         model: MODEL,
         messages: chatMessages,
         signal: controller.signal,
-      });
-
-      for await (const chunk of extractThinking(tokens)) {
-        if (chunk.type === "thinking") {
-          thinking += chunk.text;
-          setStreamingThinking(thinking);
-        } else {
-          content += chunk.text;
-          setStreamingContent(content);
-        }
+      })) {
+        content += token;
+        setStreamingContent(content);
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -69,18 +58,16 @@ export function App() {
       }
     }
 
-    if (thinking || content) {
+    if (content) {
       const assistantMsg: DisplayMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
         content,
-        thinking: thinking || undefined,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     }
 
     setStreaming(false);
-    setStreamingThinking("");
     setStreamingContent("");
     abortRef.current = null;
   };
@@ -107,10 +94,8 @@ export function App() {
 
       <MessageList messages={messages} />
 
-      {streaming && (streamingThinking || streamingContent) ? (
-        <AssistantMessage thinking={streamingThinking}>
-          {streamingContent}
-        </AssistantMessage>
+      {streaming && streamingContent ? (
+        <AssistantMessage>{streamingContent}</AssistantMessage>
       ) : null}
 
       {error ? <Text color="red">{`Error: ${error}`}</Text> : null}

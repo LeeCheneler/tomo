@@ -42,7 +42,7 @@ const md = new Marked({
       return `${body}\n\n`;
     },
     listitem({ tokens }) {
-      return this.parser.parseInline(tokens);
+      return this.parser.parse(tokens).replace(/\n+$/, "");
     },
     hr() {
       return `${chalk.dim("─".repeat(40))}\n\n`;

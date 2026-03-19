@@ -54,12 +54,7 @@ export async function* streamChatCompletion(
   for await (const data of parseSSEStream(response.body)) {
     try {
       const chunk = JSON.parse(data);
-      const delta = chunk.choices?.[0]?.delta;
-      const reasoning = delta?.reasoning_content;
-      if (reasoning) {
-        yield `<think>${reasoning}</think>`;
-      }
-      const content = delta?.content;
+      const content = chunk.choices?.[0]?.delta?.content;
       if (content) {
         yield content;
       }
