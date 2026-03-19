@@ -7,10 +7,8 @@ export default defineConfig({
   platform: "node",
   bundle: true,
   noExternal: [/.*/],
+  splitting: false,
   banner: {
     js: 'import { createRequire } from "module"; const require = createRequire(import.meta.url);',
-  },
-  esbuildOptions(options) {
-    options.external = ["react-devtools-core"];
   },
 });
