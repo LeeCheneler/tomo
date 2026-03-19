@@ -1,0 +1,84 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+template: |
+  ## What Changed
+
+  $CHANGES
+
+categories:
+  - title: "Breaking Changes"
+    labels:
+      - breaking
+  - title: "Features"
+    labels:
+      - feature
+  - title: "Bug Fixes"
+    labels:
+      - fix
+  - title: "Documentation"
+    labels:
+      - docs
+  - title: "Maintenance"
+    labels:
+      - chore
+      - refactor
+      - perf
+      - test
+      - ci
+      - build
+      - style
+
+version-resolver:
+  major:
+    labels:
+      - breaking
+  minor:
+    labels:
+      - feature
+  patch:
+    labels:
+      - fix
+      - chore
+      - docs
+      - refactor
+      - perf
+      - test
+      - ci
+      - build
+      - style
+  default: patch
+
+autolabeler:
+  - label: breaking
+    title:
+      - "/^.+!:/"
+  - label: feature
+    title:
+      - "/^feat(\\(.+\\))?:/"
+  - label: fix
+    title:
+      - "/^fix(\\(.+\\))?:/"
+  - label: docs
+    title:
+      - "/^docs(\\(.+\\))?:/"
+  - label: chore
+    title:
+      - "/^chore(\\(.+\\))?:/"
+  - label: refactor
+    title:
+      - "/^refactor(\\(.+\\))?:/"
+  - label: perf
+    title:
+      - "/^perf(\\(.+\\))?:/"
+  - label: test
+    title:
+      - "/^test(\\(.+\\))?:/"
+  - label: ci
+    title:
+      - "/^ci(\\(.+\\))?:/"
+  - label: build
+    title:
+      - "/^build(\\(.+\\))?:/"
+  - label: style
+    title:
+      - "/^style(\\(.+\\))?:/"
