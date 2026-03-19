@@ -7,6 +7,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "build:sea": "bash scripts/build-sea.sh",
     "dev": "tsx src/index.tsx",
     "format": "biome format --write .",
     "format:check": "biome format .",
@@ -21,6 +22,7 @@
     "@types/react": "^19.2.14",
     "ink-testing-library": "^4.0.0",
     "lefthook": "^2.1.4",
+    "react-devtools-core": "^7.0.1",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
