@@ -23,24 +23,6 @@ describe("MessageList", () => {
     expect(output).toBe("");
   });
 
-  it("renders thinking text on assistant messages", () => {
-    const { lastFrame } = render(
-      <MessageList
-        messages={[
-          {
-            id: "1",
-            role: "assistant",
-            content: "42",
-            thinking: "Let me think...",
-          },
-        ]}
-      />,
-    );
-    const output = lastFrame() ?? "";
-    expect(output).toContain("Let me think...");
-    expect(output).toContain("42");
-  });
-
   it("renders multiple messages in order", () => {
     const { lastFrame } = render(
       <MessageList

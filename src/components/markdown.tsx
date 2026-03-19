@@ -42,7 +42,7 @@ const md = new Marked({
       return `${body}\n\n`;
     },
     listitem({ tokens }) {
-      return this.parser.parseInline(tokens);
+      return this.parser.parse(tokens).replace(/\n+$/, "");
     },
     hr() {
       return `${chalk.dim("─".repeat(40))}\n\n`;
@@ -85,8 +85,23 @@ interface MarkdownProps {
   children: string;
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+};
+
+function unescapeHtml(text: string): string {
+  return text.replace(
+    /&(?:amp|lt|gt|quot|#39);/g,
+    (match) => HTML_ENTITIES[match],
+  );
+}
+
 export function Markdown({ children }: MarkdownProps) {
   const rendered = md.parse(children, { async: false }) as string;
-  const trimmed = rendered.replace(/\n+$/, "");
+  const trimmed = unescapeHtml(rendered.replace(/\n+$/, ""));
   return <Text>{trimmed}</Text>;
 }

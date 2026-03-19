@@ -27,6 +27,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.4.8
         version: 2.4.8
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.5.0
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -1657,7 +1660,6 @@ snapshots:
   '@types/node@25.5.0':
     dependencies:
       undici-types: 7.18.2
-    optional: true
 
   '@types/react@19.2.14':
     dependencies:
@@ -2312,8 +2314,7 @@ snapshots:
 
   ufo@1.6.3: {}
 
-  undici-types@7.18.2:
-    optional: true
+  undici-types@7.18.2: {}
 
   vite@8.0.0(@types/node@25.5.0)(esbuild@0.27.4)(tsx@4.21.0):
     dependencies:

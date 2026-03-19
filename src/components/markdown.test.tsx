@@ -62,6 +62,17 @@ describe("Markdown", () => {
     expect(output).toBe("");
   });
 
+  it("unescapes HTML entities", () => {
+    const { lastFrame } = render(
+      <Markdown>{"I'm happy & you're \"great\" < >"}</Markdown>,
+    );
+    const output = lastFrame() ?? "";
+    expect(output).toContain("I'm happy & you're");
+    expect(output).not.toContain("&#39;");
+    expect(output).not.toContain("&amp;");
+    expect(output).not.toContain("&quot;");
+  });
+
   it("re-renders with updated content (streaming simulation)", () => {
     const { lastFrame, rerender } = render(<Markdown>{"Hello"}</Markdown>);
     expect(lastFrame() ?? "").toContain("Hello");

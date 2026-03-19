@@ -6,7 +6,6 @@ export interface DisplayMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  thinking?: string;
 }
 
 interface MessageListProps {
@@ -20,9 +19,7 @@ export function MessageList({ messages }: MessageListProps) {
         msg.role === "user" ? (
           <UserMessage key={msg.id}>{msg.content}</UserMessage>
         ) : (
-          <AssistantMessage key={msg.id} thinking={msg.thinking}>
-            {msg.content}
-          </AssistantMessage>
+          <AssistantMessage key={msg.id}>{msg.content}</AssistantMessage>
         ),
       )}
     </Box>
