@@ -8,3 +8,13 @@ Terminal-native AI chat client built with Ink and TypeScript. Connects to local 
 - **OpenAI-compatible** — works with Ollama, llama.cpp, vLLM, LocalAI, or any compliant endpoint
 - **Pluggable tools** — web search via DuckDuckGo, guarded CLI command execution
 - **Convention-based config** — global config in `~/.tomo/`, local overrides in `./.tomo/`
+
+## Install
+
+Download the latest binary from [Releases](https://github.com/LeeCheneler/tomo/releases).
+
+On macOS, you'll need to remove the quarantine attribute before running:
+
+```bash
+xattr -cr tomo
+```
