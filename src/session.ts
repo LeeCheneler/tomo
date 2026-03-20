@@ -38,6 +38,13 @@ interface MessageEntry {
   content: string;
 }
 
+let _lastSavedSessionId: string | null = null;
+
+/** Returns the session ID of the last session written to disk, or null. */
+export function getLastSavedSessionId(): string | null {
+  return _lastSavedSessionId;
+}
+
 /** Returns the path to the sessions directory (~/.tomo/sessions/). */
 function sessionsDir(): string {
   return resolve(homedir(), ".tomo", "sessions");
@@ -104,6 +111,7 @@ export function appendMessage(session: Session, message: DisplayMessage): void {
     content: message.content,
   };
   appendFileSync(path, `${JSON.stringify(entry)}\n`, "utf-8");
+  _lastSavedSessionId = session.id;
 }
 
 /** Loads a session by ID. Returns null if not found. */
