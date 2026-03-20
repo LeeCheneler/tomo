@@ -29,6 +29,16 @@ export function useChat(provider: ProviderConfig): ChatState {
     setMessages((prev) => [...prev, ...msgs]);
   };
 
+  const clearMessages = () => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setStreaming(false);
+    setStreamingContent("");
+    setError(null);
+    setActiveCommand(null);
+    abortRef.current = null;
+  };
+
   const submit = async (text: string) => {
     const parsed = parse(text);
 
@@ -61,6 +71,7 @@ export function useChat(provider: ProviderConfig): ChatState {
         onCancel: () => {
           setActiveCommand(null);
         },
+        clearMessages,
       });
 
       if ("interactive" in result) {

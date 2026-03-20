@@ -10,18 +10,16 @@ export type CommandExecuteResult =
   | CommandResult
   | { interactive: ReactElement };
 
-/** Callbacks provided to interactive commands for completion and cancellation. */
-export interface InteractiveCallbacks {
+/** Callbacks provided to commands for state changes, completion, and cancellation. */
+export interface CommandCallbacks {
   onComplete: (result: CommandResult) => void;
   onCancel: () => void;
+  clearMessages: () => void;
 }
 
 /** A registered slash command with a name, description, and execute handler. */
 export interface Command {
   name: string;
   description: string;
-  execute: (
-    args: string,
-    callbacks: InteractiveCallbacks,
-  ) => CommandExecuteResult;
+  execute: (args: string, callbacks: CommandCallbacks) => CommandExecuteResult;
 }
