@@ -11,6 +11,7 @@ import {
 } from "../config";
 import type { ChatMessage } from "../provider/client";
 import { streamChatCompletion } from "../provider/client";
+import { type Session, appendMessage, createSession } from "../session";
 
 export interface ChatState {
   messages: DisplayMessage[];
@@ -29,8 +30,11 @@ export function useChat(
   config: Config,
   initialProvider: ProviderConfig,
   initialModel: string,
+  initialSession: Session,
 ): ChatState {
-  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [messages, setMessages] = useState<DisplayMessage[]>(
+    initialSession.messages,
+  );
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,12 +43,19 @@ export function useChat(
   const [activeProvider, setActiveProviderState] =
     useState<ProviderConfig>(initialProvider);
   const abortRef = useRef<AbortController | null>(null);
+  const sessionRef = useRef<Session>(initialSession);
 
   const addMessages = (...msgs: DisplayMessage[]) => {
     setMessages((prev) => [...prev, ...msgs]);
+    for (const msg of msgs) {
+      appendMessage(sessionRef.current, msg);
+    }
   };
 
   const clearMessages = () => {
+    const newSession = createSession(activeProvider.name, activeModel);
+    sessionRef.current = newSession;
+
     abortRef.current?.abort();
     setMessages([]);
     setStreaming(false);
@@ -127,6 +138,7 @@ export function useChat(
     };
 
     setMessages((prev) => [...prev, userMsg]);
+    appendMessage(sessionRef.current, userMsg);
     setStreaming(true);
     setStreamingContent("");
     setError(null);
@@ -171,6 +183,7 @@ export function useChat(
         content,
       };
       setMessages((prev) => [...prev, assistantMsg]);
+      appendMessage(sessionRef.current, assistantMsg);
     }
 
     setStreaming(false);
