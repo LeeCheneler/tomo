@@ -15,6 +15,7 @@ describe("/new command", () => {
       onComplete: vi.fn(),
       onCancel: vi.fn(),
       clearMessages,
+      switchSession: vi.fn((_id: string): string | null => null),
       setActiveModel: vi.fn(),
       setActiveProvider: vi.fn(() => null),
       providerBaseUrl: "http://localhost:11434",
