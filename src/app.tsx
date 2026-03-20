@@ -1,22 +1,13 @@
-import { createRequire } from "node:module";
 import { useRef, useState } from "react";
 import { Box, Text } from "ink";
-
-const require = createRequire(import.meta.url);
-const { version } = require("../package.json");
 import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
+import { Header } from "./components/header";
 import type { DisplayMessage } from "./components/message-list";
 import { MessageList } from "./components/message-list";
 import { getActiveProvider, loadConfig } from "./config";
 import type { ChatMessage } from "./provider/client";
 import { streamChatCompletion } from "./provider/client";
-
-const LOGO = `
- ╔╦╗╔═╗╔╦╗╔═╗
-  ║ ║ ║║║║║ ║
-  ╩ ╚═╝╩ ╩╚═╝
-`;
 
 const config = loadConfig();
 const provider = getActiveProvider(config);
@@ -89,19 +80,7 @@ export function App() {
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text color="cyan" bold>
-        {LOGO}
-      </Text>
-      <Text> </Text>
-      <Text>
-        <Text color="cyan" bold>
-          {"  友"}
-        </Text>
-        <Text dimColor> — your local AI companion</Text>
-      </Text>
-      <Text> </Text>
-      <Text dimColor>{`  v${version}`}</Text>
-      <Text> </Text>
+      <Header />
 
       <MessageList messages={messages} />
 
