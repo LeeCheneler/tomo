@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { useEffect, useState } from "react";
+import { Box, Text, useInput, useStdout } from "ink";
 import { getAllCommands } from "../commands";
 
 interface ChatInputProps {
@@ -12,7 +12,17 @@ const MAX_SUGGESTIONS = 5;
 
 /** Text input with Enter to submit, slash command autocomplete, and Escape to cancel. */
 export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
+  const { stdout } = useStdout();
+  const [columns, setColumns] = useState(stdout.columns || 80);
   const [value, setValue] = useState("");
+
+  useEffect(() => {
+    const onResize = () => setColumns(stdout.columns || 80);
+    stdout.on("resize", onResize);
+    return () => {
+      stdout.off("resize", onResize);
+    };
+  }, [stdout]);
 
   const isAutocomplete = value.startsWith("/") && !value.includes(" ");
   const partial = isAutocomplete ? value.slice(1) : "";
@@ -62,13 +72,13 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>{"─".repeat((process.stdout.columns || 80) - 2)}</Text>
+      <Text dimColor>{"─".repeat(columns - 2)}</Text>
       <Box>
         <Text dimColor>{disabled ? "  " : "> "}</Text>
         <Text>{value}</Text>
         {isAutocomplete && ghost ? <Text dimColor>{ghost}</Text> : null}
       </Box>
-      <Text dimColor>{"─".repeat((process.stdout.columns || 80) - 2)}</Text>
+      <Text dimColor>{"─".repeat(columns - 2)}</Text>
       {isAutocomplete && matches.length > 0 ? (
         <Box flexDirection="column">
           {matches.map((cmd, i) => (
