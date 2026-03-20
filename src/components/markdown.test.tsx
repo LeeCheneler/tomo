@@ -73,6 +73,38 @@ describe("Markdown", () => {
     expect(output).not.toContain("&quot;");
   });
 
+  it("renders markdown tables with box drawing", () => {
+    const table = "| Name | Age |\n| --- | --- |\n| Alice | 30 |\n| Bob | 25 |";
+    const { lastFrame } = render(<Markdown>{table}</Markdown>);
+    const output = lastFrame() ?? "";
+    expect(output).toContain("Name");
+    expect(output).toContain("Alice");
+    expect(output).toContain("Bob");
+    expect(output).toContain("┌");
+    expect(output).toContain("│");
+    expect(output).toContain("└");
+  });
+
+  it("renders HTML tables with box drawing", () => {
+    const html =
+      "<table><thead><tr><th>Task</th><th>Status</th></tr></thead><tbody><tr><td>Build</td><td>Done</td></tr></tbody></table>";
+    const { lastFrame } = render(<Markdown>{html}</Markdown>);
+    const output = lastFrame() ?? "";
+    expect(output).toContain("Task");
+    expect(output).toContain("Build");
+    expect(output).toContain("Done");
+    expect(output).toContain("┌");
+    expect(output).not.toContain("<table>");
+    expect(output).not.toContain("<td>");
+  });
+
+  it("strips non-table HTML tags", () => {
+    const { lastFrame } = render(<Markdown>{"<div>hello</div>"}</Markdown>);
+    const output = lastFrame() ?? "";
+    expect(output).toContain("hello");
+    expect(output).not.toContain("<div>");
+  });
+
   it("re-renders with updated content (streaming simulation)", () => {
     const { lastFrame, rerender } = render(<Markdown>{"Hello"}</Markdown>);
     expect(lastFrame() ?? "").toContain("Hello");
