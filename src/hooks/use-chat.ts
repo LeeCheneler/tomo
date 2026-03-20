@@ -9,6 +9,7 @@ import {
   updateActiveModel,
   updateActiveProvider,
 } from "../config";
+import { truncateMessages } from "../context/truncate";
 import type { ChatMessage, TokenUsage } from "../provider/client";
 import {
   fetchContextWindow,
@@ -191,7 +192,7 @@ export function useChat(
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const chatMessages: ChatMessage[] = [
+    const allMessages: ChatMessage[] = [
       ...(systemMessage
         ? [{ role: "system" as const, content: systemMessage }]
         : []),
@@ -203,6 +204,12 @@ export function useChat(
         })),
       { role: "user" as const, content: text },
     ];
+
+    const chatMessages = truncateMessages(
+      allMessages,
+      contextWindow,
+      tokenUsage?.promptTokens ?? null,
+    );
 
     let content = "";
 
