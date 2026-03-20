@@ -11,7 +11,12 @@ import {
 } from "../config";
 import type { ChatMessage } from "../provider/client";
 import { streamChatCompletion } from "../provider/client";
-import { type Session, appendMessage, createSession } from "../session";
+import {
+  type Session,
+  appendMessage,
+  createSession,
+  loadSession,
+} from "../session";
 
 export interface ChatState {
   messages: DisplayMessage[];
@@ -47,9 +52,6 @@ export function useChat(
 
   const addMessages = (...msgs: DisplayMessage[]) => {
     setMessages((prev) => [...prev, ...msgs]);
-    for (const msg of msgs) {
-      appendMessage(sessionRef.current, msg);
-    }
   };
 
   const clearMessages = () => {
@@ -98,6 +100,13 @@ export function useChat(
           setActiveCommand(null);
         },
         clearMessages,
+        switchSession: (id: string) => {
+          const session = loadSession(id);
+          if (!session) return `Session not found: ${id}`;
+          sessionRef.current = session;
+          setMessages(session.messages);
+          return null;
+        },
         setActiveModel: (model: string) => {
           setActiveModel(model);
           updateActiveModel(model);

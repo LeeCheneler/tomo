@@ -28,7 +28,6 @@ describe("createSession", () => {
   it("creates a session with correct defaults", () => {
     const session = createSession("ollama", "qwen3:8b");
     expect(session.id).toBeDefined();
-    expect(session.name).toBe("New session");
     expect(session.provider).toBe("ollama");
     expect(session.model).toBe("qwen3:8b");
     expect(session.messages).toEqual([]);
@@ -58,7 +57,6 @@ describe("appendMessage / loadSession", () => {
 
     const loaded = loadSession(session.id);
     expect(loaded?.id).toBe(session.id);
-    expect(loaded?.name).toBe("New session");
     expect(loaded?.provider).toBe("ollama");
     expect(loaded?.model).toBe("qwen3:8b");
     expect(loaded?.messages).toEqual([msg1, msg2]);
@@ -144,12 +142,28 @@ describe("listSessions", () => {
     expect(sessions[1].id).toBe(s1.id);
   });
 
-  it("returns sessions without messages loaded", () => {
+  it("includes first message for preview", () => {
     const session = createSession("ollama", "qwen3:8b");
     appendMessage(session, { id: "m1", role: "user", content: "hello" });
+    appendMessage(session, {
+      id: "m2",
+      role: "assistant",
+      content: "hi there",
+    });
 
     const sessions = listSessions();
-    expect(sessions[0].messages).toEqual([]);
+    expect(sessions[0].messages).toHaveLength(1);
+    expect(sessions[0].messages[0].content).toBe("hello");
+  });
+
+  it("respects limit parameter", () => {
+    for (let i = 0; i < 5; i++) {
+      const s = createSession("ollama", "qwen3:8b");
+      appendMessage(s, { id: `m${i}`, role: "user", content: `msg ${i}` });
+    }
+
+    const sessions = listSessions(3);
+    expect(sessions).toHaveLength(3);
   });
 
   it("skips malformed files", () => {

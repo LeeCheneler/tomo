@@ -15,6 +15,7 @@ export interface CommandCallbacks {
   onComplete: (result: CommandResult) => void;
   onCancel: () => void;
   clearMessages: () => void;
+  switchSession: (id: string) => string | null;
   setActiveModel: (model: string) => void;
   setActiveProvider: (name: string) => string | null;
   providerBaseUrl: string;

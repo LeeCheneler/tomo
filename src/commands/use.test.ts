@@ -7,6 +7,7 @@ const mockCallbacks = () => ({
   onComplete: vi.fn(),
   onCancel: vi.fn(),
   clearMessages: vi.fn(),
+  switchSession: vi.fn((_id: string): string | null => null),
   setActiveModel: vi.fn(),
   setActiveProvider: vi.fn((_name: string): string | null => null),
   providerBaseUrl: "http://localhost:11434",

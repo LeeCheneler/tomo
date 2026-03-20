@@ -16,7 +16,6 @@ import type { DisplayMessage } from "./components/message-list";
 
 export interface Session {
   id: string;
-  name: string;
   createdAt: string;
   updatedAt: string;
   provider: string;
@@ -27,7 +26,6 @@ export interface Session {
 interface MetaEntry {
   type: "meta";
   id: string;
-  name: string;
   createdAt: string;
   provider: string;
   model: string;
@@ -58,15 +56,14 @@ function ensureSessionsDir(): void {
   }
 }
 
-/** Reads the first line of a file efficiently (up to 4KB). */
-function readFirstLine(path: string): string {
+/** Reads the first N lines of a file efficiently (up to 16KB). */
+function readHeadLines(path: string, count: number): string[] {
   const fd = openSync(path, "r");
   try {
-    const buf = Buffer.alloc(4096);
-    const bytesRead = readSync(fd, buf, 0, 4096, 0);
+    const buf = Buffer.alloc(16384);
+    const bytesRead = readSync(fd, buf, 0, 16384, 0);
     const content = buf.toString("utf-8", 0, bytesRead);
-    const idx = content.indexOf("\n");
-    return idx === -1 ? content : content.slice(0, idx);
+    return content.split("\n").slice(0, count);
   } finally {
     closeSync(fd);
   }
@@ -76,7 +73,6 @@ function readFirstLine(path: string): string {
 export function createSession(provider: string, model: string): Session {
   return {
     id: crypto.randomUUID(),
-    name: "New session",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     provider,
@@ -94,7 +90,6 @@ export function appendMessage(session: Session, message: DisplayMessage): void {
     const meta: MetaEntry = {
       type: "meta",
       id: session.id,
-      name: session.name,
       createdAt: session.createdAt,
       provider: session.provider,
       model: session.model,
@@ -142,7 +137,6 @@ export function loadSession(id: string): Session | null {
 
   return {
     id: meta.id,
-    name: meta.name,
     createdAt: meta.createdAt,
     updatedAt: stat.mtime.toISOString(),
     provider: meta.provider,
@@ -151,8 +145,8 @@ export function loadSession(id: string): Session | null {
   };
 }
 
-/** Returns all sessions sorted by most recently updated. Messages are not loaded. */
-export function listSessions(): Session[] {
+/** Returns all sessions sorted by most recently updated, with first message for preview. */
+export function listSessions(limit = 50): Session[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
 
@@ -162,27 +156,45 @@ export function listSessions(): Session[] {
   for (const file of files) {
     try {
       const path = resolve(dir, file);
-      const firstLine = readFirstLine(path);
-      const meta = JSON.parse(firstLine) as MetaEntry;
+      const lines = readHeadLines(path, 2);
+      const meta = JSON.parse(lines[0]) as MetaEntry;
       const stat = statSync(path);
+
+      const messages: DisplayMessage[] = [];
+      if (lines[1]) {
+        try {
+          const entry = JSON.parse(lines[1]) as MessageEntry;
+          if (entry.type === "message") {
+            messages.push({
+              id: entry.id,
+              role: entry.role,
+              content: entry.content,
+            });
+          }
+        } catch {
+          // First message line malformed or truncated
+        }
+      }
 
       sessions.push({
         id: meta.id,
-        name: meta.name,
         createdAt: meta.createdAt,
         updatedAt: stat.mtime.toISOString(),
         provider: meta.provider,
         model: meta.model,
-        messages: [],
+        messages,
       });
     } catch {
       // Skip malformed session files
     }
   }
 
-  return sessions.sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
+  return sessions
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+    .slice(0, limit);
 }
 
 /** Loads the most recently updated session, or null if none exist. */
