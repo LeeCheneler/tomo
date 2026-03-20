@@ -233,12 +233,16 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
           ? cursorVisible
             ? chalk.inverse(charAtCursor)
             : charAtCursor
-          : cursorVisible
-            ? chalk.inverse(" ")
-            : "";
+          : showGhost
+            ? cursorVisible
+              ? chalk.inverse(ghost[0])
+              : chalk.dim(ghost[0])
+            : cursorVisible
+              ? chalk.inverse(" ")
+              : "";
     inputDisplay = before + cursorStr + after;
     if (showGhost) {
-      inputDisplay += chalk.dim(ghost);
+      inputDisplay += chalk.dim(ghost.slice(1));
     }
   }
 
