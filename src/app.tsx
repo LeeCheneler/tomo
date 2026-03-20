@@ -17,7 +17,7 @@ export function App() {
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Header model={config.activeModel} />
+      <Header model={chat.activeModel} />
 
       {chat.messages.length > 0 ? (
         <Box flexDirection="column" marginBottom={1}>

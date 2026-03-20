@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { Command } from "./types";
 import { getCommand } from "./registry";
 import "./new";
 
@@ -8,17 +9,18 @@ describe("/new command", () => {
   });
 
   it("calls clearMessages and returns confirmation", () => {
-    const command = getCommand("new");
+    const command = getCommand("new") as Command;
     const clearMessages = vi.fn();
     const callbacks = {
       onComplete: vi.fn(),
       onCancel: vi.fn(),
       clearMessages,
+      setActiveModel: vi.fn(),
       providerBaseUrl: "http://localhost:11434",
       activeModel: "qwen3:8b",
     };
 
-    const result = command!.execute("", callbacks);
+    const result = command.execute("", callbacks);
 
     expect(clearMessages).toHaveBeenCalled();
     expect(result).toEqual({ output: "Conversation cleared." });

@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { useRef, useState } from "react";
 import { getCommand, parse } from "../commands";
 import type { DisplayMessage } from "../components/message-list";
-import type { ProviderConfig } from "../config";
+import { type ProviderConfig, updateActiveModel } from "../config";
 import type { ChatMessage } from "../provider/client";
 import { streamChatCompletion } from "../provider/client";
 
@@ -12,17 +12,22 @@ export interface ChatState {
   streamingContent: string;
   error: string | null;
   activeCommand: ReactElement | null;
+  activeModel: string;
   submit: (text: string) => void;
   cancel: () => void;
 }
 
 /** Manages conversation state and streaming for a chat session. */
-export function useChat(provider: ProviderConfig, model: string): ChatState {
+export function useChat(
+  provider: ProviderConfig,
+  initialModel: string,
+): ChatState {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [activeCommand, setActiveCommand] = useState<ReactElement | null>(null);
+  const [activeModel, setActiveModel] = useState(initialModel);
   const abortRef = useRef<AbortController | null>(null);
 
   const addMessages = (...msgs: DisplayMessage[]) => {
@@ -72,8 +77,12 @@ export function useChat(provider: ProviderConfig, model: string): ChatState {
           setActiveCommand(null);
         },
         clearMessages,
+        setActiveModel: (model: string) => {
+          setActiveModel(model);
+          updateActiveModel(model);
+        },
         providerBaseUrl: provider.baseUrl,
-        activeModel: model,
+        activeModel,
       });
 
       if ("interactive" in result) {
@@ -118,7 +127,7 @@ export function useChat(provider: ProviderConfig, model: string): ChatState {
     try {
       for await (const token of streamChatCompletion({
         baseUrl: provider.baseUrl,
-        model,
+        model: activeModel,
         messages: chatMessages,
         signal: controller.signal,
       })) {
@@ -157,6 +166,7 @@ export function useChat(provider: ProviderConfig, model: string): ChatState {
     streamingContent,
     error,
     activeCommand,
+    activeModel,
     submit,
     cancel,
   };
