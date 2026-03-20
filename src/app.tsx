@@ -9,11 +9,11 @@ import { getActiveProvider, loadConfig } from "./config";
 import { useChat } from "./hooks/use-chat";
 
 const config = loadConfig();
-const provider = getActiveProvider(config);
+const initialProvider = getActiveProvider(config);
 
 /** Root application component. Renders the chat UI and delegates state to useChat. */
 export function App() {
-  const chat = useChat(provider, config.activeModel);
+  const chat = useChat(config, initialProvider, config.activeModel);
 
   return (
     <Box flexDirection="column" paddingX={1}>

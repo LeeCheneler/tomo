@@ -16,8 +16,11 @@ export interface CommandCallbacks {
   onCancel: () => void;
   clearMessages: () => void;
   setActiveModel: (model: string) => void;
+  setActiveProvider: (name: string) => string | null;
   providerBaseUrl: string;
   activeModel: string;
+  activeProvider: string;
+  providerNames: string[];
 }
 
 /** A registered slash command with a name, description, and execute handler. */

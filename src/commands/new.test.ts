@@ -16,8 +16,11 @@ describe("/new command", () => {
       onCancel: vi.fn(),
       clearMessages,
       setActiveModel: vi.fn(),
+      setActiveProvider: vi.fn(() => null),
       providerBaseUrl: "http://localhost:11434",
       activeModel: "qwen3:8b",
+      activeProvider: "ollama",
+      providerNames: ["ollama"],
     };
 
     const result = command.execute("", callbacks);

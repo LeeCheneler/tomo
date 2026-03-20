@@ -5,13 +5,25 @@ import type { Command } from "./types";
 
 const use: Command = {
   name: "use",
-  description: "Switch the active model",
+  description: "Switch the active model or provider/model",
   execute: (args, callbacks) => {
-    const model = args.trim();
+    const input = args.trim();
 
-    if (model) {
-      callbacks.setActiveModel(model);
-      return { output: `Switched to ${model}.` };
+    if (input) {
+      const slashIndex = input.indexOf("/");
+      if (slashIndex >= 0) {
+        const providerName = input.slice(0, slashIndex);
+        const model = input.slice(slashIndex + 1);
+        if (!providerName || !model) {
+          return { output: "Usage: /use provider/model or /use model" };
+        }
+        const error = callbacks.setActiveProvider(providerName);
+        if (error) return { output: error };
+        callbacks.setActiveModel(model);
+        return { output: `Switched to ${providerName}/${model}.` };
+      }
+      callbacks.setActiveModel(input);
+      return { output: `Switched to ${input}.` };
     }
 
     return {

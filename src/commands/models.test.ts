@@ -8,8 +8,11 @@ const mockCallbacks = () => ({
   onCancel: vi.fn(),
   clearMessages: vi.fn(),
   setActiveModel: vi.fn(),
+  setActiveProvider: vi.fn(() => null),
   providerBaseUrl: "http://localhost:11434",
   activeModel: "qwen3:8b",
+  activeProvider: "ollama",
+  providerNames: ["ollama"],
 });
 
 describe("/models command", () => {
