@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Command } from "./types";
 import { getCommand } from "./registry";
 import "./models";
 
@@ -6,8 +7,12 @@ const mockCallbacks = () => ({
   onComplete: vi.fn(),
   onCancel: vi.fn(),
   clearMessages: vi.fn(),
+  setActiveModel: vi.fn(),
+  setActiveProvider: vi.fn(() => null),
   providerBaseUrl: "http://localhost:11434",
   activeModel: "qwen3:8b",
+  activeProvider: "ollama",
+  providerNames: ["ollama"],
 });
 
 describe("/models command", () => {
@@ -28,7 +33,7 @@ describe("/models command", () => {
       ),
     );
 
-    const command = getCommand("models")!;
+    const command = getCommand("models") as Command;
     const result = await command.execute("", mockCallbacks());
 
     expect(result).toHaveProperty("output");
@@ -42,7 +47,7 @@ describe("/models command", () => {
       new Response(JSON.stringify({ data: [] })),
     );
 
-    const command = getCommand("models")!;
+    const command = getCommand("models") as Command;
     const result = await command.execute("", mockCallbacks());
 
     expect(result).toHaveProperty("output");
@@ -55,7 +60,7 @@ describe("/models command", () => {
       new TypeError("fetch failed"),
     );
 
-    const command = getCommand("models")!;
+    const command = getCommand("models") as Command;
     const result = await command.execute("", mockCallbacks());
 
     expect(result).toHaveProperty("output");

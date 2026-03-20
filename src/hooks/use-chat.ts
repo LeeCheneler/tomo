@@ -2,7 +2,13 @@ import type { ReactElement } from "react";
 import { useRef, useState } from "react";
 import { getCommand, parse } from "../commands";
 import type { DisplayMessage } from "../components/message-list";
-import type { ProviderConfig } from "../config";
+import {
+  type Config,
+  type ProviderConfig,
+  getProviderByName,
+  updateActiveModel,
+  updateActiveProvider,
+} from "../config";
 import type { ChatMessage } from "../provider/client";
 import { streamChatCompletion } from "../provider/client";
 
@@ -12,17 +18,26 @@ export interface ChatState {
   streamingContent: string;
   error: string | null;
   activeCommand: ReactElement | null;
+  activeModel: string;
+  activeProvider: ProviderConfig;
   submit: (text: string) => void;
   cancel: () => void;
 }
 
 /** Manages conversation state and streaming for a chat session. */
-export function useChat(provider: ProviderConfig, model: string): ChatState {
+export function useChat(
+  config: Config,
+  initialProvider: ProviderConfig,
+  initialModel: string,
+): ChatState {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [activeCommand, setActiveCommand] = useState<ReactElement | null>(null);
+  const [activeModel, setActiveModel] = useState(initialModel);
+  const [activeProvider, setActiveProviderState] =
+    useState<ProviderConfig>(initialProvider);
   const abortRef = useRef<AbortController | null>(null);
 
   const addMessages = (...msgs: DisplayMessage[]) => {
@@ -72,8 +87,24 @@ export function useChat(provider: ProviderConfig, model: string): ChatState {
           setActiveCommand(null);
         },
         clearMessages,
-        providerBaseUrl: provider.baseUrl,
-        activeModel: model,
+        setActiveModel: (model: string) => {
+          setActiveModel(model);
+          updateActiveModel(model);
+        },
+        setActiveProvider: (name: string) => {
+          const provider = getProviderByName(config, name);
+          if (!provider) {
+            const available = config.providers.map((p) => p.name).join(", ");
+            return `Unknown provider: ${name}. Available: ${available}`;
+          }
+          setActiveProviderState(provider);
+          updateActiveProvider(name);
+          return null;
+        },
+        providerBaseUrl: activeProvider.baseUrl,
+        activeModel,
+        activeProvider: activeProvider.name,
+        providerNames: config.providers.map((p) => p.name),
       });
 
       if ("interactive" in result) {
@@ -117,8 +148,8 @@ export function useChat(provider: ProviderConfig, model: string): ChatState {
 
     try {
       for await (const token of streamChatCompletion({
-        baseUrl: provider.baseUrl,
-        model,
+        baseUrl: activeProvider.baseUrl,
+        model: activeModel,
         messages: chatMessages,
         signal: controller.signal,
       })) {
@@ -157,6 +188,8 @@ export function useChat(provider: ProviderConfig, model: string): ChatState {
     streamingContent,
     error,
     activeCommand,
+    activeModel,
+    activeProvider,
     submit,
     cancel,
   };

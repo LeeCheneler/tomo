@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type Config, getActiveProvider, loadConfig } from "./config";
+import {
+  type Config,
+  getActiveProvider,
+  loadConfig,
+  updateActiveModel,
+} from "./config";
 
 const tmpDir = resolve(import.meta.dirname, "../.test-config-tmp");
 const globalDir = resolve(tmpDir, "global/.tomo");
@@ -191,5 +196,42 @@ describe("getActiveProvider", () => {
     expect(() => getActiveProvider(config)).toThrow(
       'active provider "missing" not found',
     );
+  });
+});
+
+describe("updateActiveModel", () => {
+  it("updates activeModel in the global config", () => {
+    loadConfig(); // create default global config
+    updateActiveModel("llama3:70b");
+    const config = loadConfig();
+    expect(config.activeModel).toBe("llama3:70b");
+  });
+
+  it("updates activeModel in local config when present", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ollama
+activeModel: qwen3:8b
+providers:
+  - name: ollama
+    type: ollama
+    baseUrl: http://localhost:11434
+`,
+    );
+    writeYaml(
+      localPath,
+      `
+activeProvider: ollama
+activeModel: qwen3:8b
+providers:
+  - name: ollama
+    type: ollama
+    baseUrl: http://localhost:11434
+`,
+    );
+    updateActiveModel("mistral");
+    const config = loadConfig();
+    expect(config.activeModel).toBe("mistral");
   });
 });

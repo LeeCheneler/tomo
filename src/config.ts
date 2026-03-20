@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
 import { z } from "zod";
 
 const providerSchema = z.object({
@@ -111,6 +111,38 @@ export function loadConfig(): Config {
   }
 
   return result.data;
+}
+
+/** Updates fields in config files on disk. Updates local if present, always updates global. */
+function updateConfigFiles(updates: Record<string, unknown>): void {
+  const paths = [globalConfigPath()];
+  const local = localConfigPath();
+  if (existsSync(local)) paths.push(local);
+
+  for (const path of paths) {
+    const raw = loadYaml(path);
+    if (!raw) continue;
+    Object.assign(raw, updates);
+    writeFileSync(path, stringify(raw), "utf-8");
+  }
+}
+
+/** Updates activeModel in config files on disk. */
+export function updateActiveModel(model: string): void {
+  updateConfigFiles({ activeModel: model });
+}
+
+/** Updates activeProvider in config files on disk. */
+export function updateActiveProvider(provider: string): void {
+  updateConfigFiles({ activeProvider: provider });
+}
+
+/** Returns a provider config by name, or undefined if not found. */
+export function getProviderByName(
+  config: Config,
+  name: string,
+): ProviderConfig | undefined {
+  return config.providers.find((p) => p.name === name);
 }
 
 /** Returns the provider config matching the activeProvider name. Throws if not found. */
