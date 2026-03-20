@@ -1,4 +1,6 @@
+import type { ReactElement } from "react";
 import { useRef, useState } from "react";
+import { getCommand, parse } from "../commands";
 import type { DisplayMessage } from "../components/message-list";
 import type { ProviderConfig } from "../config";
 import type { ChatMessage } from "../provider/client";
@@ -9,6 +11,7 @@ export interface ChatState {
   streaming: boolean;
   streamingContent: string;
   error: string | null;
+  activeCommand: ReactElement | null;
   submit: (text: string) => void;
   cancel: () => void;
 }
@@ -19,9 +22,60 @@ export function useChat(provider: ProviderConfig): ChatState {
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [activeCommand, setActiveCommand] = useState<ReactElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const addMessages = (...msgs: DisplayMessage[]) => {
+    setMessages((prev) => [...prev, ...msgs]);
+  };
+
   const submit = async (text: string) => {
+    const parsed = parse(text);
+
+    if (parsed) {
+      const userMsg: DisplayMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: text,
+      };
+
+      const command = getCommand(parsed.name);
+      if (!command) {
+        addMessages(userMsg, {
+          id: crypto.randomUUID(),
+          role: "system",
+          content: `Unknown command: /${parsed.name}. Type /help for available commands.`,
+        });
+        return;
+      }
+
+      const result = command.execute(parsed.args, {
+        onComplete: (completionResult) => {
+          addMessages({
+            id: crypto.randomUUID(),
+            role: "system",
+            content: completionResult.output,
+          });
+          setActiveCommand(null);
+        },
+        onCancel: () => {
+          setActiveCommand(null);
+        },
+      });
+
+      if ("interactive" in result) {
+        addMessages(userMsg);
+        setActiveCommand(result.interactive);
+      } else {
+        addMessages(userMsg, {
+          id: crypto.randomUUID(),
+          role: "system",
+          content: result.output,
+        });
+      }
+      return;
+    }
+
     const userMsg: DisplayMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -37,7 +91,12 @@ export function useChat(provider: ProviderConfig): ChatState {
     abortRef.current = controller;
 
     const chatMessages: ChatMessage[] = [
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
+      ...messages
+        .filter((m) => m.role !== "system")
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
       { role: "user" as const, content: text },
     ];
 
@@ -79,5 +138,13 @@ export function useChat(provider: ProviderConfig): ChatState {
     abortRef.current?.abort();
   };
 
-  return { messages, streaming, streamingContent, error, submit, cancel };
+  return {
+    messages,
+    streaming,
+    streamingContent,
+    error,
+    activeCommand,
+    submit,
+    cancel,
+  };
 }
