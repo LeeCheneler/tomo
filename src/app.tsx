@@ -80,7 +80,7 @@ export function App() {
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Header />
+      <Header model={provider.model} />
 
       <MessageList messages={messages} />
 
