@@ -179,6 +179,212 @@ describe("ChatInput", () => {
     expect(output).toContain("Ctrl+C again");
   });
 
+  it("moves cursor left with arrow key", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("abc");
+    await flush();
+    // Move cursor left once (before 'c'), type 'X'
+    stdin.write("\x1B[D");
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("abXc");
+  });
+
+  it("moves cursor right with arrow key", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("abc");
+    await flush();
+    // Move left twice, then right once
+    stdin.write("\x1B[D");
+    await flush();
+    stdin.write("\x1B[D");
+    await flush();
+    stdin.write("\x1B[C");
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("abXc");
+  });
+
+  it("backspace deletes character before cursor", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("abc");
+    await flush();
+    // Move left once (before 'c'), backspace removes 'b'
+    stdin.write("\x1B[D");
+    await flush();
+    stdin.write("\x7f");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("ac");
+  });
+
+  it("Ctrl+A moves cursor to start", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("abc");
+    await flush();
+    stdin.write("\x01"); // Ctrl+A
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("Xabc");
+  });
+
+  it("Ctrl+E moves cursor to end", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("abc");
+    await flush();
+    stdin.write("\x01"); // Ctrl+A (go to start)
+    await flush();
+    stdin.write("\x05"); // Ctrl+E (go to end)
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("abcX");
+  });
+
+  it("cursor does not move past start", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("ab");
+    await flush();
+    // Move left 5 times (more than string length)
+    for (let i = 0; i < 5; i++) {
+      stdin.write("\x1B[D");
+      await flush();
+    }
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("Xab");
+  });
+
+  it("up arrow moves cursor to previous line at same column", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    // Type "abc", newline, "defgh" — cursor ends at position 9 (end of "defgh")
+    stdin.write("abc");
+    await flush();
+    // Shift+Enter for newline
+    stdin.write("\x1B[13;2u");
+    await flush();
+    stdin.write("defgh");
+    await flush();
+    // Up arrow should move to line 1, column clamped to line length
+    stdin.write("\x1B[A");
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    // Cursor was at col 5 on line 2, line 1 is "abc" (length 3), so clamp to col 3
+    expect(onSubmit).toHaveBeenCalledWith("abcX\ndefgh");
+  });
+
+  it("down arrow moves cursor to next line at same column", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("abcde");
+    await flush();
+    stdin.write("\x1B[13;2u");
+    await flush();
+    stdin.write("fg");
+    await flush();
+    // Go to start of first line
+    stdin.write("\x01");
+    await flush();
+    // Move right 2 (cursor on 'c', col 2)
+    stdin.write("\x1B[C");
+    await flush();
+    stdin.write("\x1B[C");
+    await flush();
+    // Down arrow should move to line 2, col 2 (on end since "fg" is len 2)
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("abcde\nfgX");
+  });
+
+  it("up arrow does nothing on first line", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("abc");
+    await flush();
+    stdin.write("\x1B[A");
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("abcX");
+  });
+
+  it("down arrow does nothing on last line", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("abc");
+    await flush();
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("abcX");
+  });
+
+  it("Option+Left skips to previous word boundary", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("hello world foo");
+    await flush();
+    // Alt+B / Option+Left — skip back one word
+    stdin.write("\x1bb");
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("hello world Xfoo");
+  });
+
+  it("Option+Right skips to next word boundary", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("hello world");
+    await flush();
+    // Go to start
+    stdin.write("\x01");
+    await flush();
+    // Alt+F / Option+Right — skip forward one word
+    stdin.write("\x1bf");
+    await flush();
+    stdin.write("X");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("helloX world");
+  });
+
   it("Ctrl+C shows exit warning when disabled", async () => {
     const onEscape = vi.fn();
     const { lastFrame, stdin } = render(
