@@ -18,7 +18,7 @@
 - **Build tool:** tsup (esbuild-based bundler)
 - **Test runner:** Vitest
 - **Config format:** YAML
-- **Session storage:** JSON files on disk
+- **Session storage:** JSONL files on disk (append-only)
 - **Distribution:** Node SEA standalone binary → Homebrew
 
 ## Goals

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import chalk from "chalk";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { getAllCommands } from "../commands";
@@ -10,7 +10,6 @@ interface ChatInputProps {
 }
 
 const MAX_SUGGESTIONS = 5;
-const BLINK_INTERVAL_MS = 530;
 
 function findPrevWordBoundary(text: string, pos: number): number {
   let i = pos - 1;
@@ -33,9 +32,7 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
   const [columns, setColumns] = useState(stdout.columns || 80);
   const [value, setValue] = useState("");
   const [cursor, setCursor] = useState(0);
-  const [cursorVisible, setCursorVisible] = useState(true);
   const [exitWarning, setExitWarning] = useState(false);
-  const blinkRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const onResize = () => setColumns(stdout.columns || 80);
@@ -44,31 +41,6 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
       stdout.off("resize", onResize);
     };
   }, [stdout]);
-
-  useEffect(() => {
-    if (disabled) {
-      setCursorVisible(false);
-      if (blinkRef.current) clearInterval(blinkRef.current);
-      blinkRef.current = null;
-      return;
-    }
-    blinkRef.current = setInterval(() => {
-      setCursorVisible((v) => !v);
-    }, BLINK_INTERVAL_MS);
-    return () => {
-      if (blinkRef.current) clearInterval(blinkRef.current);
-    };
-  }, [disabled]);
-
-  const resetBlink = () => {
-    setCursorVisible(true);
-    if (blinkRef.current) clearInterval(blinkRef.current);
-    if (!disabled) {
-      blinkRef.current = setInterval(() => {
-        setCursorVisible((v) => !v);
-      }, BLINK_INTERVAL_MS);
-    }
-  };
 
   const isAutocomplete = value.startsWith("/") && !value.includes(" ");
   const partial = isAutocomplete ? value.slice(1) : "";
@@ -87,8 +59,6 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
   const showGhost = isAutocomplete && ghost && cursor === value.length;
 
   useInput((input, key) => {
-    resetBlink();
-
     const isCtrlC = input === "c" && key.ctrl;
 
     if (isCtrlC) {
@@ -226,20 +196,12 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
     const charAtCursor = cursor < value.length ? value[cursor] : null;
     const cursorStr =
       charAtCursor === "\n"
-        ? cursorVisible
-          ? `${chalk.inverse(" ")}\n`
-          : "\n"
+        ? `${chalk.inverse(" ")}\n`
         : charAtCursor !== null
-          ? cursorVisible
-            ? chalk.inverse(charAtCursor)
-            : charAtCursor
+          ? chalk.inverse(charAtCursor)
           : showGhost
-            ? cursorVisible
-              ? chalk.inverse(ghost[0])
-              : chalk.dim(ghost[0])
-            : cursorVisible
-              ? chalk.inverse(" ")
-              : "";
+            ? chalk.inverse(ghost[0])
+            : chalk.inverse(" ");
     inputDisplay = before + cursorStr + after;
     if (showGhost) {
       inputDisplay += chalk.dim(ghost.slice(1));

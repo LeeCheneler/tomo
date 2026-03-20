@@ -36,6 +36,7 @@ export function useChat(
   initialProvider: ProviderConfig,
   initialModel: string,
   initialSession: Session,
+  systemMessage: string | null = null,
 ): ChatState {
   const [messages, setMessages] = useState<DisplayMessage[]>(
     initialSession.messages,
@@ -156,6 +157,9 @@ export function useChat(
     abortRef.current = controller;
 
     const chatMessages: ChatMessage[] = [
+      ...(systemMessage
+        ? [{ role: "system" as const, content: systemMessage }]
+        : []),
       ...messages
         .filter((m) => m.role !== "system")
         .map((m) => ({
