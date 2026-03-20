@@ -74,6 +74,7 @@ const md = new Marked({
   },
 });
 
+/** Indents each line of text with 4 spaces for code block display. */
 function indentBlock(text: string): string {
   return text
     .split("\n")
@@ -93,6 +94,7 @@ const HTML_ENTITIES: Record<string, string> = {
   "&#39;": "'",
 };
 
+/** Replaces HTML entities (&amp; &lt; &gt; &quot; &#39;) with their literal characters. */
 function unescapeHtml(text: string): string {
   return text.replace(
     /&(?:amp|lt|gt|quot|#39);/g,
@@ -100,6 +102,7 @@ function unescapeHtml(text: string): string {
   );
 }
 
+/** Renders a markdown string as ANSI-formatted terminal output. */
 export function Markdown({ children }: MarkdownProps) {
   const rendered = md.parse(children, { async: false }) as string;
   const trimmed = unescapeHtml(rendered.replace(/\n+$/, ""));

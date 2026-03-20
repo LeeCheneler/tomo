@@ -7,6 +7,7 @@ interface ChatInputProps {
   onEscape?: () => void;
 }
 
+/** Text input with Enter to submit, Shift+Enter for newline, and Escape to cancel. */
 export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
   const [value, setValue] = useState("");
 

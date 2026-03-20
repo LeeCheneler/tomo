@@ -1,26 +1,18 @@
-import { createRequire } from "module";
 import { useRef, useState } from "react";
 import { Box, Text } from "ink";
-
-const require = createRequire(import.meta.url);
-const { version } = require("../package.json");
 import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
+import { Header } from "./components/header";
 import type { DisplayMessage } from "./components/message-list";
 import { MessageList } from "./components/message-list";
-import { env } from "./env";
+import { getActiveProvider, loadConfig } from "./config";
 import type { ChatMessage } from "./provider/client";
 import { streamChatCompletion } from "./provider/client";
 
-const LOGO = `
- ╔╦╗╔═╗╔╦╗╔═╗
-  ║ ║ ║║║║║ ║
-  ╩ ╚═╝╩ ╩╚═╝
-`;
+const config = loadConfig();
+const provider = getActiveProvider(config);
 
-const BASE_URL = env.getOptional("TOMO_BASE_URL") ?? "http://localhost:11434";
-const MODEL = env.getOptional("TOMO_MODEL") ?? "qwen3:8b";
-
+/** Root application component. Manages the conversation loop and renders the chat UI. */
 export function App() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -52,8 +44,8 @@ export function App() {
 
     try {
       for await (const token of streamChatCompletion({
-        baseUrl: BASE_URL,
-        model: MODEL,
+        baseUrl: provider.baseUrl,
+        model: provider.model,
         messages: chatMessages,
         signal: controller.signal,
       })) {
@@ -88,19 +80,7 @@ export function App() {
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text color="cyan" bold>
-        {LOGO}
-      </Text>
-      <Text> </Text>
-      <Text>
-        <Text color="cyan" bold>
-          {"  友"}
-        </Text>
-        <Text dimColor> — your local AI companion</Text>
-      </Text>
-      <Text> </Text>
-      <Text dimColor>{`  v${version}`}</Text>
-      <Text> </Text>
+      <Header model={provider.model} />
 
       <MessageList messages={messages} />
 
