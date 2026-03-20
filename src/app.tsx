@@ -3,6 +3,7 @@ import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
 import { Header } from "./components/header";
 import { MessageList } from "./components/message-list";
+import { ThinkingIndicator } from "./components/thinking-indicator";
 import { getActiveProvider, loadConfig } from "./config";
 import { useChat } from "./hooks/use-chat";
 
@@ -17,13 +18,25 @@ export function App() {
     <Box flexDirection="column" paddingX={1}>
       <Header model={provider.model} />
 
-      <MessageList messages={chat.messages} />
-
-      {chat.streaming && chat.streamingContent ? (
-        <AssistantMessage>{chat.streamingContent}</AssistantMessage>
+      {chat.messages.length > 0 ? (
+        <Box flexDirection="column" marginBottom={1}>
+          <MessageList messages={chat.messages} />
+        </Box>
       ) : null}
 
-      {chat.error ? <Text color="red">{`Error: ${chat.error}`}</Text> : null}
+      {chat.streaming && chat.streamingContent ? (
+        <Box flexDirection="column" marginBottom={1}>
+          <AssistantMessage>{chat.streamingContent}</AssistantMessage>
+        </Box>
+      ) : null}
+
+      {chat.error ? (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="red">{`Error: ${chat.error}`}</Text>
+        </Box>
+      ) : null}
+
+      {chat.streaming && !chat.streamingContent ? <ThinkingIndicator /> : null}
 
       <ChatInput
         onSubmit={chat.submit}
