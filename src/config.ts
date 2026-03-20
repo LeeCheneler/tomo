@@ -10,12 +10,12 @@ const providerSchema = z.object({
     message: 'unsupported provider type. Supported: "ollama"',
   }),
   baseUrl: z.string().url("baseUrl must be a valid URL"),
-  model: z.string().min(1, "model is required"),
 });
 
 const configSchema = z
   .object({
     activeProvider: z.string().min(1, "activeProvider is required"),
+    activeModel: z.string().min(1, "activeModel is required"),
     providers: z
       .array(providerSchema)
       .min(1, "providers must be a non-empty array"),
@@ -37,23 +37,23 @@ export type Config = z.infer<typeof configSchema>;
 
 const DEFAULT_CONFIG: Config = {
   activeProvider: "ollama",
+  activeModel: "qwen3:8b",
   providers: [
     {
       name: "ollama",
       type: "ollama",
       baseUrl: "http://localhost:11434",
-      model: "qwen3:8b",
     },
   ],
 };
 
 const DEFAULT_CONFIG_YAML = `activeProvider: ollama
+activeModel: qwen3:8b
 
 providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
-    model: qwen3:8b
 `;
 
 /** Returns the path to the global config file (~/.tomo/config.yaml). */

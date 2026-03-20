@@ -17,7 +17,7 @@ export interface ChatState {
 }
 
 /** Manages conversation state and streaming for a chat session. */
-export function useChat(provider: ProviderConfig): ChatState {
+export function useChat(provider: ProviderConfig, model: string): ChatState {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -59,7 +59,7 @@ export function useChat(provider: ProviderConfig): ChatState {
         return;
       }
 
-      const result = command.execute(parsed.args, {
+      const result = await command.execute(parsed.args, {
         onComplete: (completionResult) => {
           addMessages({
             id: crypto.randomUUID(),
@@ -72,6 +72,8 @@ export function useChat(provider: ProviderConfig): ChatState {
           setActiveCommand(null);
         },
         clearMessages,
+        providerBaseUrl: provider.baseUrl,
+        activeModel: model,
       });
 
       if ("interactive" in result) {
@@ -116,7 +118,7 @@ export function useChat(provider: ProviderConfig): ChatState {
     try {
       for await (const token of streamChatCompletion({
         baseUrl: provider.baseUrl,
-        model: provider.model,
+        model,
         messages: chatMessages,
         signal: controller.signal,
       })) {
