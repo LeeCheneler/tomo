@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { getAllCommands } from "../commands";
 
 interface ChatInputProps {
@@ -12,9 +12,11 @@ const MAX_SUGGESTIONS = 5;
 
 /** Text input with Enter to submit, slash command autocomplete, and Escape to cancel. */
 export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
+  const { exit } = useApp();
   const { stdout } = useStdout();
   const [columns, setColumns] = useState(stdout.columns || 80);
   const [value, setValue] = useState("");
+  const [exitWarning, setExitWarning] = useState(false);
 
   useEffect(() => {
     const onResize = () => setColumns(stdout.columns || 80);
@@ -40,6 +42,30 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
         : "";
 
   useInput((input, key) => {
+    const isCtrlC = input === "c" && key.ctrl;
+
+    if (isCtrlC) {
+      if (exitWarning) {
+        exit();
+        return;
+      }
+      if (disabled) {
+        setExitWarning(true);
+        return;
+      }
+      if (value) {
+        setValue("");
+        return;
+      }
+      setExitWarning(true);
+      return;
+    }
+
+    // Any other input dismisses the exit warning
+    if (exitWarning) {
+      setExitWarning(false);
+    }
+
     if (key.escape) {
       onEscape?.();
       return;
@@ -92,6 +118,9 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
             </Text>
           ))}
         </Box>
+      ) : null}
+      {exitWarning ? (
+        <Text dimColor>{"  Ctrl+C again to close Tomo"}</Text>
       ) : null}
     </Box>
   );

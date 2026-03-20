@@ -138,4 +138,55 @@ describe("ChatInput", () => {
     // Should not show suggestion list since there's a space (args mode)
     expect(output).not.toContain("List available commands");
   });
+
+  it("Ctrl+C clears input when text is present", async () => {
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("hello");
+    await flush();
+    stdin.write("\x03");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).not.toContain("hello");
+    expect(output).not.toContain("Ctrl+C again");
+  });
+
+  it("Ctrl+C shows exit warning on empty input", async () => {
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x03");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).toContain("Ctrl+C again to close Tomo");
+  });
+
+  it("any input after exit warning dismisses it", async () => {
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x03");
+    await flush();
+    expect(lastFrame()).toContain("Ctrl+C again");
+    stdin.write("a");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).not.toContain("Ctrl+C again");
+    expect(output).toContain("a");
+  });
+
+  it("Ctrl+C does not close app on first press", async () => {
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x03");
+    await flush();
+    // App should still be rendering
+    const output = lastFrame() ?? "";
+    expect(output).toContain("Ctrl+C again");
+  });
+
+  it("Ctrl+C shows exit warning when disabled", async () => {
+    const onEscape = vi.fn();
+    const { lastFrame, stdin } = render(
+      <ChatInput onSubmit={vi.fn()} disabled onEscape={onEscape} />,
+    );
+    stdin.write("\x03");
+    await flush();
+    expect(onEscape).not.toHaveBeenCalled();
+    expect(lastFrame()).toContain("Ctrl+C again to close Tomo");
+  });
 });
