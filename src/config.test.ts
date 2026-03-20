@@ -168,6 +168,7 @@ describe("getActiveProvider", () => {
     const config: Config = {
       activeProvider: "ollama",
       activeModel: "qwen3:8b",
+      maxTokens: 8192,
       providers: [
         {
           name: "ollama",
@@ -185,6 +186,7 @@ describe("getActiveProvider", () => {
     const config: Config = {
       activeProvider: "missing",
       activeModel: "qwen3:8b",
+      maxTokens: 8192,
       providers: [
         {
           name: "ollama",

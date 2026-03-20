@@ -4,6 +4,10 @@ import { dirname, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { z } from "zod";
 
+const modelOverrideSchema = z.object({
+  maxTokens: z.number().int().positive().optional(),
+});
+
 const providerSchema = z.object({
   name: z.string().min(1, "provider name is required"),
   type: z.enum(["ollama"], {
@@ -11,12 +15,14 @@ const providerSchema = z.object({
   }),
   baseUrl: z.string().url("baseUrl must be a valid URL"),
   contextWindow: z.number().int().positive().optional(),
+  models: z.record(z.string(), modelOverrideSchema).optional(),
 });
 
 const configSchema = z
   .object({
     activeProvider: z.string().min(1, "activeProvider is required"),
     activeModel: z.string().min(1, "activeModel is required"),
+    maxTokens: z.number().int().positive().default(8192),
     providers: z
       .array(providerSchema)
       .min(1, "providers must be a non-empty array"),
@@ -39,6 +45,7 @@ export type Config = z.infer<typeof configSchema>;
 const DEFAULT_CONFIG: Config = {
   activeProvider: "ollama",
   activeModel: "qwen3:8b",
+  maxTokens: 8192,
   providers: [
     {
       name: "ollama",
@@ -50,6 +57,7 @@ const DEFAULT_CONFIG: Config = {
 
 const DEFAULT_CONFIG_YAML = `activeProvider: ollama
 activeModel: qwen3:8b
+maxTokens: 8192
 
 providers:
   - name: ollama
@@ -144,6 +152,15 @@ export function getProviderByName(
   name: string,
 ): ProviderConfig | undefined {
   return config.providers.find((p) => p.name === name);
+}
+
+/** Resolves the effective maxTokens for a model: model override > global default. */
+export function getMaxTokens(
+  config: Config,
+  provider: ProviderConfig,
+  model: string,
+): number {
+  return provider.models?.[model]?.maxTokens ?? config.maxTokens;
 }
 
 /** Returns the provider config matching the activeProvider name. Throws if not found. */

@@ -14,6 +14,10 @@ const mockCallbacks = () => ({
   activeModel: "qwen3:8b",
   activeProvider: "ollama",
   providerNames: ["ollama"],
+  contextWindow: 8192,
+  maxTokens: 8192,
+  tokenUsage: null,
+  messageCount: 0,
 });
 
 const mockModelsResponse = (ids: string[]) =>

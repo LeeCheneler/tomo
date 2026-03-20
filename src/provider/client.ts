@@ -115,6 +115,7 @@ export interface CompletionOptions {
   baseUrl: string;
   model: string;
   messages: ChatMessage[];
+  maxTokens?: number;
   signal?: AbortSignal;
 }
 
@@ -134,7 +135,7 @@ export interface CompletionStream {
 export async function streamChatCompletion(
   options: CompletionOptions,
 ): Promise<CompletionStream> {
-  const { baseUrl, model, messages, signal } = options;
+  const { baseUrl, model, messages, maxTokens, signal } = options;
   const url = `${baseUrl.replace(/\/+$/, "")}/v1/chat/completions`;
 
   let response: Response;
@@ -147,6 +148,7 @@ export async function streamChatCompletion(
         messages,
         stream: true,
         stream_options: { include_usage: true },
+        ...(maxTokens != null && { max_tokens: maxTokens }),
       }),
       signal,
     });

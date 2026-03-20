@@ -22,6 +22,10 @@ export interface CommandCallbacks {
   activeModel: string;
   activeProvider: string;
   providerNames: string[];
+  contextWindow: number;
+  maxTokens: number;
+  tokenUsage: { promptTokens: number; completionTokens: number } | null;
+  messageCount: number;
 }
 
 /** A registered slash command with a name, description, and execute handler. */
