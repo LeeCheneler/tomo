@@ -1,4 +1,5 @@
 import { Box, Text } from "ink";
+import "./commands";
 import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
 import { Header } from "./components/header";
@@ -38,11 +39,15 @@ export function App() {
 
       {chat.streaming && !chat.streamingContent ? <ThinkingIndicator /> : null}
 
-      <ChatInput
-        onSubmit={chat.submit}
-        disabled={chat.streaming}
-        onEscape={chat.cancel}
-      />
+      {chat.activeCommand ? (
+        chat.activeCommand
+      ) : (
+        <ChatInput
+          onSubmit={chat.submit}
+          disabled={chat.streaming}
+          onEscape={chat.cancel}
+        />
+      )}
     </Box>
   );
 }
