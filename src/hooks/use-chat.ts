@@ -9,7 +9,7 @@ import {
   updateActiveModel,
   updateActiveProvider,
 } from "../config";
-import type { ChatMessage } from "../provider/client";
+import type { ChatMessage, TokenUsage } from "../provider/client";
 import { streamChatCompletion } from "../provider/client";
 import {
   type Session,
@@ -26,6 +26,7 @@ export interface ChatState {
   activeCommand: ReactElement | null;
   activeModel: string;
   activeProvider: ProviderConfig;
+  tokenUsage: TokenUsage | null;
   submit: (text: string) => void;
   cancel: () => void;
 }
@@ -48,6 +49,7 @@ export function useChat(
   const [activeModel, setActiveModel] = useState(initialModel);
   const [activeProvider, setActiveProviderState] =
     useState<ProviderConfig>(initialProvider);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<Session>(initialSession);
 
@@ -172,14 +174,21 @@ export function useChat(
     let content = "";
 
     try {
-      for await (const token of streamChatCompletion({
+      const completion = await streamChatCompletion({
         baseUrl: activeProvider.baseUrl,
         model: activeModel,
         messages: chatMessages,
         signal: controller.signal,
-      })) {
+      });
+
+      for await (const token of completion.content) {
         content += token;
         setStreamingContent(content);
+      }
+
+      const usage = completion.getUsage();
+      if (usage) {
+        setTokenUsage(usage);
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -216,6 +225,7 @@ export function useChat(
     activeCommand,
     activeModel,
     activeProvider,
+    tokenUsage,
     submit,
     cancel,
   };

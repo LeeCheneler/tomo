@@ -38,6 +38,11 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
 export interface CompletionOptions {
   baseUrl: string;
   model: string;
@@ -45,14 +50,22 @@ export interface CompletionOptions {
   signal?: AbortSignal;
 }
 
+export interface CompletionStream {
+  content: AsyncIterable<string>;
+  getUsage: () => TokenUsage | null;
+}
+
 /**
  * Streams chat completion tokens from an OpenAI-compatible endpoint.
  * Sends a POST to `/v1/chat/completions` with `stream: true` and
- * yields content strings as they arrive.
+ * `stream_options.include_usage` to capture token counts.
+ *
+ * Returns a `CompletionStream` with an async iterable of content strings
+ * and a `getUsage()` accessor that returns token counts after the stream ends.
  */
-export async function* streamChatCompletion(
+export async function streamChatCompletion(
   options: CompletionOptions,
-): AsyncGenerator<string> {
+): Promise<CompletionStream> {
   const { baseUrl, model, messages, signal } = options;
   const url = `${baseUrl.replace(/\/+$/, "")}/v1/chat/completions`;
 
@@ -61,7 +74,12 @@ export async function* streamChatCompletion(
     response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages, stream: true }),
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
       signal,
     });
   } catch (error) {
@@ -84,15 +102,31 @@ export async function* streamChatCompletion(
     throw new Error("Provider returned an empty response body");
   }
 
-  for await (const data of parseSSEStream(response.body)) {
-    try {
-      const chunk = JSON.parse(data);
-      const content = chunk.choices?.[0]?.delta?.content;
-      if (content) {
-        yield content;
+  const responseBody = response.body;
+  let usage: TokenUsage | null = null;
+
+  async function* streamContent(): AsyncGenerator<string> {
+    for await (const data of parseSSEStream(responseBody)) {
+      try {
+        const chunk = JSON.parse(data);
+        const content = chunk.choices?.[0]?.delta?.content;
+        if (content) {
+          yield content;
+        }
+        if (chunk.usage) {
+          usage = {
+            promptTokens: chunk.usage.prompt_tokens ?? 0,
+            completionTokens: chunk.usage.completion_tokens ?? 0,
+          };
+        }
+      } catch {
+        // Skip malformed JSON in SSE data
       }
-    } catch {
-      // Skip malformed JSON in SSE data
     }
   }
+
+  return {
+    content: streamContent(),
+    getUsage: () => usage,
+  };
 }

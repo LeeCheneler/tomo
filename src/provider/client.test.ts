@@ -27,6 +27,24 @@ function makeChunk(content: string): string {
   });
 }
 
+function makeUsageChunk(
+  promptTokens: number,
+  completionTokens: number,
+): string {
+  return JSON.stringify({
+    id: "chatcmpl-1",
+    object: "chat.completion.chunk",
+    created: 1234567890,
+    model: "test-model",
+    choices: [],
+    usage: {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: promptTokens + completionTokens,
+    },
+  });
+}
+
 const defaultOptions = {
   baseUrl: "http://localhost:11434",
   model: "test-model",
@@ -49,15 +67,16 @@ describe("streamChatCompletion", () => {
       ]),
     );
 
+    const completion = await streamChatCompletion(defaultOptions);
     const tokens: string[] = [];
-    for await (const token of streamChatCompletion(defaultOptions)) {
+    for await (const token of completion.content) {
       tokens.push(token);
     }
 
     expect(tokens).toEqual(["Hello", " world"]);
   });
 
-  it("sends correct request to the endpoint", async () => {
+  it("sends correct request with stream_options", async () => {
     vi.mocked(fetch).mockResolvedValue(createSSEResponse(["data: [DONE]\n\n"]));
 
     const messages: ChatMessage[] = [
@@ -65,11 +84,12 @@ describe("streamChatCompletion", () => {
       { role: "user", content: "Hi" },
     ];
 
-    for await (const _ of streamChatCompletion({
+    const completion = await streamChatCompletion({
       baseUrl: "http://localhost:11434",
       model: "llama3",
       messages,
-    })) {
+    });
+    for await (const _ of completion.content) {
       // consume
     }
 
@@ -82,6 +102,7 @@ describe("streamChatCompletion", () => {
           model: "llama3",
           messages,
           stream: true,
+          stream_options: { include_usage: true },
         }),
       }),
     );
@@ -90,10 +111,11 @@ describe("streamChatCompletion", () => {
   it("strips trailing slashes from baseUrl", async () => {
     vi.mocked(fetch).mockResolvedValue(createSSEResponse(["data: [DONE]\n\n"]));
 
-    for await (const _ of streamChatCompletion({
+    const completion = await streamChatCompletion({
       ...defaultOptions,
       baseUrl: "http://localhost:11434/",
-    })) {
+    });
+    for await (const _ of completion.content) {
       // consume
     }
 
@@ -108,21 +130,17 @@ describe("streamChatCompletion", () => {
       new Response("Internal Server Error", { status: 500 }),
     );
 
-    await expect(async () => {
-      for await (const _ of streamChatCompletion(defaultOptions)) {
-        // consume
-      }
-    }).rejects.toThrow("Provider returned HTTP 500: Internal Server Error");
+    await expect(streamChatCompletion(defaultOptions)).rejects.toThrow(
+      "Provider returned HTTP 500: Internal Server Error",
+    );
   });
 
   it("throws on connection failure", async () => {
     vi.mocked(fetch).mockRejectedValue(new TypeError("fetch failed"));
 
-    await expect(async () => {
-      for await (const _ of streamChatCompletion(defaultOptions)) {
-        // consume
-      }
-    }).rejects.toThrow("Failed to connect to provider");
+    await expect(streamChatCompletion(defaultOptions)).rejects.toThrow(
+      "Failed to connect to provider",
+    );
   });
 
   it("skips chunks with no content (e.g. role-only delta)", async () => {
@@ -141,8 +159,9 @@ describe("streamChatCompletion", () => {
       ]),
     );
 
+    const completion = await streamChatCompletion(defaultOptions);
     const tokens: string[] = [];
-    for await (const token of streamChatCompletion(defaultOptions)) {
+    for await (const token of completion.content) {
       tokens.push(token);
     }
 
@@ -157,14 +176,12 @@ describe("streamChatCompletion", () => {
       new DOMException("The operation was aborted", "AbortError"),
     );
 
-    await expect(async () => {
-      for await (const _ of streamChatCompletion({
+    await expect(
+      streamChatCompletion({
         ...defaultOptions,
         signal: controller.signal,
-      })) {
-        // consume
-      }
-    }).rejects.toThrow("aborted");
+      }),
+    ).rejects.toThrow("aborted");
   });
 
   it("throws on empty response body", async () => {
@@ -172,10 +189,57 @@ describe("streamChatCompletion", () => {
     Object.defineProperty(response, "body", { value: null });
     vi.mocked(fetch).mockResolvedValue(response);
 
-    await expect(async () => {
-      for await (const _ of streamChatCompletion(defaultOptions)) {
-        // consume
-      }
-    }).rejects.toThrow("Provider returned an empty response body");
+    await expect(streamChatCompletion(defaultOptions)).rejects.toThrow(
+      "Provider returned an empty response body",
+    );
+  });
+
+  it("extracts token usage from the final chunk", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      createSSEResponse([
+        `data: ${makeChunk("Hi")}\n\ndata: ${makeUsageChunk(25, 10)}\n\ndata: [DONE]\n\n`,
+      ]),
+    );
+
+    const completion = await streamChatCompletion(defaultOptions);
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    expect(completion.getUsage()).toEqual({
+      promptTokens: 25,
+      completionTokens: 10,
+    });
+  });
+
+  it("returns null usage when provider sends no usage chunk", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      createSSEResponse([`data: ${makeChunk("Hi")}\n\ndata: [DONE]\n\n`]),
+    );
+
+    const completion = await streamChatCompletion(defaultOptions);
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    expect(completion.getUsage()).toBeNull();
+  });
+
+  it("returns null usage before stream is consumed", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      createSSEResponse([`data: ${makeUsageChunk(10, 5)}\n\ndata: [DONE]\n\n`]),
+    );
+
+    const completion = await streamChatCompletion(defaultOptions);
+    expect(completion.getUsage()).toBeNull();
+
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    expect(completion.getUsage()).toEqual({
+      promptTokens: 10,
+      completionTokens: 5,
+    });
   });
 });

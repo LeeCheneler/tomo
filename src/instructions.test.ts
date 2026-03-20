@@ -6,9 +6,7 @@ import { loadInstructions } from "./instructions";
 const tmpDir = resolve(import.meta.dirname, "../.test-instructions-tmp");
 const globalTomoDir = resolve(tmpDir, "global/.tomo");
 const globalClaudeDir = resolve(tmpDir, "global/.claude");
-const globalBareDir = resolve(tmpDir, "global");
 const localTomoDir = resolve(tmpDir, "local/.tomo");
-const localClaudeDir = resolve(tmpDir, "local/.claude");
 const localBareDir = resolve(tmpDir, "local");
 
 vi.mock("node:os", () => ({
