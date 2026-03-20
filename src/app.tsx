@@ -1,4 +1,4 @@
-import { createRequire } from "module";
+import { createRequire } from "node:module";
 import { useRef, useState } from "react";
 import { Box, Text } from "ink";
 
@@ -8,7 +8,7 @@ import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
 import type { DisplayMessage } from "./components/message-list";
 import { MessageList } from "./components/message-list";
-import { env } from "./env";
+import { getActiveProvider, loadConfig } from "./config";
 import type { ChatMessage } from "./provider/client";
 import { streamChatCompletion } from "./provider/client";
 
@@ -18,9 +18,10 @@ const LOGO = `
   ╩ ╚═╝╩ ╩╚═╝
 `;
 
-const BASE_URL = env.getOptional("TOMO_BASE_URL") ?? "http://localhost:11434";
-const MODEL = env.getOptional("TOMO_MODEL") ?? "qwen3:8b";
+const config = loadConfig();
+const provider = getActiveProvider(config);
 
+/** Root application component. Manages the conversation loop and renders the chat UI. */
 export function App() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -52,8 +53,8 @@ export function App() {
 
     try {
       for await (const token of streamChatCompletion({
-        baseUrl: BASE_URL,
-        model: MODEL,
+        baseUrl: provider.baseUrl,
+        model: provider.model,
         messages: chatMessages,
         signal: controller.signal,
       })) {

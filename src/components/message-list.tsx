@@ -12,6 +12,7 @@ interface MessageListProps {
   messages: DisplayMessage[];
 }
 
+/** Renders a list of chat messages, dispatching to UserMessage or AssistantMessage by role. */
 export function MessageList({ messages }: MessageListProps) {
   return (
     <Box flexDirection="column" gap={1}>
