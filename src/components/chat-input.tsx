@@ -7,6 +7,7 @@ interface ChatInputProps {
   onSubmit: (text: string) => void;
   disabled?: boolean;
   onEscape?: () => void;
+  contextPercent?: number | null;
 }
 
 const MAX_SUGGESTIONS = 5;
@@ -26,7 +27,12 @@ function findNextWordBoundary(text: string, pos: number): number {
 }
 
 /** Text input with cursor navigation, slash command autocomplete, and Ctrl+C confirmation. */
-export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
+export function ChatInput({
+  onSubmit,
+  disabled,
+  onEscape,
+  contextPercent,
+}: ChatInputProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [columns, setColumns] = useState(stdout.columns || 80);
@@ -208,14 +214,34 @@ export function ChatInput({ onSubmit, disabled, onEscape }: ChatInputProps) {
     }
   }
 
+  const hasContext = contextPercent != null;
+  const dividerColor =
+    hasContext && contextPercent >= 90
+      ? "red"
+      : hasContext && contextPercent >= 80
+        ? "yellow"
+        : undefined;
+  const dividerDim = !dividerColor;
+
+  const contextLabel = hasContext
+    ? ` ${Math.round(contextPercent)}% context `
+    : "";
+  const topLineWidth = columns - 2;
+  const bottomLineWidth = Math.max(0, columns - 2 - contextLabel.length);
+
   return (
     <Box flexDirection="column">
-      <Text dimColor>{"─".repeat(columns - 2)}</Text>
+      <Text dimColor={dividerDim} color={dividerColor}>
+        {"─".repeat(topLineWidth)}
+      </Text>
       <Text>
         {prompt}
         {inputDisplay}
       </Text>
-      <Text dimColor>{"─".repeat(columns - 2)}</Text>
+      <Text dimColor={dividerDim} color={dividerColor}>
+        {"─".repeat(bottomLineWidth)}
+        {contextLabel}
+      </Text>
       {isAutocomplete && matches.length > 0 ? (
         <Box flexDirection="column">
           {matches.map((cmd, i) => (

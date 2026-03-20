@@ -56,6 +56,14 @@ export function App() {
           onSubmit={chat.submit}
           disabled={chat.streaming}
           onEscape={chat.cancel}
+          contextPercent={
+            chat.tokenUsage
+              ? ((chat.tokenUsage.promptTokens +
+                  chat.tokenUsage.completionTokens) /
+                  chat.contextWindow) *
+                100
+              : null
+          }
         />
       )}
     </Box>
