@@ -5,6 +5,7 @@ import type { DisplayMessage } from "../components/message-list";
 import {
   type Config,
   type ProviderConfig,
+  getMaxTokens,
   getProviderByName,
   updateActiveModel,
   updateActiveProvider,
@@ -162,6 +163,10 @@ export function useChat(
         activeModel,
         activeProvider: activeProvider.name,
         providerNames: config.providers.map((p) => p.name),
+        contextWindow,
+        maxTokens: getMaxTokens(config, activeProvider, activeModel),
+        tokenUsage,
+        messageCount: messages.length,
       });
 
       if ("interactive" in result) {
@@ -205,9 +210,12 @@ export function useChat(
       { role: "user" as const, content: text },
     ];
 
+    const maxTokens = getMaxTokens(config, activeProvider, activeModel);
+
     const chatMessages = truncateMessages(
       allMessages,
       contextWindow,
+      maxTokens,
       tokenUsage?.promptTokens ?? null,
     );
 
@@ -218,6 +226,7 @@ export function useChat(
         baseUrl: activeProvider.baseUrl,
         model: activeModel,
         messages: chatMessages,
+        maxTokens,
         signal: controller.signal,
       });
 

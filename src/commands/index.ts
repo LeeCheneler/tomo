@@ -1,4 +1,5 @@
 // Register built-in commands
+import "./context";
 import "./help";
 import "./models";
 import "./new";

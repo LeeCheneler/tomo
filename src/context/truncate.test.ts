@@ -9,7 +9,7 @@ function msg(role: ChatMessage["role"], content: string): ChatMessage {
 describe("truncateMessages", () => {
   it("returns messages unchanged when no usage data is available", () => {
     const messages = [msg("user", "hi"), msg("assistant", "hello")];
-    expect(truncateMessages(messages, 4096, null)).toEqual(messages);
+    expect(truncateMessages(messages, 8192, 4096, null)).toEqual(messages);
   });
 
   it("returns messages unchanged when under budget", () => {
@@ -18,9 +18,8 @@ describe("truncateMessages", () => {
       msg("user", "hi"),
       msg("assistant", "hello"),
     ];
-    // 100 prompt tokens for 2 non-system messages, context window 4096
-    // budget = 3072, estimated ~100, well under
-    expect(truncateMessages(messages, 4096, 100)).toEqual(messages);
+    // 100 prompt tokens, budget = 8192 - 4096 = 4096, well under
+    expect(truncateMessages(messages, 8192, 4096, 100)).toEqual(messages);
   });
 
   it("drops oldest non-system messages when over budget", () => {
@@ -32,17 +31,12 @@ describe("truncateMessages", () => {
       msg("assistant", "resp2"),
       msg("user", "msg3"),
     ];
-    // 5 non-system messages, 2500 prompt tokens => 500 tokens/msg avg
-    // system overhead ~250, total estimate ~2750
-    // budget for contextWindow=1000 => 750
-    // Need to drop messages until under 750
-    const result = truncateMessages(messages, 1000, 2500);
+    // 5 non-system messages, 10000 prompt tokens
+    // budget = 8192 - 4096 = 4096, estimated ~10000, over budget
+    const result = truncateMessages(messages, 8192, 4096, 10000);
 
-    // System message preserved
     expect(result[0]).toEqual(msg("system", "sys"));
-    // Oldest messages dropped
     expect(result.length).toBeLessThan(messages.length);
-    // Last message (most recent) preserved
     expect(result[result.length - 1]).toEqual(msg("user", "msg3"));
   });
 
@@ -51,8 +45,7 @@ describe("truncateMessages", () => {
       msg("system", "important system prompt"),
       msg("user", "hi"),
     ];
-    // Even with tiny context window, system message stays
-    const result = truncateMessages(messages, 100, 5000);
+    const result = truncateMessages(messages, 8192, 4096, 50000);
     expect(result[0]).toEqual(msg("system", "important system prompt"));
   });
 
@@ -63,14 +56,13 @@ describe("truncateMessages", () => {
       msg("assistant", "resp1"),
       msg("user", "latest"),
     ];
-    const result = truncateMessages(messages, 10, 50000);
-    // System + at least the latest message
+    const result = truncateMessages(messages, 8192, 4096, 50000);
     expect(result.length).toBeGreaterThanOrEqual(2);
     expect(result[result.length - 1]).toEqual(msg("user", "latest"));
   });
 
   it("returns empty array unchanged", () => {
-    expect(truncateMessages([], 4096, 100)).toEqual([]);
+    expect(truncateMessages([], 8192, 4096, 100)).toEqual([]);
   });
 
   it("works without a system message", () => {
@@ -81,9 +73,25 @@ describe("truncateMessages", () => {
       msg("assistant", "resp2"),
       msg("user", "msg3"),
     ];
-    // 5 messages, 2500 tokens => 500/msg, budget for 1000 = 750
-    const result = truncateMessages(messages, 1000, 2500);
+    // 5 messages, 10000 tokens, budget = 8192 - 4096 = 4096
+    const result = truncateMessages(messages, 8192, 4096, 10000);
     expect(result.length).toBeLessThan(messages.length);
     expect(result[result.length - 1]).toEqual(msg("user", "msg3"));
+  });
+
+  it("respects different maxTokens values", () => {
+    const messages = [
+      msg("system", "sys"),
+      msg("user", "msg1"),
+      msg("assistant", "resp1"),
+      msg("user", "msg2"),
+    ];
+    // With large maxTokens (small budget), should truncate
+    const small = truncateMessages(messages, 8192, 7000, 5000);
+    // With small maxTokens (large budget), should keep all
+    const large = truncateMessages(messages, 8192, 1000, 5000);
+
+    expect(small.length).toBeLessThan(messages.length);
+    expect(large).toEqual(messages);
   });
 });
