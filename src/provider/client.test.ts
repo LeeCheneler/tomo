@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { streamChatCompletion, type ChatMessage } from "./client";
+import {
+  streamChatCompletion,
+  fetchContextWindow,
+  clearContextWindowCache,
+  type ChatMessage,
+} from "./client";
 
 function createSSEResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -241,5 +246,136 @@ describe("streamChatCompletion", () => {
       promptTokens: 10,
       completionTokens: 5,
     });
+  });
+});
+
+describe("fetchContextWindow", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    clearContextWindowCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("extracts context length from Ollama model_info", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model_info: { "llama.context_length": 8192 },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await fetchContextWindow(
+      "http://localhost:11434",
+      "llama3",
+      "ollama",
+    );
+    expect(result).toBe(8192);
+  });
+
+  it("handles different architecture prefixes", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model_info: { "qwen2.context_length": 32768 },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await fetchContextWindow(
+      "http://localhost:11434",
+      "qwen3:8b",
+      "ollama",
+    );
+    expect(result).toBe(32768);
+  });
+
+  it("returns default when model_info has no context_length key", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model_info: { "llama.embedding_length": 4096 },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await fetchContextWindow(
+      "http://localhost:11434",
+      "unknown",
+      "ollama",
+    );
+    expect(result).toBe(4096);
+  });
+
+  it("returns default on HTTP error", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response("Not Found", { status: 404 }),
+    );
+
+    const result = await fetchContextWindow(
+      "http://localhost:11434",
+      "missing",
+      "ollama",
+    );
+    expect(result).toBe(4096);
+  });
+
+  it("returns default on network failure", async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await fetchContextWindow(
+      "http://localhost:11434",
+      "model",
+      "ollama",
+    );
+    expect(result).toBe(4096);
+  });
+
+  it("caches results per baseUrl + model", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model_info: { "llama.context_length": 16384 },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await fetchContextWindow("http://localhost:11434", "llama3", "ollama");
+    await fetchContextWindow("http://localhost:11434", "llama3", "ollama");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends POST to /api/show with model name", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ model_info: {} }), { status: 200 }),
+    );
+
+    await fetchContextWindow("http://localhost:11434", "qwen3:8b", "ollama");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "http://localhost:11434/api/show",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ model: "qwen3:8b" }),
+      }),
+    );
+  });
+
+  it("returns default without fetching for non-ollama providers", async () => {
+    const result = await fetchContextWindow(
+      "http://localhost:8080",
+      "model",
+      "openai",
+    );
+    expect(result).toBe(4096);
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 });

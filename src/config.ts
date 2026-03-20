@@ -10,6 +10,7 @@ const providerSchema = z.object({
     message: 'unsupported provider type. Supported: "ollama"',
   }),
   baseUrl: z.string().url("baseUrl must be a valid URL"),
+  contextWindow: z.number().int().positive().optional(),
 });
 
 const configSchema = z

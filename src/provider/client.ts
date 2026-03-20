@@ -33,6 +33,74 @@ export async function fetchModels(baseUrl: string): Promise<ModelInfo[]> {
   return models.map((m) => ({ id: m.id }));
 }
 
+const DEFAULT_CONTEXT_WINDOW = 4096;
+
+const contextWindowCache = new Map<string, number>();
+
+/** Clears the context window cache. Exported for testing. */
+export function clearContextWindowCache(): void {
+  contextWindowCache.clear();
+}
+
+/**
+ * Fetches the context window size for a model.
+ * Dispatches to provider-specific detection based on `providerType`.
+ * Only Ollama supports detection — other types return the default.
+ * Results are cached per `baseUrl + model` key.
+ */
+export async function fetchContextWindow(
+  baseUrl: string,
+  model: string,
+  providerType: string,
+): Promise<number> {
+  if (providerType !== "ollama") return DEFAULT_CONTEXT_WINDOW;
+
+  const cacheKey = `${baseUrl}::${model}`;
+  const cached = contextWindowCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const url = `${baseUrl.replace(/\/+$/, "")}/api/show`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model }),
+    });
+
+    if (!response.ok) return DEFAULT_CONTEXT_WINDOW;
+
+    const json = await response.json();
+    const modelInfo = json.model_info;
+
+    // Ollama stores context length under `<arch>.context_length` where
+    // the arch prefix varies per model. Find any matching key.
+    let contextLength: number | null = null;
+    if (modelInfo && typeof modelInfo === "object") {
+      for (const key of Object.keys(modelInfo)) {
+        if (key.endsWith(".context_length")) {
+          const val = modelInfo[key];
+          if (typeof val === "number") {
+            contextLength = val;
+            break;
+          }
+        }
+      }
+    }
+
+    const result = contextLength ?? DEFAULT_CONTEXT_WINDOW;
+    contextWindowCache.set(cacheKey, result);
+    return result;
+  } catch {
+    return DEFAULT_CONTEXT_WINDOW;
+  }
+}
+
+/** Returns the default context window size used when detection fails. */
+export function getDefaultContextWindow(): number {
+  return DEFAULT_CONTEXT_WINDOW;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;

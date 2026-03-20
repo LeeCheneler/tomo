@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getCommand, parse } from "../commands";
 import type { DisplayMessage } from "../components/message-list";
 import {
@@ -10,7 +10,11 @@ import {
   updateActiveProvider,
 } from "../config";
 import type { ChatMessage, TokenUsage } from "../provider/client";
-import { streamChatCompletion } from "../provider/client";
+import {
+  fetchContextWindow,
+  getDefaultContextWindow,
+  streamChatCompletion,
+} from "../provider/client";
 import {
   type Session,
   appendMessage,
@@ -27,6 +31,7 @@ export interface ChatState {
   activeModel: string;
   activeProvider: ProviderConfig;
   tokenUsage: TokenUsage | null;
+  contextWindow: number;
   submit: (text: string) => void;
   cancel: () => void;
 }
@@ -50,8 +55,36 @@ export function useChat(
   const [activeProvider, setActiveProviderState] =
     useState<ProviderConfig>(initialProvider);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
+  const [contextWindow, setContextWindow] = useState(
+    initialProvider.contextWindow ?? getDefaultContextWindow(),
+  );
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<Session>(initialSession);
+
+  // Detect context window from provider when model or provider changes.
+  // Config override takes precedence — only fetch if no override is set.
+  useEffect(() => {
+    if (activeProvider.contextWindow) {
+      setContextWindow(activeProvider.contextWindow);
+      return;
+    }
+    let cancelled = false;
+    fetchContextWindow(
+      activeProvider.baseUrl,
+      activeModel,
+      activeProvider.type,
+    ).then((size) => {
+      if (!cancelled) setContextWindow(size);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeProvider.baseUrl,
+    activeProvider.contextWindow,
+    activeProvider.type,
+    activeModel,
+  ]);
 
   const addMessages = (...msgs: DisplayMessage[]) => {
     setMessages((prev) => [...prev, ...msgs]);
@@ -226,6 +259,7 @@ export function useChat(
     activeModel,
     activeProvider,
     tokenUsage,
+    contextWindow,
     submit,
     cancel,
   };
