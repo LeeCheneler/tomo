@@ -13,11 +13,11 @@ const provider = getActiveProvider(config);
 
 /** Root application component. Renders the chat UI and delegates state to useChat. */
 export function App() {
-  const chat = useChat(provider);
+  const chat = useChat(provider, config.activeModel);
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Header model={provider.model} />
+      <Header model={config.activeModel} />
 
       {chat.messages.length > 0 ? (
         <Box flexDirection="column" marginBottom={1}>

@@ -33,6 +33,7 @@ describe("loadConfig", () => {
   it("creates default config when none exists", () => {
     const config = loadConfig();
     expect(config.activeProvider).toBe("ollama");
+    expect(config.activeModel).toBe("qwen3:8b");
     expect(config.providers).toHaveLength(1);
     expect(config.providers[0].name).toBe("ollama");
     expect(existsSync(globalPath)).toBe(true);
@@ -43,17 +44,17 @@ describe("loadConfig", () => {
       globalPath,
       `
 activeProvider: my-ollama
+activeModel: llama3
 providers:
   - name: my-ollama
     type: ollama
     baseUrl: http://localhost:9999
-    model: llama3
 `,
     );
     const config = loadConfig();
     expect(config.activeProvider).toBe("my-ollama");
+    expect(config.activeModel).toBe("llama3");
     expect(config.providers[0].baseUrl).toBe("http://localhost:9999");
-    expect(config.providers[0].model).toBe("llama3");
   });
 
   it("merges local config on top of global", () => {
@@ -61,27 +62,27 @@ providers:
       globalPath,
       `
 activeProvider: ollama
+activeModel: qwen3:8b
 providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
-    model: qwen3:8b
 `,
     );
     writeYaml(
       localPath,
       `
 activeProvider: local-ollama
+activeModel: mistral
 providers:
   - name: local-ollama
     type: ollama
     baseUrl: http://localhost:5555
-    model: mistral
 `,
     );
     const config = loadConfig();
     expect(config.activeProvider).toBe("local-ollama");
-    expect(config.providers[0].model).toBe("mistral");
+    expect(config.activeModel).toBe("mistral");
   });
 
   it("throws on empty providers", () => {
@@ -89,6 +90,7 @@ providers:
       globalPath,
       `
 activeProvider: ollama
+activeModel: qwen3:8b
 providers: []
 `,
     );
@@ -100,10 +102,10 @@ providers: []
       globalPath,
       `
 activeProvider: ollama
+activeModel: qwen3:8b
 providers:
   - type: ollama
     baseUrl: http://localhost:11434
-    model: qwen3:8b
 `,
     );
     expect(() => loadConfig()).toThrow("validation failed");
@@ -114,11 +116,11 @@ providers:
       globalPath,
       `
 activeProvider: test
+activeModel: qwen3:8b
 providers:
   - name: test
     type: unsupported
     baseUrl: http://localhost:11434
-    model: qwen3:8b
 `,
     );
     expect(() => loadConfig()).toThrow("unsupported provider type");
@@ -129,27 +131,13 @@ providers:
       globalPath,
       `
 activeProvider: test
+activeModel: qwen3:8b
 providers:
   - name: test
     type: ollama
-    model: qwen3:8b
 `,
     );
     expect(() => loadConfig()).toThrow("validation failed");
-  });
-
-  it("throws on missing model", () => {
-    writeYaml(
-      globalPath,
-      `
-activeProvider: test
-providers:
-  - name: test
-    type: ollama
-    baseUrl: http://localhost:11434
-`,
-    );
-    expect(() => loadConfig()).toThrow("model");
   });
 
   it("throws when activeProvider does not match any provider", () => {
@@ -157,11 +145,11 @@ providers:
       globalPath,
       `
 activeProvider: nonexistent
+activeModel: qwen3:8b
 providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
-    model: qwen3:8b
 `,
     );
     expect(() => loadConfig()).toThrow(
@@ -174,12 +162,12 @@ describe("getActiveProvider", () => {
   it("returns the active provider", () => {
     const config: Config = {
       activeProvider: "ollama",
+      activeModel: "qwen3:8b",
       providers: [
         {
           name: "ollama",
           type: "ollama",
           baseUrl: "http://localhost:11434",
-          model: "qwen3:8b",
         },
       ],
     };
@@ -191,12 +179,12 @@ describe("getActiveProvider", () => {
   it("throws when active provider not found", () => {
     const config: Config = {
       activeProvider: "missing",
+      activeModel: "qwen3:8b",
       providers: [
         {
           name: "ollama",
           type: "ollama",
           baseUrl: "http://localhost:11434",
-          model: "qwen3:8b",
         },
       ],
     };

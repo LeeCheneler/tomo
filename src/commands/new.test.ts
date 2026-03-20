@@ -14,6 +14,8 @@ describe("/new command", () => {
       onComplete: vi.fn(),
       onCancel: vi.fn(),
       clearMessages,
+      providerBaseUrl: "http://localhost:11434",
+      activeModel: "qwen3:8b",
     };
 
     const result = command!.execute("", callbacks);
