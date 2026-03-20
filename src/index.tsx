@@ -3,7 +3,7 @@ import { render } from "ink";
 import { App } from "./app";
 import { getLastSavedSessionId } from "./session";
 
-const { waitUntilExit } = render(<App />);
+const { waitUntilExit } = render(<App />, { exitOnCtrlC: false });
 await waitUntilExit();
 
 const sessionId = getLastSavedSessionId();
