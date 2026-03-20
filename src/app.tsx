@@ -7,13 +7,20 @@ import { MessageList } from "./components/message-list";
 import { ThinkingIndicator } from "./components/thinking-indicator";
 import { getActiveProvider, loadConfig } from "./config";
 import { useChat } from "./hooks/use-chat";
+import { createSession } from "./session";
 
 const config = loadConfig();
 const initialProvider = getActiveProvider(config);
+const initialSession = createSession(initialProvider.name, config.activeModel);
 
 /** Root application component. Renders the chat UI and delegates state to useChat. */
 export function App() {
-  const chat = useChat(config, initialProvider, config.activeModel);
+  const chat = useChat(
+    config,
+    initialProvider,
+    config.activeModel,
+    initialSession,
+  );
 
   return (
     <Box flexDirection="column" paddingX={1}>
