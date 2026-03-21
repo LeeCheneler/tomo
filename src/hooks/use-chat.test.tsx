@@ -44,6 +44,7 @@ function createDeferredStream(signal?: AbortSignal) {
   return {
     content: content(),
     getUsage: () => ({ promptTokens: 10, completionTokens: 5 }),
+    getToolCalls: () => [],
   };
 }
 
