@@ -90,13 +90,3 @@ Conversations are automatically saved to `~/.tomo/sessions/` as JSONL files. On 
 ```
 
 Use `/session` to browse previous sessions or `/session <id>` to load one directly.
-
-## Development
-
-```bash
-pnpm install
-pnpm dev        # run in development
-pnpm test       # run tests
-pnpm build      # bundle to dist/tomo.js
-pnpm build:sea  # build standalone binary
-```
