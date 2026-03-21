@@ -13,6 +13,7 @@ import {
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import type { DisplayMessage } from "./components/message-list";
+import type { ToolCall } from "./provider/client";
 
 export interface Session {
   id: string;
@@ -31,12 +32,22 @@ interface MetaEntry {
   model: string;
 }
 
-interface MessageEntry {
-  type: "message";
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-}
+type MessageEntry =
+  | { type: "message"; id: string; role: "user" | "system"; content: string }
+  | {
+      type: "message";
+      id: string;
+      role: "assistant";
+      content: string;
+      tool_calls?: ToolCall[];
+    }
+  | {
+      type: "message";
+      id: string;
+      role: "tool";
+      content: string;
+      tool_call_id: string;
+    };
 
 let _lastSavedSessionId: string | null = null;
 
@@ -104,12 +115,7 @@ export function appendMessage(session: Session, message: DisplayMessage): void {
     writeFileSync(path, `${JSON.stringify(meta)}\n`, "utf-8");
   }
 
-  const entry: MessageEntry = {
-    type: "message",
-    id: message.id,
-    role: message.role,
-    content: message.content,
-  };
+  const entry: MessageEntry = { type: "message", ...message } as MessageEntry;
   appendFileSync(path, `${JSON.stringify(entry)}\n`, "utf-8");
   _lastSavedSessionId = session.id;
 }
@@ -130,11 +136,8 @@ export function loadSession(id: string): Session | null {
     try {
       const entry = JSON.parse(lines[i]) as MessageEntry;
       if (entry.type === "message") {
-        messages.push({
-          id: entry.id,
-          role: entry.role,
-          content: entry.content,
-        });
+        const { type: _, ...msg } = entry;
+        messages.push(msg as DisplayMessage);
       }
     } catch {
       // Skip malformed lines
@@ -173,11 +176,8 @@ export function listSessions(limit = 50): Session[] {
         try {
           const entry = JSON.parse(lines[1]) as MessageEntry;
           if (entry.type === "message") {
-            messages.push({
-              id: entry.id,
-              role: entry.role,
-              content: entry.content,
-            });
+            const { type: _, ...msg } = entry;
+            messages.push(msg as DisplayMessage);
           }
         } catch {
           // First message line malformed or truncated

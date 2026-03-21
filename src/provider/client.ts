@@ -101,10 +101,21 @@ export function getDefaultContextWindow(): number {
   return DEFAULT_CONTEXT_WINDOW;
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
+export interface ToolCallFunction {
+  name: string;
+  arguments: string;
 }
+
+export interface ToolCall {
+  id: string;
+  function: ToolCallFunction;
+}
+
+export type ChatMessage =
+  | { role: "user"; content: string }
+  | { role: "system"; content: string }
+  | { role: "assistant"; content: string; tool_calls?: ToolCall[] }
+  | { role: "tool"; content: string; tool_call_id: string };
 
 export interface TokenUsage {
   promptTokens: number;

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "../provider/client";
 import { truncateMessages } from "./truncate";
 
-function msg(role: ChatMessage["role"], content: string): ChatMessage {
-  return { role, content };
+function msg(
+  role: "user" | "assistant" | "system",
+  content: string,
+): ChatMessage {
+  return { role, content } as ChatMessage;
 }
 
 describe("truncateMessages", () => {

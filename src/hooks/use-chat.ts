@@ -216,10 +216,23 @@ export function useChat(
         : []),
       ...messages
         .filter((m) => m.role !== "system")
-        .map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
+        .map((m): ChatMessage => {
+          if (m.role === "tool") {
+            return {
+              role: "tool",
+              content: m.content,
+              tool_call_id: m.tool_call_id,
+            };
+          }
+          if (m.role === "assistant" && m.tool_calls) {
+            return {
+              role: "assistant",
+              content: m.content,
+              tool_calls: m.tool_calls,
+            };
+          }
+          return { role: m.role as "user" | "assistant", content: m.content };
+        }),
       { role: "user" as const, content: text },
     ];
 

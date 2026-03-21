@@ -101,6 +101,44 @@ describe("appendMessage / loadSession", () => {
     expect(loaded?.messages[2].content).toBe("third");
   });
 
+  it("round-trips assistant messages with tool_calls", () => {
+    const session = createSession("ollama", "qwen3:8b");
+    const msg = {
+      id: "msg-1",
+      role: "assistant" as const,
+      content: "",
+      tool_calls: [
+        {
+          id: "call-1",
+          function: {
+            name: "ask",
+            arguments: '{"question":"pick one","options":["a","b"]}',
+          },
+        },
+      ],
+    };
+
+    appendMessage(session, msg);
+
+    const loaded = loadSession(session.id);
+    expect(loaded?.messages).toEqual([msg]);
+  });
+
+  it("round-trips tool result messages", () => {
+    const session = createSession("ollama", "qwen3:8b");
+    const msg = {
+      id: "msg-1",
+      role: "tool" as const,
+      content: "a",
+      tool_call_id: "call-1",
+    };
+
+    appendMessage(session, msg);
+
+    const loaded = loadSession(session.id);
+    expect(loaded?.messages).toEqual([msg]);
+  });
+
   it("preserves session metadata across appends", () => {
     const session = createSession("ollama", "qwen3:8b");
 
