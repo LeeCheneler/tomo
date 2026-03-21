@@ -10,18 +10,22 @@ interface ToolMessageProps {
 /** Renders tool output with collapsed/expanded display. */
 export function ToolMessage({ children, expanded }: ToolMessageProps) {
   const lines = children.split("\n");
-  const totalLines = lines.length;
-  const needsCollapse = totalLines > COLLAPSED_LINES;
+  // First line is the tool header (styled with chalk), rest is body
+  const header = lines[0] ?? "";
+  const bodyLines = lines.slice(1);
+  const bodyTotal = bodyLines.length;
+  const needsCollapse = bodyTotal > COLLAPSED_LINES;
 
-  const displayContent =
+  const displayBody =
     !expanded && needsCollapse
-      ? lines.slice(-COLLAPSED_LINES).join("\n")
-      : children;
+      ? bodyLines.slice(-COLLAPSED_LINES).join("\n")
+      : bodyLines.join("\n");
 
-  const hiddenCount = totalLines - COLLAPSED_LINES;
+  const hiddenCount = bodyTotal - COLLAPSED_LINES;
 
   return (
     <Box flexDirection="column">
+      <Text>{header}</Text>
       {!expanded && needsCollapse ? (
         <Text dimColor>
           {"  ▸ "}
@@ -31,7 +35,7 @@ export function ToolMessage({ children, expanded }: ToolMessageProps) {
       {expanded && needsCollapse ? (
         <Text dimColor>{"  ▾ Tab to collapse"}</Text>
       ) : null}
-      <Text dimColor>{displayContent}</Text>
+      {displayBody ? <Text dimColor>{displayBody}</Text> : null}
     </Box>
   );
 }
