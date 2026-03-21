@@ -34,6 +34,7 @@ export interface ChatState {
   activeProvider: ProviderConfig;
   tokenUsage: TokenUsage | null;
   contextWindow: number;
+  pendingMessage: string | null;
   submit: (text: string) => void;
   cancel: () => void;
 }
@@ -62,6 +63,9 @@ export function useChat(
   );
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<Session>(initialSession);
+  const streamingRef = useRef(false);
+  const pendingMessageRef = useRef<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   // Detect context window from provider when model or provider changes.
   // Config override takes precedence — only fetch if no override is set.
@@ -96,6 +100,8 @@ export function useChat(
     const newSession = createSession(activeProvider.name, activeModel);
     sessionRef.current = newSession;
 
+    pendingMessageRef.current = null;
+    setPendingMessage(null);
     abortRef.current?.abort();
     setMessages([]);
     setStreaming(false);
@@ -106,6 +112,12 @@ export function useChat(
   };
 
   const submit = async (text: string) => {
+    if (streamingRef.current) {
+      pendingMessageRef.current = text;
+      setPendingMessage(text);
+      return;
+    }
+
     const parsed = parse(text);
 
     if (parsed) {
@@ -190,6 +202,7 @@ export function useChat(
 
     setMessages((prev) => [...prev, userMsg]);
     appendMessage(sessionRef.current, userMsg);
+    streamingRef.current = true;
     setStreaming(true);
     setStreamingContent("");
     setError(null);
@@ -257,12 +270,30 @@ export function useChat(
       appendMessage(sessionRef.current, assistantMsg);
     }
 
+    streamingRef.current = false;
     setStreaming(false);
     setStreamingContent("");
     abortRef.current = null;
   };
 
+  // Keep a ref to the latest submit so the pending-message effect
+  // always calls the version with up-to-date message history.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+
+  // Process queued message after streaming completes.
+  useEffect(() => {
+    if (!streaming && pendingMessageRef.current !== null) {
+      const pending = pendingMessageRef.current;
+      pendingMessageRef.current = null;
+      setPendingMessage(null);
+      submitRef.current(pending);
+    }
+  }, [streaming]);
+
   const cancel = () => {
+    pendingMessageRef.current = null;
+    setPendingMessage(null);
     abortRef.current?.abort();
   };
 
@@ -276,6 +307,7 @@ export function useChat(
     activeProvider,
     tokenUsage,
     contextWindow,
+    pendingMessage,
     submit,
     cancel,
   };
