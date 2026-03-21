@@ -47,6 +47,19 @@ export function App() {
         </Box>
       ) : null}
 
+      {chat.pendingMessage ? (
+        <Box marginBottom={1}>
+          <Text>
+            <Text color="yellow" bold>
+              {"Queued: "}
+            </Text>
+            <Text backgroundColor="gray" color="white">
+              {chat.pendingMessage}
+            </Text>
+          </Text>
+        </Box>
+      ) : null}
+
       {chat.streaming && !chat.streamingContent ? <ThinkingIndicator /> : null}
 
       {chat.activeCommand ? (
@@ -54,7 +67,6 @@ export function App() {
       ) : (
         <ChatInput
           onSubmit={chat.submit}
-          disabled={chat.streaming}
           onEscape={chat.cancel}
           contextPercent={
             chat.tokenUsage
