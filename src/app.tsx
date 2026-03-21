@@ -3,6 +3,7 @@ import "./commands";
 import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
 import { Header } from "./components/header";
+import { completePartialMarkdown } from "./components/markdown";
 import { MessageList } from "./components/message-list";
 import { ThinkingIndicator } from "./components/thinking-indicator";
 import { getActiveProvider, loadConfig } from "./config";
@@ -37,7 +38,9 @@ export function App() {
 
       {chat.streaming && chat.streamingContent ? (
         <Box flexDirection="column" marginBottom={1}>
-          <AssistantMessage>{chat.streamingContent}</AssistantMessage>
+          <AssistantMessage>
+            {completePartialMarkdown(chat.streamingContent)}
+          </AssistantMessage>
         </Box>
       ) : null}
 

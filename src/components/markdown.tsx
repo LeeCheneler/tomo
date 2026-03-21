@@ -159,6 +159,45 @@ function indentBlock(text: string): string {
     .join("\n");
 }
 
+/**
+ * Closes unclosed code fences in partial markdown so streaming content
+ * renders as a code block instead of plain text while the response is
+ * still arriving.
+ */
+export function completePartialMarkdown(text: string): string {
+  const lines = text.split("\n");
+  let inCodeBlock = false;
+  let fenceChar = "";
+  let fenceLength = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    if (!inCodeBlock) {
+      const match = trimmed.match(/^(`{3,}|~{3,})/);
+      if (match) {
+        inCodeBlock = true;
+        fenceChar = match[1][0];
+        fenceLength = match[1].length;
+      }
+    } else {
+      const match = trimmed.match(/^(`{3,}|~{3,})\s*$/);
+      if (
+        match &&
+        match[1][0] === fenceChar &&
+        match[1].length >= fenceLength
+      ) {
+        inCodeBlock = false;
+      }
+    }
+  }
+
+  if (inCodeBlock) {
+    return `${text}\n${fenceChar.repeat(fenceLength)}`;
+  }
+
+  return text;
+}
+
 interface MarkdownProps {
   children: string;
 }
