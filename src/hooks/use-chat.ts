@@ -23,7 +23,7 @@ import {
   createSession,
   loadSession,
 } from "../session";
-import { getTool, getToolDefinitions } from "../tools";
+import { type ToolContext, getTool, getToolDefinitions } from "../tools";
 
 export interface ChatState {
   messages: DisplayMessage[];
@@ -40,10 +40,17 @@ export interface ChatState {
   cancel: () => void;
 }
 
+class ToolDismissedError extends Error {
+  constructor() {
+    super("The user dismissed the question.");
+  }
+}
+
 /** Executes tool calls and returns tool result messages. */
 async function executeToolCalls(
   toolCalls: ToolCall[],
   signal: AbortSignal,
+  toolContext: ToolContext,
 ): Promise<DisplayMessage[]> {
   const results: DisplayMessage[] = [];
   for (const tc of toolCalls) {
@@ -56,8 +63,9 @@ async function executeToolCalls(
       result = `Error: unknown tool "${tc.function.name}"`;
     } else {
       try {
-        result = await tool.execute(tc.function.arguments);
+        result = await tool.execute(tc.function.arguments, toolContext);
       } catch (err) {
+        if (err instanceof ToolDismissedError) throw err;
         result = `Error: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
@@ -276,6 +284,21 @@ export function useChat(
     const maxTokens = getMaxTokens(config, activeProvider, activeModel);
     const toolDefs = getToolDefinitions();
 
+    const toolContext: ToolContext = {
+      renderInteractive: (factory) =>
+        new Promise<string>((resolve, reject) => {
+          const onResult = (result: string) => {
+            setActiveCommand(null);
+            resolve(result);
+          };
+          const onCancel = () => {
+            setActiveCommand(null);
+            reject(new ToolDismissedError());
+          };
+          setActiveCommand(factory(onResult, onCancel));
+        }),
+    };
+
     let aborted = false;
     // Declared outside the loop so partial content survives abort.
     let content = "";
@@ -342,10 +365,29 @@ export function useChat(
         currentMessages = [...currentMessages, assistantMsg];
         appendMessage(sessionRef.current, assistantMsg);
 
-        const toolResultMessages = await executeToolCalls(
-          toolCalls,
-          controller.signal,
-        );
+        let toolResultMessages: DisplayMessage[];
+        try {
+          toolResultMessages = await executeToolCalls(
+            toolCalls,
+            controller.signal,
+            toolContext,
+          );
+        } catch (err) {
+          if (err instanceof ToolDismissedError) {
+            // User dismissed a tool interaction — add a system note and
+            // stop the turn without calling the provider again.
+            const dismissedMsg: DisplayMessage = {
+              id: crypto.randomUUID(),
+              role: "system",
+              content: "Question dismissed",
+            };
+            currentMessages = [...currentMessages, dismissedMsg];
+            setMessages(currentMessages);
+            break;
+          }
+          throw err;
+        }
+
         for (const msg of toolResultMessages) {
           currentMessages = [...currentMessages, msg];
           appendMessage(sessionRef.current, msg);

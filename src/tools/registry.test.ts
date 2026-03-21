@@ -12,7 +12,7 @@ function makeTool(name: string): Tool {
     name,
     description: `${name} description`,
     parameters: { type: "object", properties: {} },
-    execute: async () => "result",
+    execute: async (_args, _context) => "result",
   };
 }
 

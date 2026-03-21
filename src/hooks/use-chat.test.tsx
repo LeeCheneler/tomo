@@ -5,7 +5,7 @@ import { parse, getCommand } from "../commands";
 import { appendMessage } from "../session";
 import { streamChatCompletion } from "../provider/client";
 import type { ToolCall } from "../provider/client";
-import { getTool } from "../tools";
+import { getTool, getToolDefinitions } from "../tools";
 import { type ChatState, useChat } from "./use-chat";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
@@ -575,6 +575,98 @@ describe("useChat", () => {
 
       expect(chat.messages[2].role).toBe("tool");
       expect(chat.messages[2].content).toContain("tool failed");
+    });
+
+    it("stops the turn when a tool interaction is dismissed", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(getTool).mockReturnValue({
+        name: "ask",
+        description: "Ask",
+        parameters: {},
+        execute: async (_args, context) =>
+          context.renderInteractive((_onResult, onCancel) => {
+            // Simulate user dismissing immediately via microtask
+            Promise.resolve().then(onCancel);
+            return <Text>mock</Text>;
+          }),
+      });
+
+      vi.mocked(streamChatCompletion).mockResolvedValueOnce(
+        createToolCallStream([
+          {
+            id: "call-1",
+            function: { name: "ask", arguments: "{}" },
+          },
+        ]),
+      );
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      // Need multiple flushes: stream completes → tool executes →
+      // setTimeout fires → promise rejects → loop breaks → state updates
+      for (let i = 0; i < 6; i++) await flush();
+
+      expect(chat.streaming).toBe(false);
+      // Provider should only be called once — no re-call after dismissal
+      expect(vi.mocked(streamChatCompletion)).toHaveBeenCalledTimes(1);
+
+      // Should have: user, assistant (tool_calls), system (dismissed)
+      const systemMsgs = chat.messages.filter((m) => m.role === "system");
+      expect(systemMsgs).toHaveLength(1);
+      expect(systemMsgs[0].content).toBe("Question dismissed");
+    });
+
+    it("sends tool definitions with completion requests", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+      const toolDefs = [
+        {
+          type: "function" as const,
+          function: {
+            name: "ask",
+            description: "Ask a question",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ];
+      vi.mocked(getToolDefinitions).mockReturnValue(toolDefs);
+      vi.mocked(streamChatCompletion).mockImplementation(async (options) =>
+        createDeferredStream(options.signal),
+      );
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+
+      expect(vi.mocked(streamChatCompletion)).toHaveBeenCalledWith(
+        expect.objectContaining({ tools: toolDefs }),
+      );
+
+      streams[0].complete();
+      await flush();
+    });
+
+    it("does not send tools key when no tools are registered", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(getToolDefinitions).mockReturnValue([]);
+      vi.mocked(streamChatCompletion).mockImplementation(async (options) =>
+        createDeferredStream(options.signal),
+      );
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+
+      const callArgs = vi.mocked(streamChatCompletion).mock.calls[0][0];
+      expect(callArgs).not.toHaveProperty("tools");
+
+      streams[0].complete();
+      await flush();
     });
   });
 });

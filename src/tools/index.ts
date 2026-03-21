@@ -1,3 +1,6 @@
+// Register built-in tools
+import "./ask";
+
 // Re-export registry functions
 export {
   registerTool,
@@ -5,4 +8,4 @@ export {
   getAllTools,
   getToolDefinitions,
 } from "./registry";
-export type { Tool } from "./types";
+export type { Tool, ToolContext } from "./types";
