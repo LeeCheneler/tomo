@@ -27,7 +27,7 @@ describe("run_command tool", () => {
 
   it("returns error when no command provided", async () => {
     const tool = getTool("run_command");
-    const context = { renderInteractive: vi.fn() };
+    const context = { renderInteractive: vi.fn(), reportProgress: vi.fn() };
 
     const result = await tool?.execute(
       JSON.stringify({ command: "" }),
@@ -41,6 +41,7 @@ describe("run_command tool", () => {
     const tool = getTool("run_command");
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
+      reportProgress: vi.fn(),
     };
 
     const result = await tool?.execute(
@@ -49,14 +50,35 @@ describe("run_command tool", () => {
     );
 
     expect(context.renderInteractive).toHaveBeenCalledTimes(1);
+    expect(result).toContain("$ echo hello");
     expect(result).toContain("Exit code: 0");
     expect(result).toContain("hello");
+  });
+
+  it("streams output via reportProgress during execution", async () => {
+    const tool = getTool("run_command");
+    const context = {
+      renderInteractive: vi.fn().mockResolvedValue("approved"),
+      reportProgress: vi.fn(),
+    };
+
+    await tool?.execute(JSON.stringify({ command: "echo hello" }), context);
+
+    // reportProgress should have been called with partial output, then cleared
+    expect(context.reportProgress).toHaveBeenCalled();
+    // Last call clears streaming content
+    const lastCall =
+      context.reportProgress.mock.calls[
+        context.reportProgress.mock.calls.length - 1
+      ];
+    expect(lastCall[0]).toBe("");
   });
 
   it("returns denial message when user denies via cancel", async () => {
     const tool = getTool("run_command");
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("denied"),
+      reportProgress: vi.fn(),
     };
 
     const result = await tool?.execute(
@@ -71,6 +93,7 @@ describe("run_command tool", () => {
     const tool = getTool("run_command");
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
+      reportProgress: vi.fn(),
     };
 
     const result = await tool?.execute(
@@ -87,6 +110,7 @@ describe("run_command tool", () => {
     const tool = getTool("run_command");
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
+      reportProgress: vi.fn(),
     };
 
     const result = await tool?.execute(

@@ -1,10 +1,56 @@
-import { execSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import React from "react";
 import { CommandConfirm } from "../components/command-confirm";
 import { registerTool } from "./registry";
 import type { ToolContext } from "./types";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+interface SpawnResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+}
+
+/** Runs a command via spawn, streaming output through onData as it arrives. */
+function spawnCommand(
+  command: string,
+  timeout: number,
+  onData: (accumulated: string) => void,
+): Promise<SpawnResult> {
+  return new Promise((resolve) => {
+    const child = spawn(command, { shell: "/bin/sh", stdio: "pipe" });
+
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, timeout);
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      onData(stdout);
+    });
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ exitCode: code ?? 1, stdout, stderr, timedOut });
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      resolve({ exitCode: 1, stdout: "", stderr: err.message, timedOut });
+    });
+  });
+}
 
 registerTool({
   name: "run_command",
@@ -40,37 +86,28 @@ registerTool({
       return "The user denied this command.";
     }
 
-    try {
-      const stdout = execSync(command, {
-        encoding: "utf-8",
-        timeout: DEFAULT_TIMEOUT_MS,
-        stdio: ["pipe", "pipe", "pipe"],
-        shell: "/bin/sh",
-      });
+    const result = await spawnCommand(command, DEFAULT_TIMEOUT_MS, (output) => {
+      context.reportProgress(`$ ${command}\n${output}`);
+    });
 
-      return formatResult(0, stdout, "");
-    } catch (err) {
-      if (isExecError(err)) {
-        if (err.killed) {
-          return `Command timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`;
-        }
-        return formatResult(
-          err.status ?? 1,
-          err.stdout?.toString() ?? "",
-          err.stderr?.toString() ?? "",
-        );
-      }
-      return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    // Clear streaming content now that we have the final result
+    context.reportProgress("");
+
+    if (result.timedOut) {
+      return `$ ${command}\nCommand timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`;
     }
+
+    return formatResult(command, result.exitCode, result.stdout, result.stderr);
   },
 });
 
 function formatResult(
+  command: string,
   exitCode: number,
   stdout: string,
   stderr: string,
 ): string {
-  const parts = [`Exit code: ${exitCode}`];
+  const parts = [`$ ${command}`, `Exit code: ${exitCode}`];
   if (stdout.trim()) {
     parts.push(`\nstdout:\n${stdout.trim()}`);
   }
@@ -78,15 +115,4 @@ function formatResult(
     parts.push(`\nstderr:\n${stderr.trim()}`);
   }
   return parts.join("\n");
-}
-
-interface ExecError extends Error {
-  status?: number;
-  killed?: boolean;
-  stdout?: Buffer | string;
-  stderr?: Buffer | string;
-}
-
-function isExecError(err: unknown): err is ExecError {
-  return err instanceof Error && "status" in err;
 }

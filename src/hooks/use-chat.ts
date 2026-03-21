@@ -300,6 +300,9 @@ export function useChat(
           };
           setActiveCommand(factory(onResult, onCancel));
         }),
+      reportProgress: (progressContent: string) => {
+        setStreamingContent(progressContent);
+      },
     };
 
     let aborted = false;
