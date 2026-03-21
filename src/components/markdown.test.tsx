@@ -1,6 +1,6 @@
 import { render } from "ink-testing-library";
 import { describe, it, expect } from "vitest";
-import { Markdown } from "./markdown";
+import { Markdown, completePartialMarkdown } from "./markdown";
 
 describe("Markdown", () => {
   it("renders bold text", () => {
@@ -111,5 +111,50 @@ describe("Markdown", () => {
 
     rerender(<Markdown>{"Hello **world**"}</Markdown>);
     expect(lastFrame() ?? "").toContain("world");
+  });
+});
+
+describe("completePartialMarkdown", () => {
+  it("returns text unchanged when no code fences", () => {
+    expect(completePartialMarkdown("hello world")).toBe("hello world");
+  });
+
+  it("returns text unchanged when code fences are balanced", () => {
+    const text = "```js\nconst x = 1;\n```";
+    expect(completePartialMarkdown(text)).toBe(text);
+  });
+
+  it("closes an unclosed backtick fence", () => {
+    const text = "```python\nprint('hi')";
+    expect(completePartialMarkdown(text)).toBe(`${text}\n\`\`\``);
+  });
+
+  it("closes an unclosed tilde fence", () => {
+    const text = "~~~\nsome code";
+    expect(completePartialMarkdown(text)).toBe(`${text}\n~~~`);
+  });
+
+  it("matches fence length when closing", () => {
+    const text = "````\ncode";
+    expect(completePartialMarkdown(text)).toBe(`${text}\n\`\`\`\``);
+  });
+
+  it("handles multiple code blocks with last one unclosed", () => {
+    const text = "```js\nconst x = 1;\n```\n\ntext\n\n```py\nprint('hi')";
+    expect(completePartialMarkdown(text)).toBe(`${text}\n\`\`\``);
+  });
+
+  it("does not close when shorter fence appears inside block", () => {
+    const text = "````\nsome ```\nstill open";
+    expect(completePartialMarkdown(text)).toBe(`${text}\n\`\`\`\``);
+  });
+
+  it("handles fence with only opening line and no content", () => {
+    const text = "some text\n```";
+    expect(completePartialMarkdown(text)).toBe(`${text}\n\`\`\``);
+  });
+
+  it("returns empty string unchanged", () => {
+    expect(completePartialMarkdown("")).toBe("");
   });
 });
