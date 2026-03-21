@@ -652,6 +652,104 @@ describe("useChat", () => {
       await flush();
     });
 
+    it("retries with nudge when model returns empty response after tool calls", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(getTool).mockReturnValue({
+        name: "ask",
+        description: "Ask",
+        parameters: {},
+        execute: async () => "result",
+      });
+
+      function createEmptyStream() {
+        async function* content(): AsyncGenerator<string> {
+          // yields nothing — simulates an empty model response
+        }
+        return {
+          content: content(),
+          getUsage: () => ({ promptTokens: 10, completionTokens: 5 }),
+          getToolCalls: () => [],
+        };
+      }
+
+      // Call 1: tool call, Call 2: empty response (triggers nudge),
+      // Call 3: real content response
+      vi.mocked(streamChatCompletion)
+        .mockResolvedValueOnce(
+          createToolCallStream([
+            {
+              id: "call-1",
+              function: { name: "ask", arguments: "{}" },
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(createEmptyStream())
+        .mockResolvedValueOnce(createContentStream("recovered"));
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+      await flush();
+      await flush();
+
+      expect(chat.streaming).toBe(false);
+      // 3 calls: tool call, empty (nudge), content
+      expect(vi.mocked(streamChatCompletion)).toHaveBeenCalledTimes(3);
+
+      // Nudge message should have been sent in the 3rd call but NOT persisted
+      const lastCallMessages =
+        vi.mocked(streamChatCompletion).mock.calls[2][0].messages;
+      const nudge = lastCallMessages.find(
+        (m: { content: string }) =>
+          typeof m.content === "string" &&
+          m.content.includes("previous response was empty"),
+      );
+      expect(nudge).toBeDefined();
+
+      // Nudge should NOT appear in the displayed messages
+      const allContent = chat.messages.map((m) => m.content).join(" ");
+      expect(allContent).not.toContain("previous response was empty");
+
+      // Final assistant message should be present
+      const lastMsg = chat.messages[chat.messages.length - 1];
+      expect(lastMsg.role).toBe("assistant");
+      expect(lastMsg.content).toBe("recovered");
+    });
+
+    it("gives up after max empty response retries", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+
+      function createEmptyStream() {
+        async function* content(): AsyncGenerator<string> {
+          // empty
+        }
+        return {
+          content: content(),
+          getUsage: () => ({ promptTokens: 10, completionTokens: 5 }),
+          getToolCalls: () => [],
+        };
+      }
+
+      // All responses are empty — should stop after 3 retries + 1 original = 4 calls
+      vi.mocked(streamChatCompletion)
+        .mockResolvedValueOnce(createEmptyStream())
+        .mockResolvedValueOnce(createEmptyStream())
+        .mockResolvedValueOnce(createEmptyStream())
+        .mockResolvedValueOnce(createEmptyStream());
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      for (let i = 0; i < 8; i++) await flush();
+
+      expect(chat.streaming).toBe(false);
+      // 1 original + 3 retries = 4 calls
+      expect(vi.mocked(streamChatCompletion)).toHaveBeenCalledTimes(4);
+    });
+
     it("does not send tools key when no tools are registered", async () => {
       vi.mocked(parse).mockReturnValue(null);
       vi.mocked(getToolDefinitions).mockReturnValue([]);
@@ -670,6 +768,51 @@ describe("useChat", () => {
 
       streams[0].complete();
       await flush();
+    });
+  });
+
+  describe("/new command", () => {
+    beforeEach(setupRegularMessages);
+
+    it("resets token usage when clearing messages", async () => {
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+      streams[0].complete();
+      await flush();
+
+      // Token usage should be set after first message
+      expect(chat.tokenUsage).toEqual({
+        promptTokens: 10,
+        completionTokens: 5,
+      });
+
+      // Simulate /new command which calls clearMessages
+      chat.clearMessages();
+      await flush();
+
+      // tokenUsage should be reset after /new
+      expect(chat.tokenUsage).toBeNull();
+    });
+
+    it("clears token usage on clearMessages", async () => {
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+      streams[0].complete();
+      await flush();
+
+      expect(chat.tokenUsage).not.toBeNull();
+
+      chat.clearMessages();
+      await flush();
+
+      expect(chat.tokenUsage).toBeNull();
+      expect(chat.messages).toEqual([]);
     });
   });
 });
