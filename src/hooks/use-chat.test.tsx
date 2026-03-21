@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parse, getCommand } from "../commands";
 import { appendMessage } from "../session";
 import { streamChatCompletion } from "../provider/client";
+import type { ToolCall } from "../provider/client";
+import { getTool } from "../tools";
 import { type ChatState, useChat } from "./use-chat";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
@@ -83,6 +85,11 @@ vi.mock("../commands", () => ({
 
 vi.mock("../context/truncate", () => ({
   truncateMessages: (msgs: unknown[]) => msgs,
+}));
+
+vi.mock("../tools", () => ({
+  getTool: vi.fn(),
+  getToolDefinitions: vi.fn().mockReturnValue([]),
 }));
 
 const testProvider = {
@@ -407,6 +414,167 @@ describe("useChat", () => {
       expect(chat.streaming).toBe(false);
       expect(chat.pendingMessage).toBeNull();
       expect(chat.messages.filter((m) => m.role === "user")).toHaveLength(1);
+    });
+  });
+
+  describe("tool execution loop", () => {
+    function createToolCallStream(toolCalls: ToolCall[]) {
+      async function* content(): AsyncGenerator<string> {
+        // no content tokens for a tool-call response
+      }
+      return {
+        content: content(),
+        getUsage: () => ({ promptTokens: 10, completionTokens: 5 }),
+        getToolCalls: () => toolCalls,
+      };
+    }
+
+    function createContentStream(text: string) {
+      async function* content(): AsyncGenerator<string> {
+        yield text;
+      }
+      return {
+        content: content(),
+        getUsage: () => ({ promptTokens: 10, completionTokens: 5 }),
+        getToolCalls: () => [],
+      };
+    }
+
+    it("executes tool calls and re-calls provider until content response", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(getTool).mockReturnValue({
+        name: "ask",
+        description: "Ask a question",
+        parameters: {},
+        execute: async () => "option A",
+      });
+
+      // First call returns tool call, second returns content
+      vi.mocked(streamChatCompletion)
+        .mockResolvedValueOnce(
+          createToolCallStream([
+            {
+              id: "call-1",
+              function: { name: "ask", arguments: '{"question":"pick"}' },
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(createContentStream("Great, you chose A"));
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+      await flush();
+
+      expect(chat.streaming).toBe(false);
+      expect(vi.mocked(streamChatCompletion)).toHaveBeenCalledTimes(2);
+
+      // Messages: user, assistant (tool_calls), tool result, assistant (content)
+      expect(chat.messages).toHaveLength(4);
+      expect(chat.messages[0].role).toBe("user");
+      expect(chat.messages[1].role).toBe("assistant");
+      expect(chat.messages[2].role).toBe("tool");
+      expect(chat.messages[2].content).toBe("option A");
+      expect(chat.messages[3].role).toBe("assistant");
+      expect(chat.messages[3].content).toBe("Great, you chose A");
+    });
+
+    it("returns error result for unknown tools", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(getTool).mockReturnValue(undefined);
+
+      vi.mocked(streamChatCompletion)
+        .mockResolvedValueOnce(
+          createToolCallStream([
+            {
+              id: "call-1",
+              function: { name: "bogus", arguments: "{}" },
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(
+          createContentStream("Sorry, I don't have that tool"),
+        );
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+      await flush();
+
+      expect(chat.messages[2].role).toBe("tool");
+      expect(chat.messages[2].content).toContain('unknown tool "bogus"');
+    });
+
+    it("persists tool messages to the session", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(getTool).mockReturnValue({
+        name: "ask",
+        description: "Ask",
+        parameters: {},
+        execute: async () => "result",
+      });
+
+      vi.mocked(streamChatCompletion)
+        .mockResolvedValueOnce(
+          createToolCallStream([
+            {
+              id: "call-1",
+              function: { name: "ask", arguments: "{}" },
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(createContentStream("done"));
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+      await flush();
+
+      // user + assistant(tool_calls) + tool result + assistant(content)
+      expect(vi.mocked(appendMessage)).toHaveBeenCalledTimes(4);
+      expect(vi.mocked(appendMessage)).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ role: "tool", content: "result" }),
+      );
+    });
+
+    it("handles tool execution errors gracefully", async () => {
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(getTool).mockReturnValue({
+        name: "ask",
+        description: "Ask",
+        parameters: {},
+        execute: async () => {
+          throw new Error("tool failed");
+        },
+      });
+
+      vi.mocked(streamChatCompletion)
+        .mockResolvedValueOnce(
+          createToolCallStream([
+            {
+              id: "call-1",
+              function: { name: "ask", arguments: "{}" },
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(createContentStream("ok"));
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+      await flush();
+
+      expect(chat.messages[2].role).toBe("tool");
+      expect(chat.messages[2].content).toContain("tool failed");
     });
   });
 });

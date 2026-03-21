@@ -11,7 +11,7 @@ import {
   updateActiveProvider,
 } from "../config";
 import { truncateMessages } from "../context/truncate";
-import type { ChatMessage, TokenUsage } from "../provider/client";
+import type { ChatMessage, TokenUsage, ToolCall } from "../provider/client";
 import {
   fetchContextWindow,
   getDefaultContextWindow,
@@ -23,6 +23,7 @@ import {
   createSession,
   loadSession,
 } from "../session";
+import { getTool, getToolDefinitions } from "../tools";
 
 export interface ChatState {
   messages: DisplayMessage[];
@@ -37,6 +38,37 @@ export interface ChatState {
   pendingMessage: string | null;
   submit: (text: string) => void;
   cancel: () => void;
+}
+
+/** Executes tool calls and returns tool result messages. */
+async function executeToolCalls(
+  toolCalls: ToolCall[],
+  signal: AbortSignal,
+): Promise<DisplayMessage[]> {
+  const results: DisplayMessage[] = [];
+  for (const tc of toolCalls) {
+    if (signal.aborted) {
+      throw new DOMException("aborted", "AbortError");
+    }
+    const tool = getTool(tc.function.name);
+    let result: string;
+    if (!tool) {
+      result = `Error: unknown tool "${tc.function.name}"`;
+    } else {
+      try {
+        result = await tool.execute(tc.function.arguments);
+      } catch (err) {
+        result = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+    results.push({
+      id: crypto.randomUUID(),
+      role: "tool",
+      content: result,
+      tool_call_id: tc.id,
+    });
+  }
+  return results;
 }
 
 /** Manages conversation state and streaming for a chat session. */
@@ -210,11 +242,13 @@ export function useChat(
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const allMessages: ChatMessage[] = [
+    const toChatMessages = (
+      displayMessages: DisplayMessage[],
+    ): ChatMessage[] => [
       ...(systemMessage
         ? [{ role: "system" as const, content: systemMessage }]
         : []),
-      ...messages
+      ...displayMessages
         .filter((m) => m.role !== "system")
         .map((m): ChatMessage => {
           if (m.role === "tool") {
@@ -233,54 +267,115 @@ export function useChat(
           }
           return { role: m.role as "user" | "assistant", content: m.content };
         }),
-      { role: "user" as const, content: text },
     ];
 
+    // Track the full message list across tool-call iterations so each
+    // re-call to the provider includes prior tool results.
+    let currentMessages: DisplayMessage[] = [...messages, userMsg];
+
     const maxTokens = getMaxTokens(config, activeProvider, activeModel);
+    const toolDefs = getToolDefinitions();
 
-    const chatMessages = truncateMessages(
-      allMessages,
-      contextWindow,
-      maxTokens,
-      tokenUsage?.promptTokens ?? null,
-    );
-
+    let aborted = false;
+    // Declared outside the loop so partial content survives abort.
     let content = "";
 
     try {
-      const completion = await streamChatCompletion({
-        baseUrl: activeProvider.baseUrl,
-        model: activeModel,
-        messages: chatMessages,
-        maxTokens,
-        signal: controller.signal,
-      });
+      // Tool loop: stream a completion, check for tool calls, execute
+      // them, and re-call the provider until the model responds with
+      // content only (no more tool calls).
+      while (true) {
+        content = "";
 
-      for await (const token of completion.content) {
-        content += token;
-        setStreamingContent(content);
-      }
+        const chatMessages = truncateMessages(
+          toChatMessages(currentMessages),
+          contextWindow,
+          maxTokens,
+          tokenUsage?.promptTokens ?? null,
+        );
 
-      const usage = completion.getUsage();
-      if (usage) {
-        setTokenUsage(usage);
+        const completion = await streamChatCompletion({
+          baseUrl: activeProvider.baseUrl,
+          model: activeModel,
+          messages: chatMessages,
+          maxTokens,
+          signal: controller.signal,
+          ...(toolDefs.length > 0 && { tools: toolDefs }),
+        });
+
+        for await (const token of completion.content) {
+          content += token;
+          setStreamingContent(content);
+        }
+
+        const usage = completion.getUsage();
+        if (usage) {
+          setTokenUsage(usage);
+        }
+
+        const toolCalls = completion.getToolCalls();
+
+        if (toolCalls.length === 0) {
+          // No tool calls — add assistant content message and finish.
+          if (content) {
+            const assistantMsg: DisplayMessage = {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content,
+            };
+            currentMessages = [...currentMessages, assistantMsg];
+            setMessages(currentMessages);
+            appendMessage(sessionRef.current, assistantMsg);
+          }
+          break;
+        }
+
+        // Assistant responded with tool calls — persist the assistant
+        // message (with tool_calls), execute each tool, and append
+        // tool result messages before re-calling the provider.
+        const assistantMsg: DisplayMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: content || "",
+          tool_calls: toolCalls,
+        };
+        currentMessages = [...currentMessages, assistantMsg];
+        appendMessage(sessionRef.current, assistantMsg);
+
+        const toolResultMessages = await executeToolCalls(
+          toolCalls,
+          controller.signal,
+        );
+        for (const msg of toolResultMessages) {
+          currentMessages = [...currentMessages, msg];
+          appendMessage(sessionRef.current, msg);
+        }
+
+        setMessages(currentMessages);
+        setStreamingContent("");
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        // User cancelled — keep what we have
+        aborted = true;
+        // User cancelled — keep what we have. Persist partial content
+        // if the stream had yielded anything.
       } else {
         setError(err instanceof Error ? err.message : String(err));
       }
     }
 
-    if (content) {
-      const assistantMsg: DisplayMessage = {
+    // On abort, preserve partial content and sync accumulated messages.
+    if (aborted && content) {
+      const partialMsg: DisplayMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
         content,
       };
-      setMessages((prev) => [...prev, assistantMsg]);
-      appendMessage(sessionRef.current, assistantMsg);
+      currentMessages = [...currentMessages, partialMsg];
+      appendMessage(sessionRef.current, partialMsg);
+    }
+    if (aborted) {
+      setMessages(currentMessages);
     }
 
     streamingRef.current = false;
