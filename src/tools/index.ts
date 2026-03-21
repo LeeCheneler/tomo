@@ -1,5 +1,6 @@
 // Register built-in tools
 import "./ask";
+import "./run-command";
 
 // Re-export registry functions
 export {

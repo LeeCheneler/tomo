@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadInstructions } from "./instructions";
+import { getSystemInfo, loadInstructions } from "./instructions";
 
 const tmpDir = resolve(import.meta.dirname, "../.test-instructions-tmp");
 const globalTomoDir = resolve(tmpDir, "global/.tomo");
@@ -9,7 +9,8 @@ const globalClaudeDir = resolve(tmpDir, "global/.claude");
 const localTomoDir = resolve(tmpDir, "local/.tomo");
 const localBareDir = resolve(tmpDir, "local");
 
-vi.mock("node:os", () => ({
+vi.mock("node:os", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:os")>()),
   homedir: () => resolve(tmpDir, "global"),
 }));
 
@@ -23,23 +24,37 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("getSystemInfo", () => {
+  it("returns a string with platform and architecture", () => {
+    const info = getSystemInfo();
+    expect(info).toContain("System:");
+    expect(info).toContain("arch:");
+    expect(info).toContain("shell:");
+  });
+});
+
 describe("loadInstructions", () => {
-  it("returns null when no instruction files exist", () => {
-    expect(loadInstructions()).toBeNull();
+  it("returns system info when no instruction files exist", () => {
+    const result = loadInstructions();
+    expect(result).toContain("System:");
+    expect(result).not.toContain("---");
   });
 
   it("loads root claude.md", () => {
     mkdirSync(globalTomoDir, { recursive: true });
     writeFileSync(resolve(globalTomoDir, "claude.md"), "root instructions");
 
-    expect(loadInstructions()).toBe("root instructions");
+    const result = loadInstructions();
+    expect(result).toContain("System:");
+    expect(result).toContain("root instructions");
   });
 
   it("loads local claude.md", () => {
     mkdirSync(localTomoDir, { recursive: true });
     writeFileSync(resolve(localTomoDir, "claude.md"), "local instructions");
 
-    expect(loadInstructions()).toBe("local instructions");
+    const result = loadInstructions();
+    expect(result).toContain("local instructions");
   });
 
   it("combines root and local with separator", () => {
@@ -48,14 +63,15 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(globalTomoDir, "claude.md"), "root");
     writeFileSync(resolve(localTomoDir, "claude.md"), "local");
 
-    expect(loadInstructions()).toBe("root\n\n---\n\nlocal");
+    const result = loadInstructions();
+    expect(result).toContain("root\n\n---\n\nlocal");
   });
 
   it("finds files case-insensitively", () => {
     mkdirSync(globalTomoDir, { recursive: true });
     writeFileSync(resolve(globalTomoDir, "CLAUDE.md"), "uppercase root");
 
-    expect(loadInstructions()).toBe("uppercase root");
+    expect(loadInstructions()).toContain("uppercase root");
   });
 
   it("prefers claude.md over agents.md", () => {
@@ -63,14 +79,16 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(globalTomoDir, "claude.md"), "from claude");
     writeFileSync(resolve(globalTomoDir, "agents.md"), "from agents");
 
-    expect(loadInstructions()).toBe("from claude");
+    const result = loadInstructions();
+    expect(result).toContain("from claude");
+    expect(result).not.toContain("from agents");
   });
 
   it("falls back to agents.md when no claude.md exists", () => {
     mkdirSync(globalTomoDir, { recursive: true });
     writeFileSync(resolve(globalTomoDir, "agents.md"), "agent instructions");
 
-    expect(loadInstructions()).toBe("agent instructions");
+    expect(loadInstructions()).toContain("agent instructions");
   });
 
   it("local agents.md only pairs with root agents.md", () => {
@@ -80,7 +98,9 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(localTomoDir, "agents.md"), "local agents");
 
     // root claude.md is ignored because local is agents.md
-    expect(loadInstructions()).toBe("local agents");
+    const result = loadInstructions();
+    expect(result).toContain("local agents");
+    expect(result).not.toContain("root claude");
   });
 
   it("combines when local and root use the same filename", () => {
@@ -89,14 +109,15 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(globalTomoDir, "agents.md"), "root agents");
     writeFileSync(resolve(localTomoDir, "agents.md"), "local agents");
 
-    expect(loadInstructions()).toBe("root agents\n\n---\n\nlocal agents");
+    const result = loadInstructions();
+    expect(result).toContain("root agents\n\n---\n\nlocal agents");
   });
 
   it("falls back to .claude/ when .tomo/ has no instructions", () => {
     mkdirSync(globalClaudeDir, { recursive: true });
     writeFileSync(resolve(globalClaudeDir, "claude.md"), "from .claude");
 
-    expect(loadInstructions()).toBe("from .claude");
+    expect(loadInstructions()).toContain("from .claude");
   });
 
   it("prefers .tomo/ over .claude/", () => {
@@ -105,14 +126,16 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(globalTomoDir, "claude.md"), "from tomo");
     writeFileSync(resolve(globalClaudeDir, "claude.md"), "from claude dir");
 
-    expect(loadInstructions()).toBe("from tomo");
+    const result = loadInstructions();
+    expect(result).toContain("from tomo");
+    expect(result).not.toContain("from claude dir");
   });
 
   it("falls back to bare directory for agents.md", () => {
     mkdirSync(localBareDir, { recursive: true });
     writeFileSync(resolve(localBareDir, "AGENTS.md"), "project agents");
 
-    expect(loadInstructions()).toBe("project agents");
+    expect(loadInstructions()).toContain("project agents");
   });
 
   it("prefers .tomo/ over bare directory", () => {
@@ -121,7 +144,9 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(localTomoDir, "claude.md"), "from tomo");
     writeFileSync(resolve(localBareDir, "AGENTS.md"), "from bare");
 
-    expect(loadInstructions()).toBe("from tomo");
+    const result = loadInstructions();
+    expect(result).toContain("from tomo");
+    expect(result).not.toContain("from bare");
   });
 
   it("local file matches root across different directory types", () => {
@@ -130,7 +155,8 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(globalClaudeDir, "agents.md"), "global agents");
     writeFileSync(resolve(localBareDir, "AGENTS.md"), "local agents");
 
-    expect(loadInstructions()).toBe("global agents\n\n---\n\nlocal agents");
+    const result = loadInstructions();
+    expect(result).toContain("global agents\n\n---\n\nlocal agents");
   });
 
   it("ignores empty files", () => {
@@ -139,6 +165,6 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(globalTomoDir, "claude.md"), "   ");
     writeFileSync(resolve(localTomoDir, "claude.md"), "local only");
 
-    expect(loadInstructions()).toBe("local only");
+    expect(loadInstructions()).toContain("local only");
   });
 });
