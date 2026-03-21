@@ -11,31 +11,26 @@ export type DisplayMessage =
   | { id: string; role: "assistant"; content: string; tool_calls?: ToolCall[] }
   | { id: string; role: "tool"; content: string; tool_call_id: string };
 
-interface MessageListProps {
-  messages: DisplayMessage[];
-  toolOutputExpanded?: boolean;
+/** Renders a single message, dispatching to the appropriate component by role. */
+export function Message({ msg }: { msg: DisplayMessage }) {
+  if (msg.role === "user") return <UserMessage>{msg.content}</UserMessage>;
+  if (msg.role === "system")
+    return <SystemMessage>{msg.content}</SystemMessage>;
+  if (msg.role === "tool") return <ToolMessage>{msg.content}</ToolMessage>;
+  return <AssistantMessage>{msg.content}</AssistantMessage>;
 }
 
-/** Renders a list of chat messages, dispatching to the appropriate component by role. */
-export function MessageList({
-  messages,
-  toolOutputExpanded = false,
-}: MessageListProps) {
+interface MessageListProps {
+  messages: DisplayMessage[];
+}
+
+/** Renders a list of chat messages. */
+export function MessageList({ messages }: MessageListProps) {
   return (
     <Box flexDirection="column" gap={1}>
-      {messages.map((msg) => {
-        if (msg.role === "user")
-          return <UserMessage key={msg.id}>{msg.content}</UserMessage>;
-        if (msg.role === "system")
-          return <SystemMessage key={msg.id}>{msg.content}</SystemMessage>;
-        if (msg.role === "tool")
-          return (
-            <ToolMessage key={msg.id} expanded={toolOutputExpanded}>
-              {msg.content}
-            </ToolMessage>
-          );
-        return <AssistantMessage key={msg.id}>{msg.content}</AssistantMessage>;
-      })}
+      {messages.map((msg) => (
+        <Message key={msg.id} msg={msg} />
+      ))}
     </Box>
   );
 }
