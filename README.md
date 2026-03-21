@@ -26,25 +26,35 @@ Tomo looks for config at `~/.tomo/config.yaml` (global) and `./.tomo/config.yaml
 ```yaml
 activeProvider: ollama
 activeModel: qwen3:8b
+maxTokens: 8192
 
 providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
+    # contextWindow: 32768  # optional override (auto-detected for Ollama)
+    # models:                # optional per-model overrides
+    #   qwen3:4b:
+    #     maxTokens: 16384
 ```
+
+- `maxTokens` — global default for max response tokens (default: 8192)
+- `contextWindow` — optional override per provider (auto-detected from Ollama, falls back to 4096)
+- `models.<name>.maxTokens` — optional per-model override for max response tokens
 
 ## Slash Commands
 
-| Command | Description |
-|---------|-------------|
-| `/help` | List available commands |
-| `/new` | Start a new conversation |
-| `/session` | Browse and load previous sessions |
-| `/session <id>` | Load a session by ID |
-| `/models` | List available models from the provider |
-| `/use` | Interactive model picker |
-| `/use <model>` | Switch to a different model |
-| `/use <provider/model>` | Switch provider and model |
+| Command                 | Description                             |
+| ----------------------- | --------------------------------------- |
+| `/help`                 | List available commands                 |
+| `/new`                  | Start a new conversation                |
+| `/session`              | Browse and load previous sessions       |
+| `/session <id>`         | Load a session by ID                    |
+| `/models`               | List available models from the provider |
+| `/use`                  | Interactive model picker                |
+| `/use <model>`          | Switch to a different model             |
+| `/use <provider/model>` | Switch provider and model               |
+| `/context`              | Show context window usage stats         |
 
 Commands autocomplete as you type with ghost text suggestions.
 
@@ -60,16 +70,16 @@ Within each directory, `claude.md` is checked before `agents.md`. Both global (`
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `Enter` | Send message |
-| `Shift+Enter` | Insert newline |
-| `Escape` | Cancel streaming |
-| `Ctrl+C` | Clear input, or exit (double-tap) |
-| `←` `→` | Move cursor |
-| `↑` `↓` | Move cursor across lines |
-| `Ctrl+A` / `Ctrl+E` | Jump to start/end of input |
-| `Option+←` `Option+→` | Skip words |
+| Key                   | Action                            |
+| --------------------- | --------------------------------- |
+| `Enter`               | Send message                      |
+| `Shift+Enter`         | Insert newline                    |
+| `Escape`              | Cancel streaming                  |
+| `Ctrl+C`              | Clear input, or exit (double-tap) |
+| `←` `→`               | Move cursor                       |
+| `↑` `↓`               | Move cursor across lines          |
+| `Ctrl+A` / `Ctrl+E`   | Jump to start/end of input        |
+| `Option+←` `Option+→` | Skip words                        |
 
 ## Sessions
 
