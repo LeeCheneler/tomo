@@ -42,6 +42,7 @@ export interface ChatState {
   toggleToolOutput: () => void;
   submit: (text: string) => void;
   cancel: () => void;
+  clearMessages: () => void;
 }
 
 class ToolDismissedError extends Error {
@@ -232,6 +233,7 @@ export function useChat(
     setError(null);
     setActiveCommand(null);
     abortRef.current = null;
+    setTokenUsage(null);
   };
 
   const submit = async (text: string) => {
@@ -388,6 +390,11 @@ export function useChat(
     let aborted = false;
     // Declared outside the loop so partial content survives abort.
     let content = "";
+    let emptyResponseRetries = 0;
+    const MAX_EMPTY_RETRIES = 3;
+    // Ephemeral nudge message — sent to the provider on empty responses
+    // but never persisted to history or shown to the user.
+    let nudgeMessage: ChatMessage | null = null;
 
     try {
       // Tool loop: stream a completion, check for tool calls, execute
@@ -402,6 +409,12 @@ export function useChat(
           maxTokens,
           tokenUsage?.promptTokens ?? null,
         );
+
+        // Append ephemeral nudge if the model returned an empty response.
+        if (nudgeMessage) {
+          chatMessages.push(nudgeMessage);
+          nudgeMessage = null;
+        }
 
         const completion = await streamChatCompletion({
           baseUrl: activeProvider.baseUrl,
@@ -425,6 +438,19 @@ export function useChat(
         const toolCalls = completion.getToolCalls();
 
         if (toolCalls.length === 0) {
+          // Empty response — nudge the model to continue instead of
+          // silently ending the turn. This helps smaller models that
+          // stall after receiving tool results.
+          if (!content.trim() && emptyResponseRetries < MAX_EMPTY_RETRIES) {
+            emptyResponseRetries++;
+            nudgeMessage = {
+              role: "user",
+              content:
+                "Your previous response was empty. Continue working on the task. If you need to use a tool, call it now. If you are done, summarize what was accomplished.",
+            };
+            continue;
+          }
+
           // No tool calls — add assistant content message and finish.
           if (content) {
             const assistantMsg: DisplayMessage = {
@@ -438,6 +464,9 @@ export function useChat(
           }
           break;
         }
+
+        // Model produced a real response — reset retry counter.
+        emptyResponseRetries = 0;
 
         // Assistant responded with tool calls — persist the assistant
         // message (with tool_calls), execute each tool, and append
@@ -556,5 +585,6 @@ export function useChat(
     toggleToolOutput,
     submit,
     cancel,
+    clearMessages,
   };
 }
