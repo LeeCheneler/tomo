@@ -41,9 +41,13 @@ export function App() {
 
       {chat.streaming && chat.streamingContent ? (
         <Box flexDirection="column" marginBottom={1}>
-          <AssistantMessage>
-            {completePartialMarkdown(chat.streamingContent)}
-          </AssistantMessage>
+          {chat.toolActive ? (
+            <Text dimColor>{chat.streamingContent}</Text>
+          ) : (
+            <AssistantMessage>
+              {completePartialMarkdown(chat.streamingContent)}
+            </AssistantMessage>
+          )}
         </Box>
       ) : null}
 
