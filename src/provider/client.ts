@@ -33,7 +33,7 @@ export async function fetchModels(baseUrl: string): Promise<ModelInfo[]> {
   return models.map((m) => ({ id: m.id }));
 }
 
-const DEFAULT_CONTEXT_WINDOW = 4096;
+const DEFAULT_CONTEXT_WINDOW = 8192;
 
 const contextWindowCache = new Map<string, number>();
 
