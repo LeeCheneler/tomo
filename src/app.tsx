@@ -1,10 +1,9 @@
-import { Box, Text } from "ink";
+import { Box, Static, Text } from "ink";
 import "./commands";
 import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
-import { Header } from "./components/header";
 import { completePartialMarkdown } from "./components/markdown";
-import { MessageList } from "./components/message-list";
+import { Message } from "./components/message-list";
 import { ThinkingIndicator } from "./components/thinking-indicator";
 import { getActiveProvider, loadConfig } from "./config";
 import { useChat } from "./hooks/use-chat";
@@ -28,16 +27,13 @@ export function App() {
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Header model={chat.activeModel} />
-
-      {chat.messages.length > 0 ? (
-        <Box flexDirection="column" marginBottom={1}>
-          <MessageList
-            messages={chat.messages}
-            toolOutputExpanded={chat.toolOutputExpanded}
-          />
-        </Box>
-      ) : null}
+      <Static items={chat.messages}>
+        {(msg) => (
+          <Box key={msg.id} flexDirection="column" marginBottom={1}>
+            <Message msg={msg} />
+          </Box>
+        )}
+      </Static>
 
       {chat.streaming && chat.streamingContent ? (
         <Box flexDirection="column" marginBottom={1}>
@@ -80,7 +76,6 @@ export function App() {
         <ChatInput
           onSubmit={chat.submit}
           onEscape={chat.cancel}
-          onTab={chat.toggleToolOutput}
           contextPercent={
             chat.tokenUsage
               ? ((chat.tokenUsage.promptTokens +

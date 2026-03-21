@@ -7,7 +7,6 @@ interface ChatInputProps {
   onSubmit: (text: string) => void;
   disabled?: boolean;
   onEscape?: () => void;
-  onTab?: () => void;
   contextPercent?: number | null;
 }
 
@@ -32,7 +31,6 @@ export function ChatInput({
   onSubmit,
   disabled,
   onEscape,
-  onTab,
   contextPercent,
 }: ChatInputProps) {
   const { exit } = useApp();
@@ -93,11 +91,6 @@ export function ChatInput({
 
     if (key.escape) {
       onEscape?.();
-      return;
-    }
-
-    if (key.tab) {
-      onTab?.();
       return;
     }
 
