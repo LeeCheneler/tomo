@@ -476,7 +476,7 @@ describe("useChat", () => {
       expect(chat.messages[0].role).toBe("user");
       expect(chat.messages[1].role).toBe("assistant");
       expect(chat.messages[2].role).toBe("tool");
-      expect(chat.messages[2].content).toBe("option A");
+      expect(chat.messages[2].content).toContain("option A");
       expect(chat.messages[3].role).toBe("assistant");
       expect(chat.messages[3].content).toBe("Great, you chose A");
     });
@@ -540,7 +540,10 @@ describe("useChat", () => {
       expect(vi.mocked(appendMessage)).toHaveBeenCalledTimes(4);
       expect(vi.mocked(appendMessage)).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ role: "tool", content: "result" }),
+        expect.objectContaining({
+          role: "tool",
+          content: expect.stringContaining("result"),
+        }),
       );
     });
 

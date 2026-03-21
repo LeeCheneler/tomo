@@ -19,6 +19,8 @@ export interface Tool {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  /** Whether the tool requires user interaction (confirmation, input). Defaults to true. */
+  interactive?: boolean;
   execute: (args: string, context: ToolContext) => Promise<string>;
 }
 
