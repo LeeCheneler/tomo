@@ -10,8 +10,8 @@ const modelOverrideSchema = z.object({
 
 const providerSchema = z.object({
   name: z.string().min(1, "provider name is required"),
-  type: z.enum(["ollama"], {
-    message: 'unsupported provider type. Supported: "ollama"',
+  type: z.enum(["ollama", "openai"], {
+    message: 'unsupported provider type. Supported: "ollama", "openai"',
   }),
   baseUrl: z.string().url("baseUrl must be a valid URL"),
   contextWindow: z.number().int().positive().optional(),

@@ -310,7 +310,7 @@ describe("fetchContextWindow", () => {
       "unknown",
       "ollama",
     );
-    expect(result).toBe(4096);
+    expect(result).toBe(8192);
   });
 
   it("returns default on HTTP error", async () => {
@@ -323,7 +323,7 @@ describe("fetchContextWindow", () => {
       "missing",
       "ollama",
     );
-    expect(result).toBe(4096);
+    expect(result).toBe(8192);
   });
 
   it("returns default on network failure", async () => {
@@ -334,7 +334,7 @@ describe("fetchContextWindow", () => {
       "model",
       "ollama",
     );
-    expect(result).toBe(4096);
+    expect(result).toBe(8192);
   });
 
   it("caches results per baseUrl + model", async () => {
@@ -375,7 +375,7 @@ describe("fetchContextWindow", () => {
       "model",
       "openai",
     );
-    expect(result).toBe(4096);
+    expect(result).toBe(8192);
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 });
