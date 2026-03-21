@@ -36,6 +36,9 @@ export interface ChatState {
   tokenUsage: TokenUsage | null;
   contextWindow: number;
   pendingMessage: string | null;
+  toolOutputExpanded: boolean;
+  toolActive: boolean;
+  toggleToolOutput: () => void;
   submit: (text: string) => void;
   cancel: () => void;
 }
@@ -101,6 +104,8 @@ export function useChat(
   const [contextWindow, setContextWindow] = useState(
     initialProvider.contextWindow ?? getDefaultContextWindow(),
   );
+  const [toolOutputExpanded, setToolOutputExpanded] = useState(false);
+  const [toolActive, setToolActive] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<Session>(initialSession);
   const streamingRef = useRef(false);
@@ -297,6 +302,9 @@ export function useChat(
           };
           setActiveCommand(factory(onResult, onCancel));
         }),
+      reportProgress: (progressContent: string) => {
+        setStreamingContent(progressContent);
+      },
     };
 
     let aborted = false;
@@ -366,6 +374,7 @@ export function useChat(
         appendMessage(sessionRef.current, assistantMsg);
 
         let toolResultMessages: DisplayMessage[];
+        setToolActive(true);
         try {
           toolResultMessages = await executeToolCalls(
             toolCalls,
@@ -373,6 +382,7 @@ export function useChat(
             toolContext,
           );
         } catch (err) {
+          setToolActive(false);
           if (err instanceof ToolDismissedError) {
             // User dismissed a tool interaction — add a system note and
             // stop the turn without calling the provider again.
@@ -387,6 +397,7 @@ export function useChat(
           }
           throw err;
         }
+        setToolActive(false);
 
         for (const msg of toolResultMessages) {
           currentMessages = [...currentMessages, msg];
@@ -447,6 +458,10 @@ export function useChat(
     abortRef.current?.abort();
   };
 
+  const toggleToolOutput = () => {
+    setToolOutputExpanded((prev) => !prev);
+  };
+
   return {
     messages,
     streaming,
@@ -458,6 +473,9 @@ export function useChat(
     tokenUsage,
     contextWindow,
     pendingMessage,
+    toolOutputExpanded,
+    toolActive,
+    toggleToolOutput,
     submit,
     cancel,
   };

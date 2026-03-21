@@ -2,6 +2,7 @@ import { Box } from "ink";
 import type { ToolCall } from "../provider/client";
 import { AssistantMessage } from "./assistant-message";
 import { SystemMessage } from "./system-message";
+import { ToolMessage } from "./tool-message";
 import { UserMessage } from "./user-message";
 
 export type DisplayMessage =
@@ -12,10 +13,14 @@ export type DisplayMessage =
 
 interface MessageListProps {
   messages: DisplayMessage[];
+  toolOutputExpanded?: boolean;
 }
 
 /** Renders a list of chat messages, dispatching to the appropriate component by role. */
-export function MessageList({ messages }: MessageListProps) {
+export function MessageList({
+  messages,
+  toolOutputExpanded = false,
+}: MessageListProps) {
   return (
     <Box flexDirection="column" gap={1}>
       {messages.map((msg) => {
@@ -23,6 +28,12 @@ export function MessageList({ messages }: MessageListProps) {
           return <UserMessage key={msg.id}>{msg.content}</UserMessage>;
         if (msg.role === "system")
           return <SystemMessage key={msg.id}>{msg.content}</SystemMessage>;
+        if (msg.role === "tool")
+          return (
+            <ToolMessage key={msg.id} expanded={toolOutputExpanded}>
+              {msg.content}
+            </ToolMessage>
+          );
         return <AssistantMessage key={msg.id}>{msg.content}</AssistantMessage>;
       })}
     </Box>

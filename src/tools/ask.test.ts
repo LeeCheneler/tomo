@@ -34,6 +34,7 @@ describe("ask tool", () => {
     const tool = getTool("ask");
     const context = {
       renderInteractive: vi.fn(),
+      reportProgress: vi.fn(),
     };
 
     const result = await tool?.execute(
@@ -47,6 +48,7 @@ describe("ask tool", () => {
   it("uses default question when none provided", async () => {
     const tool = getTool("ask");
     const context = {
+      reportProgress: vi.fn(),
       renderInteractive: vi.fn().mockResolvedValue("A"),
     };
 
@@ -59,6 +61,7 @@ describe("ask tool", () => {
   it("calls renderInteractive with a factory function", async () => {
     const tool = getTool("ask");
     const context = {
+      reportProgress: vi.fn(),
       renderInteractive: vi.fn().mockResolvedValue("option A"),
     };
 

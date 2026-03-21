@@ -10,6 +10,8 @@ export interface ToolContext {
       onCancel: () => void,
     ) => ReactElement,
   ) => Promise<string>;
+  /** Report partial output to the UI during long-running operations. */
+  reportProgress: (content: string) => void;
 }
 
 /** A model-initiated tool with a name, description, parameters, and execute handler. */

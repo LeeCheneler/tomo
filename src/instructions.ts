@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { arch, homedir, platform, release, userInfo } from "node:os";
 import { resolve } from "node:path";
+import { env } from "./env";
 
 const FILENAMES = ["claude.md", "agents.md"];
 
@@ -66,12 +67,24 @@ function findSpecificAcrossDirs(
   return null;
 }
 
+/** Builds a system info header with OS, shell, and architecture. */
+export function getSystemInfo(): string {
+  const os = platform();
+  const osRelease = release();
+  const shell = env.getOptional("SHELL") ?? "unknown";
+  const cwd = process.cwd();
+  const username = userInfo().username;
+  return `System: ${os} (${osRelease}), arch: ${arch()}, shell: ${shell}, user: ${username}, cwd: ${cwd}`;
+}
+
 /**
  * Loads and combines instruction files from root and local locations.
  * If a local file is found, only its matching filename is searched at root.
  * If no local file exists, root is searched with full preference order.
+ * Prepends system info header to the result.
  */
 export function loadInstructions(): string | null {
+  const systemInfo = getSystemInfo();
   const home = homedir();
   const cwd = process.cwd();
 
@@ -82,10 +95,11 @@ export function loadInstructions(): string | null {
 
   if (local) {
     const root = findSpecificAcrossDirs(rootDirs, local.filename);
-    if (root) return `${root}\n\n---\n\n${local.content}`;
-    return local.content;
+    if (root) return `${systemInfo}\n\n${root}\n\n---\n\n${local.content}`;
+    return `${systemInfo}\n\n${local.content}`;
   }
 
   const root = findAcrossDirs(rootDirs);
-  return root?.content ?? null;
+  if (root) return `${systemInfo}\n\n${root.content}`;
+  return systemInfo;
 }
