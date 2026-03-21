@@ -101,14 +101,34 @@ export function getDefaultContextWindow(): number {
   return DEFAULT_CONTEXT_WINDOW;
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
+export interface ToolCallFunction {
+  name: string;
+  arguments: string;
 }
+
+export interface ToolCall {
+  id: string;
+  function: ToolCallFunction;
+}
+
+export type ChatMessage =
+  | { role: "user"; content: string }
+  | { role: "system"; content: string }
+  | { role: "assistant"; content: string; tool_calls?: ToolCall[] }
+  | { role: "tool"; content: string; tool_call_id: string };
 
 export interface TokenUsage {
   promptTokens: number;
   completionTokens: number;
+}
+
+export interface ToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 export interface CompletionOptions {
@@ -117,11 +137,13 @@ export interface CompletionOptions {
   messages: ChatMessage[];
   maxTokens?: number;
   signal?: AbortSignal;
+  tools?: ToolDefinition[];
 }
 
 export interface CompletionStream {
   content: AsyncIterable<string>;
   getUsage: () => TokenUsage | null;
+  getToolCalls: () => ToolCall[];
 }
 
 /**
@@ -135,7 +157,7 @@ export interface CompletionStream {
 export async function streamChatCompletion(
   options: CompletionOptions,
 ): Promise<CompletionStream> {
-  const { baseUrl, model, messages, maxTokens, signal } = options;
+  const { baseUrl, model, messages, maxTokens, signal, tools } = options;
   const url = `${baseUrl.replace(/\/+$/, "")}/v1/chat/completions`;
 
   let response: Response;
@@ -149,6 +171,7 @@ export async function streamChatCompletion(
         stream: true,
         stream_options: { include_usage: true },
         ...(maxTokens != null && { max_tokens: maxTokens }),
+        ...(tools && tools.length > 0 && { tools }),
       }),
       signal,
     });
@@ -174,14 +197,39 @@ export async function streamChatCompletion(
 
   const responseBody = response.body;
   let usage: TokenUsage | null = null;
+  const toolCalls: ToolCall[] = [];
 
   async function* streamContent(): AsyncGenerator<string> {
     for await (const data of parseSSEStream(responseBody)) {
       try {
         const chunk = JSON.parse(data);
-        const content = chunk.choices?.[0]?.delta?.content;
-        if (content) {
-          yield content;
+        const delta = chunk.choices?.[0]?.delta;
+        if (delta?.content) {
+          yield delta.content;
+        }
+        // Accumulate tool_calls deltas. The first chunk for a tool call
+        // carries the id and function name; subsequent chunks append to
+        // the arguments string.
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx: number = tc.index;
+            if (!toolCalls[idx]) {
+              toolCalls[idx] = {
+                id: tc.id ?? "",
+                function: {
+                  name: tc.function?.name ?? "",
+                  arguments: tc.function?.arguments ?? "",
+                },
+              };
+            } else {
+              if (tc.id) toolCalls[idx].id = tc.id;
+              if (tc.function?.name)
+                toolCalls[idx].function.name = tc.function.name;
+              if (tc.function?.arguments) {
+                toolCalls[idx].function.arguments += tc.function.arguments;
+              }
+            }
+          }
         }
         if (chunk.usage) {
           usage = {
@@ -198,5 +246,6 @@ export async function streamChatCompletion(
   return {
     content: streamContent(),
     getUsage: () => usage,
+    getToolCalls: () => toolCalls,
   };
 }

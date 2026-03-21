@@ -1,13 +1,14 @@
 import { Box } from "ink";
+import type { ToolCall } from "../provider/client";
 import { AssistantMessage } from "./assistant-message";
 import { SystemMessage } from "./system-message";
 import { UserMessage } from "./user-message";
 
-export interface DisplayMessage {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-}
+export type DisplayMessage =
+  | { id: string; role: "user"; content: string }
+  | { id: string; role: "system"; content: string }
+  | { id: string; role: "assistant"; content: string; tool_calls?: ToolCall[] }
+  | { id: string; role: "tool"; content: string; tool_call_id: string };
 
 interface MessageListProps {
   messages: DisplayMessage[];

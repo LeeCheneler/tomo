@@ -230,6 +230,162 @@ describe("streamChatCompletion", () => {
     expect(completion.getUsage()).toBeNull();
   });
 
+  it("returns empty tool calls when response has none", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      createSSEResponse([`data: ${makeChunk("Hi")}\n\ndata: [DONE]\n\n`]),
+    );
+
+    const completion = await streamChatCompletion(defaultOptions);
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    expect(completion.getToolCalls()).toEqual([]);
+  });
+
+  it("accumulates tool_calls deltas across chunks", async () => {
+    const chunk1 = JSON.stringify({
+      id: "chatcmpl-1",
+      object: "chat.completion.chunk",
+      created: 1,
+      model: "test",
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: "call-1",
+                function: { name: "ask", arguments: '{"q' },
+              },
+            ],
+          },
+          finish_reason: null,
+        },
+      ],
+    });
+    const chunk2 = JSON.stringify({
+      id: "chatcmpl-1",
+      object: "chat.completion.chunk",
+      created: 1,
+      model: "test",
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [
+              { index: 0, function: { arguments: 'uestion":"hi"}' } },
+            ],
+          },
+          finish_reason: null,
+        },
+      ],
+    });
+
+    vi.mocked(fetch).mockResolvedValue(
+      createSSEResponse([
+        `data: ${chunk1}\n\ndata: ${chunk2}\n\ndata: [DONE]\n\n`,
+      ]),
+    );
+
+    const completion = await streamChatCompletion(defaultOptions);
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    expect(completion.getToolCalls()).toEqual([
+      {
+        id: "call-1",
+        function: { name: "ask", arguments: '{"question":"hi"}' },
+      },
+    ]);
+  });
+
+  it("sends tools in request body when provided", async () => {
+    vi.mocked(fetch).mockResolvedValue(createSSEResponse(["data: [DONE]\n\n"]));
+
+    const tools = [
+      {
+        type: "function" as const,
+        function: {
+          name: "ask",
+          description: "Ask a question",
+          parameters: { type: "object", properties: {} },
+        },
+      },
+    ];
+
+    const completion = await streamChatCompletion({
+      ...defaultOptions,
+      tools,
+    });
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+    expect(body.tools).toEqual(tools);
+  });
+
+  it("does not send tools key when tools array is empty", async () => {
+    vi.mocked(fetch).mockResolvedValue(createSSEResponse(["data: [DONE]\n\n"]));
+
+    const completion = await streamChatCompletion({
+      ...defaultOptions,
+      tools: [],
+    });
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+    expect(body.tools).toBeUndefined();
+  });
+
+  it("handles multiple parallel tool calls", async () => {
+    const chunk = JSON.stringify({
+      id: "chatcmpl-1",
+      object: "chat.completion.chunk",
+      created: 1,
+      model: "test",
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: "call-1",
+                function: { name: "ask", arguments: '{"q":"a"}' },
+              },
+              {
+                index: 1,
+                id: "call-2",
+                function: { name: "ask", arguments: '{"q":"b"}' },
+              },
+            ],
+          },
+          finish_reason: null,
+        },
+      ],
+    });
+
+    vi.mocked(fetch).mockResolvedValue(
+      createSSEResponse([`data: ${chunk}\n\ndata: [DONE]\n\n`]),
+    );
+
+    const completion = await streamChatCompletion(defaultOptions);
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    const calls = completion.getToolCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls[0].id).toBe("call-1");
+    expect(calls[1].id).toBe("call-2");
+  });
+
   it("returns null usage before stream is consumed", async () => {
     vi.mocked(fetch).mockResolvedValue(
       createSSEResponse([`data: ${makeUsageChunk(10, 5)}\n\ndata: [DONE]\n\n`]),

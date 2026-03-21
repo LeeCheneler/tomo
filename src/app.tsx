@@ -63,7 +63,9 @@ export function App() {
         </Box>
       ) : null}
 
-      {chat.streaming && !chat.streamingContent ? <ThinkingIndicator /> : null}
+      {chat.streaming && !chat.streamingContent && !chat.activeCommand ? (
+        <ThinkingIndicator />
+      ) : null}
 
       {chat.activeCommand ? (
         chat.activeCommand
