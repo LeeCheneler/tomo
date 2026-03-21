@@ -36,6 +36,8 @@ export interface ChatState {
   tokenUsage: TokenUsage | null;
   contextWindow: number;
   pendingMessage: string | null;
+  toolOutputExpanded: boolean;
+  toggleToolOutput: () => void;
   submit: (text: string) => void;
   cancel: () => void;
 }
@@ -101,6 +103,7 @@ export function useChat(
   const [contextWindow, setContextWindow] = useState(
     initialProvider.contextWindow ?? getDefaultContextWindow(),
   );
+  const [toolOutputExpanded, setToolOutputExpanded] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<Session>(initialSession);
   const streamingRef = useRef(false);
@@ -447,6 +450,10 @@ export function useChat(
     abortRef.current?.abort();
   };
 
+  const toggleToolOutput = () => {
+    setToolOutputExpanded((prev) => !prev);
+  };
+
   return {
     messages,
     streaming,
@@ -458,6 +465,8 @@ export function useChat(
     tokenUsage,
     contextWindow,
     pendingMessage,
+    toolOutputExpanded,
+    toggleToolOutput,
     submit,
     cancel,
   };

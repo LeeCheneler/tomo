@@ -32,7 +32,10 @@ export function App() {
 
       {chat.messages.length > 0 ? (
         <Box flexDirection="column" marginBottom={1}>
-          <MessageList messages={chat.messages} />
+          <MessageList
+            messages={chat.messages}
+            toolOutputExpanded={chat.toolOutputExpanded}
+          />
         </Box>
       ) : null}
 
@@ -73,6 +76,7 @@ export function App() {
         <ChatInput
           onSubmit={chat.submit}
           onEscape={chat.cancel}
+          onTab={chat.toggleToolOutput}
           contextPercent={
             chat.tokenUsage
               ? ((chat.tokenUsage.promptTokens +
