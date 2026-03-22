@@ -1,8 +1,7 @@
-import { createRequire } from "node:module";
 import { Text } from "ink";
 
-const require = createRequire(import.meta.url);
-const { version } = require("../../package.json");
+declare const TOMO_VERSION: string;
+const version = TOMO_VERSION;
 
 const LOGO = `
  ╔╦╗╔═╗╔╦╗╔═╗
