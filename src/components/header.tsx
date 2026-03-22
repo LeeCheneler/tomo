@@ -1,7 +1,7 @@
 import { Text } from "ink";
 
-declare const TOMO_VERSION: string;
-const version = TOMO_VERSION;
+declare const TOMO_VERSION: string | undefined;
+const version = typeof TOMO_VERSION !== "undefined" ? TOMO_VERSION : "dev";
 
 const LOGO = `
  ╔╦╗╔═╗╔╦╗╔═╗
