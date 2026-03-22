@@ -2,6 +2,7 @@
 import "./ask";
 import "./edit-file";
 import "./glob";
+import "./grep";
 import "./read-file";
 import "./run-command";
 import "./write-file";
