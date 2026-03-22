@@ -1,6 +1,5 @@
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
-import chalk from "chalk";
 import { getCommand, parse } from "../commands";
 import type { DisplayMessage } from "../components/message-list";
 import {
@@ -13,7 +12,7 @@ import {
   updateActiveProvider,
 } from "../config";
 import { truncateMessages } from "../context/truncate";
-import type { ChatMessage, TokenUsage, ToolCall } from "../provider/client";
+import type { ChatMessage, TokenUsage } from "../provider/client";
 import {
   fetchContextWindow,
   getDefaultContextWindow,
@@ -28,10 +27,10 @@ import {
 import { resolvePermissions } from "../permissions";
 import {
   type ToolContext,
-  getTool,
   getToolDefinitions,
   resolveToolAvailability,
 } from "../tools";
+import { ToolDismissedError, executeToolCalls } from "./tool-execution";
 
 export interface ChatState {
   messages: DisplayMessage[];
@@ -50,120 +49,35 @@ export interface ChatState {
   clearMessages: () => void;
 }
 
-class ToolDismissedError extends Error {
-  constructor() {
-    super("The user dismissed the question.");
-  }
-}
-
-/** Executes tool calls and returns tool result messages. */
-const MAX_ARG_VALUE_LENGTH = 60;
-
-/** Truncates a string to a max length with ellipsis. */
-function truncateValue(value: string, max: number): string {
-  return value.length > max ? `${value.slice(0, max)}…` : value;
-}
-
-/** Formats a single arg value for display. */
-function formatArgValue(value: unknown): string {
-  if (typeof value === "string") {
-    return truncateValue(value, MAX_ARG_VALUE_LENGTH);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.length} items]`;
-  }
-  return truncateValue(JSON.stringify(value), MAX_ARG_VALUE_LENGTH);
-}
-
-/** Formats a tool call header: bold yellow name + dim args summary. */
-function formatToolHeader(name: string, args: string): string {
-  let argsSummary = "";
-  try {
-    const parsed = JSON.parse(args);
-    argsSummary = Object.entries(parsed)
-      .map(([k, v]) => `${k}: ${formatArgValue(v)}`)
-      .join(", ");
-  } catch {
-    // Malformed args — skip summary
-  }
-  const header = argsSummary
-    ? `${chalk.bold.yellow(name)}  ${chalk.dim(argsSummary)}`
-    : chalk.bold.yellow(name);
-  return header;
-}
-
-/** Execute a single tool call and return a tool result message. */
-async function executeSingleToolCall(
-  tc: ToolCall,
-  toolContext: ToolContext,
-): Promise<DisplayMessage> {
-  const tool = getTool(tc.function.name);
-  let result: string;
-  if (!tool) {
-    result = `Error: unknown tool "${tc.function.name}"`;
-  } else {
-    try {
-      result = await tool.execute(tc.function.arguments, toolContext);
-    } catch (err) {
-      if (err instanceof ToolDismissedError) throw err;
-      result = `Error: ${err instanceof Error ? err.message : String(err)}`;
-    }
-  }
-
-  const header = formatToolHeader(tc.function.name, tc.function.arguments);
-  return {
-    id: crypto.randomUUID(),
-    role: "tool",
-    content: `${header}\n${result}`,
-    tool_call_id: tc.id,
-  };
-}
-
-/** Executes tool calls. Non-interactive tools run in parallel, interactive ones run sequentially. */
-async function executeToolCalls(
-  toolCalls: ToolCall[],
-  signal: AbortSignal,
-  toolContext: ToolContext,
-): Promise<DisplayMessage[]> {
-  // Separate into non-interactive (can run in parallel) and interactive (must be sequential).
-  const nonInteractive: ToolCall[] = [];
-  const interactive: ToolCall[] = [];
-
-  for (const tc of toolCalls) {
-    const tool = getTool(tc.function.name);
-    if (tool && tool.interactive === false) {
-      nonInteractive.push(tc);
-    } else {
-      interactive.push(tc);
-    }
-  }
-
-  // Run non-interactive tools in parallel.
-  const parallelResults =
-    nonInteractive.length > 0
-      ? await Promise.all(
-          nonInteractive.map((tc) => executeSingleToolCall(tc, toolContext)),
-        )
-      : [];
-
-  // Run interactive tools sequentially.
-  const sequentialResults: DisplayMessage[] = [];
-  for (const tc of interactive) {
-    if (signal.aborted) {
-      throw new DOMException("aborted", "AbortError");
-    }
-    sequentialResults.push(await executeSingleToolCall(tc, toolContext));
-  }
-
-  // Return results in the original tool call order.
-  const allResults = [...parallelResults, ...sequentialResults];
-  const resultByCallId = new Map<string, DisplayMessage>();
-  for (const msg of allResults) {
-    if (msg.role === "tool") {
-      resultByCallId.set(msg.tool_call_id, msg);
-    }
-  }
-  return toolCalls.map((tc) => resultByCallId.get(tc.id) as DisplayMessage);
+/** Converts DisplayMessages to ChatMessages for the provider API. */
+function toChatMessages(
+  displayMessages: DisplayMessage[],
+  systemMessage: string | null,
+): ChatMessage[] {
+  return [
+    ...(systemMessage
+      ? [{ role: "system" as const, content: systemMessage }]
+      : []),
+    ...displayMessages
+      .filter((m) => m.role !== "system")
+      .map((m): ChatMessage => {
+        if (m.role === "tool") {
+          return {
+            role: "tool",
+            content: m.content,
+            tool_call_id: m.tool_call_id,
+          };
+        }
+        if (m.role === "assistant" && m.tool_calls) {
+          return {
+            role: "assistant",
+            content: m.content,
+            tool_calls: m.tool_calls,
+          };
+        }
+        return { role: m.role as "user" | "assistant", content: m.content };
+      }),
+  ];
 }
 
 /** Manages conversation state and streaming for a chat session. */
@@ -344,33 +258,6 @@ export function useChat(
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const toChatMessages = (
-      displayMessages: DisplayMessage[],
-    ): ChatMessage[] => [
-      ...(systemMessage
-        ? [{ role: "system" as const, content: systemMessage }]
-        : []),
-      ...displayMessages
-        .filter((m) => m.role !== "system")
-        .map((m): ChatMessage => {
-          if (m.role === "tool") {
-            return {
-              role: "tool",
-              content: m.content,
-              tool_call_id: m.tool_call_id,
-            };
-          }
-          if (m.role === "assistant" && m.tool_calls) {
-            return {
-              role: "assistant",
-              content: m.content,
-              tool_calls: m.tool_calls,
-            };
-          }
-          return { role: m.role as "user" | "assistant", content: m.content };
-        }),
-    ];
-
     // Track the full message list across tool-call iterations so each
     // re-call to the provider includes prior tool results.
     let currentMessages: DisplayMessage[] = [...messages, userMsg];
@@ -419,7 +306,7 @@ export function useChat(
         content = "";
 
         const chatMessages = truncateMessages(
-          toChatMessages(currentMessages),
+          toChatMessages(currentMessages, systemMessage),
           contextWindow,
           maxTokens,
           tokenUsage?.promptTokens ?? null,
