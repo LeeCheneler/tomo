@@ -3,3 +3,4 @@ dist/
 *.blob
 tomo
 sea-config.json
+.tomo/config.yaml

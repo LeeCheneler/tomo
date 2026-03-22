@@ -2,26 +2,76 @@
 
 > 友 — friend, companion
 
-Terminal-native AI chat client built with Ink and TypeScript. Connects to Ollama or any OpenAI-compatible endpoint with streaming responses and markdown rendering.
-
-- **Local first** — no third-party AI providers required
-- **OpenAI-compatible** — works with Ollama, llama.cpp, vLLM, LocalAI, or any compliant endpoint
-- **Session persistence** — conversations saved to disk, resume with `/session`
-- **Convention-based config** — global config in `~/.tomo/`, local overrides in `./.tomo/`
+Terminal-native AI chat client. Local-first, works with Ollama or any OpenAI-compatible endpoint.
 
 ## Install
 
-Download the latest binary from [Releases](https://github.com/LeeCheneler/tomo/releases).
-
-On macOS, you'll need to remove the quarantine attribute before running:
-
 ```bash
-xattr -cr tomo
+brew tap leecheneler/tomo
+brew install tomo
 ```
+
+Or download the latest binary from [Releases](https://github.com/LeeCheneler/tomo/releases).
+
+## Quick Start
+
+1. Install and run [Ollama](https://ollama.com)
+2. Pull a model: `ollama pull qwen3:8b`
+3. Run `tomo`
+
+That's it. Tomo creates a default config on first run pointing at Ollama on localhost.
+
+## Slash Commands
+
+Type `/` to see available commands with autocomplete suggestions.
+
+| Command                 | Description                             |
+| ----------------------- | --------------------------------------- |
+| `/new`                  | Start a new conversation                |
+| `/session`              | Browse and load previous sessions       |
+| `/session <id>`         | Load a session by ID                    |
+| `/models`               | List available models from the provider |
+| `/use`                  | Interactive model picker                |
+| `/use <model>`          | Switch to a different model             |
+| `/use <provider/model>` | Switch provider and model               |
+| `/context`              | Show context window usage stats         |
+| `/tools`                | Toggle tools on/off                     |
+| `/grant`                | Manage tool permissions                 |
+| `/help`                 | List available commands                 |
+
+## Tools
+
+Tomo can read, write, and search files, run commands, and more. Tools are enabled by default and the model calls them as needed.
+
+| Tool          | Description                                           | Default  |
+| ------------- | ----------------------------------------------------- | -------- |
+| `read_file`   | Read file contents with line numbers                  | Enabled  |
+| `write_file`  | Create or overwrite a file                            | Enabled  |
+| `edit_file`   | Apply string replacements to a file                   | Enabled  |
+| `glob`        | Find files by glob pattern (respects `.gitignore`)    | Enabled  |
+| `grep`        | Search file contents by regex (respects `.gitignore`) | Enabled  |
+| `run_command` | Run a shell command (always prompts)                  | Enabled  |
+| `ask`         | Ask the user a question                               | Enabled  |
+| `web_search`  | Search the web via Tavily API                         | Disabled |
+
+`web_search` requires a [Tavily](https://tavily.com) API key. Set `TAVILY_API_KEY` in your environment and enable the tool with `/tools`.
+
+## Permissions
+
+Write operations (`write_file`, `edit_file`) prompt for confirmation by default. `read_file` is auto-allowed. Use `/grant` to change this, or set in config:
+
+```yaml
+permissions:
+  read_file: true
+  write_file: true
+  edit_file: true
+```
+
+File operations outside the current working directory always prompt regardless of permissions.
 
 ## Config
 
-Tomo looks for config at `~/.tomo/config.yaml` (global) and `./.tomo/config.yaml` (local override). A default config is created on first run.
+Config lives at `~/.tomo/config.yaml` (global) with optional local overrides at `./.tomo/config.yaml`. A default is created on first run.
 
 ```yaml
 activeProvider: ollama
@@ -32,101 +82,16 @@ providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
-    # contextWindow: 32768  # optional override (auto-detected for Ollama)
-    # models:                # optional per-model overrides
+    # contextWindow: 32768  # optional (auto-detected for Ollama)
+    # models:
     #   qwen3:4b:
     #     maxTokens: 16384
 ```
 
-- `maxTokens` — global default for max response tokens (default: 8192)
-- `contextWindow` — optional override per provider (auto-detected from Ollama, falls back to 4096)
-- `models.<name>.maxTokens` — optional per-model override for max response tokens
-
-## Permissions
-
-Tool permissions control whether the model can use file tools without prompting for confirmation. Defaults:
-
-| Tool         | Default |
-| ------------ | ------- |
-| `read_file`  | Allowed |
-| `write_file` | Prompt  |
-| `edit_file`  | Prompt  |
-
-Use `/grant` to toggle permissions interactively, or set them in `.tomo/config.yaml`:
-
-```yaml
-permissions:
-  read_file: true
-  write_file: true
-  edit_file: true
-```
-
-File operations targeting paths outside the current working directory always require confirmation regardless of permission settings.
-
-## Tools
-
-Tools are model-initiated actions the LLM can call during a conversation.
-
-| Tool          | Description                                           | Permission   | Default  |
-| ------------- | ----------------------------------------------------- | ------------ | -------- |
-| `read_file`   | Read file contents with line numbers                  | `read_file`  | Enabled  |
-| `write_file`  | Create or overwrite a file                            | `write_file` | Enabled  |
-| `edit_file`   | Apply string replacements to a file                   | `edit_file`  | Enabled  |
-| `glob`        | Find files by glob pattern (respects `.gitignore`)    | `read_file`  | Enabled  |
-| `grep`        | Search file contents by regex (respects `.gitignore`) | `read_file`  | Enabled  |
-| `run_command` | Run a shell command (always prompts)                  | —            | Enabled  |
-| `ask`         | Ask the user a multiple-choice question               | —            | Enabled  |
-| `web_search`  | Search the web via Tavily API                         | —            | Disabled |
-
-`web_search` uses the [Tavily](https://tavily.com) search API. Set `TAVILY_API_KEY` in your environment and enable the tool with `/tools`.
-
-## Slash Commands
-
-| Command                 | Description                             |
-| ----------------------- | --------------------------------------- |
-| `/help`                 | List available commands                 |
-| `/new`                  | Start a new conversation                |
-| `/session`              | Browse and load previous sessions       |
-| `/session <id>`         | Load a session by ID                    |
-| `/models`               | List available models from the provider |
-| `/use`                  | Interactive model picker                |
-| `/use <model>`          | Switch to a different model             |
-| `/use <provider/model>` | Switch provider and model               |
-| `/context`              | Show context window usage stats         |
-| `/tools`                | List available tools                    |
-| `/grant`                | Manage tool permissions                 |
-
-Commands autocomplete as you type with ghost text suggestions.
-
 ## Instruction Files
 
-Tomo loads instruction files and sends them as a system message to the LLM. Files are searched case-insensitively in order of preference:
-
-1. `.tomo/` directory
-2. `.claude/` directory
-3. Current/home directory
-
-Within each directory, `claude.md` is checked before `agents.md`. Both global (`~/`) and local (`./`) locations are searched and combined.
-
-## Keyboard Shortcuts
-
-| Key                   | Action                            |
-| --------------------- | --------------------------------- |
-| `Enter`               | Send message                      |
-| `Shift+Enter`         | Insert newline                    |
-| `Escape`              | Cancel streaming                  |
-| `Ctrl+C`              | Clear input, or exit (double-tap) |
-| `←` `→`               | Move cursor                       |
-| `↑` `↓`               | Move cursor across lines          |
-| `Ctrl+A` / `Ctrl+E`   | Jump to start/end of input        |
-| `Option+←` `Option+→` | Skip words                        |
+Tomo loads instruction files as system messages. It checks `.tomo/`, `.claude/`, and the current directory for `claude.md` or `agents.md`. Both global (`~/`) and local (`./`) files are combined.
 
 ## Sessions
 
-Conversations are automatically saved to `~/.tomo/sessions/` as JSONL files. On exit, tomo displays a resume command:
-
-```
-  Resume with /session <id>
-```
-
-Use `/session` to browse previous sessions or `/session <id>` to load one directly.
+Conversations are saved automatically. Use `/session` to browse or `/session <id>` to resume.
