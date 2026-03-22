@@ -42,6 +42,27 @@ providers:
 - `contextWindow` — optional override per provider (auto-detected from Ollama, falls back to 4096)
 - `models.<name>.maxTokens` — optional per-model override for max response tokens
 
+## Permissions
+
+Tool permissions control whether the model can use file tools without prompting for confirmation. Defaults:
+
+| Tool         | Default |
+| ------------ | ------- |
+| `read_file`  | Allowed |
+| `write_file` | Prompt  |
+| `edit_file`  | Prompt  |
+
+Use `/grant` to toggle permissions interactively, or set them in `.tomo/config.yaml`:
+
+```yaml
+permissions:
+  read_file: true
+  write_file: true
+  edit_file: true
+```
+
+File operations targeting paths outside the current working directory always require confirmation regardless of permission settings.
+
 ## Slash Commands
 
 | Command                 | Description                             |
@@ -55,6 +76,8 @@ providers:
 | `/use <model>`          | Switch to a different model             |
 | `/use <provider/model>` | Switch provider and model               |
 | `/context`              | Show context window usage stats         |
+| `/tools`                | List available tools                    |
+| `/grant`                | Manage tool permissions                 |
 
 Commands autocomplete as you type with ghost text suggestions.
 
