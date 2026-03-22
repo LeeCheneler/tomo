@@ -1,10 +1,17 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { createElement } from "react";
+import { z } from "zod";
 import { FileAccessConfirm } from "../components/file-access-confirm";
 import { isPathWithinCwd } from "../permissions";
 import { registerTool } from "./registry";
-import type { ToolContext } from "./types";
+import { type ToolContext, parseToolArgs } from "./types";
+
+const argsSchema = z.object({
+  path: z.string().min(1, "no file path provided"),
+  startLine: z.number().optional(),
+  endLine: z.number().optional(),
+});
 
 const MAX_LINES = 500;
 
@@ -81,16 +88,10 @@ registerTool({
   },
   interactive: false,
   async execute(args: string, context: ToolContext): Promise<string> {
-    const parsed = JSON.parse(args);
-    const rawPath: string = parsed.path ?? "";
-    const startLine: number | undefined = parsed.startLine;
-    const endLine: number | undefined = parsed.endLine;
+    const parsed = parseToolArgs(argsSchema, args);
+    const { startLine, endLine } = parsed;
 
-    if (!rawPath.trim()) {
-      return "Error: no file path provided";
-    }
-
-    const filePath = resolve(rawPath);
+    const filePath = resolve(parsed.path);
 
     // Permission granted and path in cwd — read immediately
     if (context.permissions.read_file && isPathWithinCwd(filePath)) {

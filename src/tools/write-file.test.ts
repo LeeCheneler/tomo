@@ -72,14 +72,11 @@ describe("write_file tool", () => {
     expect(readFileSync(filePath, "utf-8")).toBe("deep\n");
   });
 
-  it("returns error for empty path", async () => {
+  it("throws for empty path", async () => {
     const tool = getTool("write_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: "", content: "x" }),
-      mockContext,
-    );
-
-    expect(result).toBe("Error: no file path provided");
+    await expect(
+      tool?.execute(JSON.stringify({ path: "", content: "x" }), mockContext),
+    ).rejects.toThrow("no file path provided");
     expect(mockContext.renderInteractive).not.toHaveBeenCalled();
   });
 

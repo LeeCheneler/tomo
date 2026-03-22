@@ -30,7 +30,7 @@ describe("ask tool", () => {
     });
   });
 
-  it("returns error when no options provided", async () => {
+  it("throws when no options provided", async () => {
     const tool = getTool("ask");
     const context = {
       renderInteractive: vi.fn(),
@@ -38,11 +38,9 @@ describe("ask tool", () => {
       permissions: {},
     };
 
-    const result = await tool?.execute(
-      JSON.stringify({ question: "pick", options: [] }),
-      context,
-    );
-    expect(result).toBe("Error: no options provided");
+    await expect(
+      tool?.execute(JSON.stringify({ question: "pick", options: [] }), context),
+    ).rejects.toThrow("no options provided");
     expect(context.renderInteractive).not.toHaveBeenCalled();
   });
 

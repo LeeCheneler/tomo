@@ -1,7 +1,12 @@
+import { z } from "zod";
 import { registerTool } from "./registry";
-import type { ToolContext } from "./types";
+import { type ToolContext, parseToolArgs } from "./types";
 
 const TAVILY_API_URL = "https://api.tavily.com/search";
+
+const argsSchema = z.object({
+  query: z.string().min(1, "no search query provided"),
+});
 
 registerTool({
   name: "web_search",
@@ -24,12 +29,7 @@ registerTool({
       ? undefined
       : "TAVILY_API_KEY env var is not set",
   async execute(args: string, _context: ToolContext): Promise<string> {
-    const parsed = JSON.parse(args);
-    const query: string = parsed.query ?? "";
-
-    if (!query.trim()) {
-      return "Error: no search query provided";
-    }
+    const { query } = parseToolArgs(argsSchema, args);
 
     const apiKey = process.env.TAVILY_API_KEY;
     if (!apiKey) {

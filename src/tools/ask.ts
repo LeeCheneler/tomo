@@ -1,7 +1,13 @@
 import React from "react";
+import { z } from "zod";
 import { AskSelector } from "../components/ask-selector";
 import { registerTool } from "./registry";
-import type { ToolContext } from "./types";
+import { type ToolContext, parseToolArgs } from "./types";
+
+const argsSchema = z.object({
+  question: z.string().default("Please choose:"),
+  options: z.array(z.string()).min(1, "no options provided"),
+});
 
 registerTool({
   name: "ask",
@@ -23,13 +29,7 @@ registerTool({
     required: ["question", "options"],
   },
   async execute(args: string, context: ToolContext): Promise<string> {
-    const parsed = JSON.parse(args);
-    const question: string = parsed.question ?? "Please choose:";
-    const options: string[] = parsed.options ?? [];
-
-    if (options.length === 0) {
-      return "Error: no options provided";
-    }
+    const { question, options } = parseToolArgs(argsSchema, args);
 
     return context.renderInteractive((onResult, onCancel) =>
       React.createElement(AskSelector, {

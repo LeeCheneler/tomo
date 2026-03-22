@@ -1,8 +1,13 @@
 import { spawn } from "node:child_process";
 import { createElement } from "react";
+import { z } from "zod";
 import { CommandConfirm } from "../components/command-confirm";
 import { registerTool } from "./registry";
-import type { ToolContext } from "./types";
+import { type ToolContext, parseToolArgs } from "./types";
+
+const argsSchema = z.object({
+  command: z.string().min(1, "no command provided"),
+});
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -67,12 +72,7 @@ registerTool({
     required: ["command"],
   },
   async execute(args: string, context: ToolContext): Promise<string> {
-    const parsed = JSON.parse(args);
-    const command: string = parsed.command ?? "";
-
-    if (!command.trim()) {
-      return "Error: no command provided";
-    }
+    const { command } = parseToolArgs(argsSchema, args);
 
     const approved = await context.renderInteractive((onResult, _onCancel) =>
       createElement(CommandConfirm, {

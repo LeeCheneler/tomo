@@ -84,14 +84,11 @@ describe("glob tool", () => {
     expect(result).toBe("No files matched the pattern.");
   });
 
-  it("returns error for empty pattern", async () => {
+  it("throws for empty pattern", async () => {
     const tool = getTool("glob");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "" }),
-      mockContext,
-    );
-
-    expect(result).toBe("Error: no glob pattern provided");
+    await expect(
+      tool?.execute(JSON.stringify({ pattern: "" }), mockContext),
+    ).rejects.toThrow("no glob pattern provided");
   });
 
   it("defaults to cwd when no path provided", async () => {

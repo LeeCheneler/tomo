@@ -34,15 +34,12 @@ describe("web_search tool", () => {
     expect(tool?.enabled).toBe(false);
   });
 
-  it("returns error for empty query", async () => {
+  it("throws for empty query", async () => {
     process.env.TAVILY_API_KEY = "test-key";
     const tool = getTool("web_search");
-    const result = await tool?.execute(
-      JSON.stringify({ query: "" }),
-      mockContext,
-    );
-
-    expect(result).toBe("Error: no search query provided");
+    await expect(
+      tool?.execute(JSON.stringify({ query: "" }), mockContext),
+    ).rejects.toThrow("no search query provided");
   });
 
   it("returns error when TAVILY_API_KEY is not set", async () => {

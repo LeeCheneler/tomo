@@ -25,7 +25,7 @@ describe("run_command tool", () => {
     });
   });
 
-  it("returns error when no command provided", async () => {
+  it("throws when no command provided", async () => {
     const tool = getTool("run_command");
     const context = {
       renderInteractive: vi.fn(),
@@ -33,11 +33,9 @@ describe("run_command tool", () => {
       permissions: {},
     };
 
-    const result = await tool?.execute(
-      JSON.stringify({ command: "" }),
-      context,
-    );
-    expect(result).toBe("Error: no command provided");
+    await expect(
+      tool?.execute(JSON.stringify({ command: "" }), context),
+    ).rejects.toThrow("no command provided");
     expect(context.renderInteractive).not.toHaveBeenCalled();
   });
 
