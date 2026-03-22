@@ -1,8 +1,7 @@
-import { createRequire } from "node:module";
 import { Text } from "ink";
 
-const require = createRequire(import.meta.url);
-const { version } = require("../../package.json");
+declare const TOMO_VERSION: string | undefined;
+const version = typeof TOMO_VERSION !== "undefined" ? TOMO_VERSION : "dev";
 
 const LOGO = `
  ╔╦╗╔═╗╔╦╗╔═╗
