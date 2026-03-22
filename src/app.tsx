@@ -14,14 +14,31 @@ import { getActiveProvider, loadConfig } from "./config";
 import { useChat } from "./hooks/use-chat";
 import { loadInstructions } from "./instructions";
 import { createSession } from "./session";
+import { getAllTools, resolveToolAvailability } from "./tools";
 
 const config = loadConfig();
 const initialProvider = getActiveProvider(config);
 const initialSession = createSession(initialProvider.name, config.activeModel);
 const instructions = loadInstructions();
 
+/** Build startup warnings for enabled tools that are misconfigured. */
+function getToolWarnings(): string[] {
+  const availability = resolveToolAvailability(config.tools);
+  const warnings: string[] = [];
+  for (const tool of getAllTools()) {
+    if (availability[tool.name] && tool.warning) {
+      const msg = tool.warning();
+      if (msg) warnings.push(`${tool.name}: ${msg}`);
+    }
+  }
+  return warnings;
+}
+
+const startupWarnings = getToolWarnings();
+
 type StaticItem =
   | { type: "header"; id: string }
+  | { type: "warning"; id: string; text: string }
   | (DisplayMessage & { type?: undefined });
 
 /** Root application component. Renders the chat UI and delegates state to useChat. */
@@ -38,7 +55,20 @@ export function App() {
     (): StaticItem => ({ type: "header", id: "__header__" }),
     [],
   );
-  const staticItems: StaticItem[] = [headerItem, ...chat.messages];
+  const warningItems = useMemo(
+    (): StaticItem[] =>
+      startupWarnings.map((text, i) => ({
+        type: "warning" as const,
+        id: `__warning_${i}__`,
+        text,
+      })),
+    [],
+  );
+  const staticItems: StaticItem[] = [
+    headerItem,
+    ...warningItems,
+    ...chat.messages,
+  ];
 
   const handleTab = () => {
     if (chat.messages.length === 0) return;
@@ -73,6 +103,13 @@ export function App() {
             return (
               <Box key={item.id} flexDirection="column">
                 <Header model={chat.activeModel} />
+              </Box>
+            );
+          }
+          if (item.type === "warning") {
+            return (
+              <Box key={item.id}>
+                <Text color="yellow">{`  ⚠ ${item.text}`}</Text>
               </Box>
             );
           }
