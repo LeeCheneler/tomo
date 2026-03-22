@@ -52,14 +52,14 @@ export function WriteFileConfirm({
       <Text bold color="yellow">
         {"  Write to file?"}
       </Text>
-      <Text>{""}</Text>
+      <Text> </Text>
       <Text>
         {"  "}
         {chalk.bold(filePath)} ({status})
       </Text>
-      <Text>{""}</Text>
+      <Text> </Text>
       <Text>{diffPreview}</Text>
-      <Text>{""}</Text>
+      <Text> </Text>
       <Text color={cursor === 0 ? "green" : undefined}>
         {"  "}
         {cursor === 0 ? "❯" : " "} Approve (y)
