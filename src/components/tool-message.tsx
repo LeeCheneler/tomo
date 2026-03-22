@@ -18,15 +18,13 @@ export function ToolMessage({ children }: ToolMessageProps) {
     ? bodyLines.slice(-VISIBLE_LINES).join("\n")
     : bodyLines.join("\n");
 
-  const hiddenCount = bodyTotal - VISIBLE_LINES;
-
   return (
     <Box flexDirection="column">
       <Text>{header}</Text>
       {needsTruncate ? (
         <Text dimColor>
           {"  ▸ "}
-          {hiddenCount} more lines
+          {bodyTotal - VISIBLE_LINES} more lines
         </Text>
       ) : null}
       {displayBody ? <Text dimColor>{displayBody}</Text> : null}

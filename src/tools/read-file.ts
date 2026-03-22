@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import React from "react";
+import { createElement } from "react";
 import { FileAccessConfirm } from "../components/file-access-confirm";
 import { isPathWithinCwd } from "../permissions";
 import { registerTool } from "./registry";
@@ -99,7 +99,7 @@ registerTool({
 
     // Permission not granted or outside cwd — ask for approval
     const approved = await context.renderInteractive((onResult, onCancel) =>
-      React.createElement(FileAccessConfirm, {
+      createElement(FileAccessConfirm, {
         filePath,
         action: "Read this file?",
         onApprove: () => onResult("approved"),
