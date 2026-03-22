@@ -41,14 +41,19 @@ type StaticItem =
   | { type: "warning"; id: string; text: string }
   | (DisplayMessage & { type?: undefined });
 
+interface AppProps {
+  onRestart: () => void;
+}
+
 /** Root application component. Renders the chat UI and delegates state to useChat. */
-export function App() {
+export function App({ onRestart }: AppProps) {
   const chat = useChat(
     config,
     initialProvider,
     config.activeModel,
     initialSession,
     instructions,
+    onRestart,
   );
 
   const headerItem = useMemo(

@@ -173,6 +173,7 @@ export function useChat(
   initialModel: string,
   initialSession: Session,
   systemMessage: string | null = null,
+  onRestart?: () => void,
 ): ChatState {
   const [messages, setMessages] = useState<DisplayMessage[]>(
     initialSession.messages,
@@ -225,6 +226,10 @@ export function useChat(
   };
 
   const clearMessages = () => {
+    if (onRestart) {
+      onRestart();
+      return;
+    }
     const newSession = createSession(activeProvider.name, activeModel);
     sessionRef.current = newSession;
 
