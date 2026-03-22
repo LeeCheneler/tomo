@@ -90,7 +90,7 @@ registerTool({
 
     const diffPreview = formatDiff(content, newContent);
 
-    const approved = await context.renderInteractive((onResult, onCancel) =>
+    const approved = await context.renderInteractive((onResult, _onCancel) =>
       createElement(WriteFileConfirm, {
         filePath,
         isNewFile: false,

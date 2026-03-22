@@ -98,7 +98,7 @@ registerTool({
     }
 
     // Permission not granted or outside cwd — ask for approval
-    const approved = await context.renderInteractive((onResult, onCancel) =>
+    const approved = await context.renderInteractive((onResult, _onCancel) =>
       createElement(FileAccessConfirm, {
         filePath,
         action: "Read this file?",
