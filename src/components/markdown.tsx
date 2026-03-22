@@ -218,9 +218,13 @@ function unescapeHtml(text: string): string {
   );
 }
 
+/** Renders a markdown string to ANSI-formatted text. */
+export function renderMarkdown(text: string): string {
+  const rendered = md.parse(text, { async: false }) as string;
+  return unescapeHtml(rendered.replace(/\n+$/, ""));
+}
+
 /** Renders a markdown string as ANSI-formatted terminal output. */
 export function Markdown({ children }: MarkdownProps) {
-  const rendered = md.parse(children, { async: false }) as string;
-  const trimmed = unescapeHtml(rendered.replace(/\n+$/, ""));
-  return <Text>{trimmed}</Text>;
+  return <Text>{renderMarkdown(children)}</Text>;
 }

@@ -27,7 +27,11 @@ describe("run_command tool", () => {
 
   it("returns error when no command provided", async () => {
     const tool = getTool("run_command");
-    const context = { renderInteractive: vi.fn(), reportProgress: vi.fn() };
+    const context = {
+      renderInteractive: vi.fn(),
+      reportProgress: vi.fn(),
+      permissions: {},
+    };
 
     const result = await tool?.execute(
       JSON.stringify({ command: "" }),
@@ -42,6 +46,7 @@ describe("run_command tool", () => {
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
       reportProgress: vi.fn(),
+      permissions: {},
     };
 
     const result = await tool?.execute(
@@ -60,6 +65,7 @@ describe("run_command tool", () => {
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
       reportProgress: vi.fn(),
+      permissions: {},
     };
 
     await tool?.execute(JSON.stringify({ command: "echo hello" }), context);
@@ -79,6 +85,7 @@ describe("run_command tool", () => {
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("denied"),
       reportProgress: vi.fn(),
+      permissions: {},
     };
 
     const result = await tool?.execute(
@@ -94,6 +101,7 @@ describe("run_command tool", () => {
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
       reportProgress: vi.fn(),
+      permissions: {},
     };
 
     const result = await tool?.execute(
@@ -111,6 +119,7 @@ describe("run_command tool", () => {
     const context = {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
       reportProgress: vi.fn(),
+      permissions: {},
     };
 
     const result = await tool?.execute(

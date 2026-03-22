@@ -8,12 +8,15 @@ import "./read-file";
 
 const tmpDir = resolve(import.meta.dirname, "../../.test-read-file-tmp");
 const mockContext = {
-  renderInteractive: vi.fn(),
+  renderInteractive: vi.fn().mockResolvedValue("approved"),
   reportProgress: vi.fn(),
+  permissions: { read_file: true },
 };
 
 beforeEach(() => {
   mkdirSync(tmpDir, { recursive: true });
+  vi.clearAllMocks();
+  mockContext.renderInteractive.mockResolvedValue("approved");
 });
 
 afterEach(() => {
@@ -120,5 +123,64 @@ describe("read_file tool", () => {
     );
 
     expect(result).toContain("lines 1-4 of 4");
+  });
+
+  it("does not prompt when read_file permission is granted and path in cwd", async () => {
+    const filePath = resolve(tmpDir, "allowed.txt");
+    writeFileSync(filePath, "content\n");
+    const tool = getTool("read_file");
+
+    const result = await tool?.execute(
+      JSON.stringify({ path: filePath }),
+      mockContext,
+    );
+
+    expect(result).toContain("content");
+    expect(mockContext.renderInteractive).not.toHaveBeenCalled();
+  });
+
+  it("prompts when read_file permission is not granted", async () => {
+    const filePath = resolve(tmpDir, "gated.txt");
+    writeFileSync(filePath, "secret\n");
+    const tool = getTool("read_file");
+    const ctx = {
+      ...mockContext,
+      permissions: { read_file: false },
+    };
+
+    const result = await tool?.execute(JSON.stringify({ path: filePath }), ctx);
+
+    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
+    expect(result).toContain("secret");
+  });
+
+  it("returns denial when user denies read", async () => {
+    const filePath = resolve(tmpDir, "denied.txt");
+    writeFileSync(filePath, "secret\n");
+    const tool = getTool("read_file");
+    const ctx = {
+      ...mockContext,
+      renderInteractive: vi.fn().mockResolvedValue("denied"),
+      permissions: { read_file: false },
+    };
+
+    const result = await tool?.execute(JSON.stringify({ path: filePath }), ctx);
+
+    expect(result).toBe("The user denied this read.");
+  });
+
+  it("prompts for files outside cwd even with permission granted", async () => {
+    const filePath = "/tmp/.test-read-outside.txt";
+    writeFileSync(filePath, "outside\n");
+    const tool = getTool("read_file");
+
+    const result = await tool?.execute(
+      JSON.stringify({ path: filePath }),
+      mockContext,
+    );
+
+    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
+    expect(result).toContain("outside");
+    rmSync(filePath, { force: true });
   });
 });

@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import React from "react";
 import { WriteFileConfirm } from "../components/write-file-confirm";
+import { isPathWithinCwd } from "../permissions";
 import { formatDiff } from "./format-diff";
 import { registerTool } from "./registry";
 import type { ToolContext } from "./types";
@@ -72,6 +73,17 @@ registerTool({
     }
 
     const newContent = content.replace(oldString, newString);
+
+    // Skip confirmation if permission granted and path is within cwd
+    if (context.permissions.edit_file && isPathWithinCwd(filePath)) {
+      try {
+        writeFileSync(filePath, newContent, "utf-8");
+        return `Successfully edited ${filePath}`;
+      } catch (err) {
+        return `Error writing file: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
     const diffPreview = formatDiff(content, newContent);
 
     const approved = await context.renderInteractive((onResult, onCancel) =>

@@ -12,6 +12,8 @@ export interface ToolContext {
   ) => Promise<string>;
   /** Report partial output to the UI during long-running operations. */
   reportProgress: (content: string) => void;
+  /** Resolved tool permissions from config. */
+  permissions: Record<string, boolean>;
 }
 
 /** A model-initiated tool with a name, description, parameters, and execute handler. */

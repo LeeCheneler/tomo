@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import React from "react";
 import { WriteFileConfirm } from "../components/write-file-confirm";
+import { isPathWithinCwd } from "../permissions";
 import { formatDiff, formatNewFile } from "./format-diff";
 import { registerTool } from "./registry";
 import type { ToolContext } from "./types";
@@ -34,6 +35,18 @@ registerTool({
     }
 
     const filePath = resolve(rawPath);
+
+    // Skip confirmation if permission granted and path is within cwd
+    if (context.permissions.write_file && isPathWithinCwd(filePath)) {
+      try {
+        mkdirSync(dirname(filePath), { recursive: true });
+        writeFileSync(filePath, content, "utf-8");
+        return `Successfully wrote to ${filePath}`;
+      } catch (err) {
+        return `Error writing file: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
     const isNewFile = !existsSync(filePath);
 
     let diffPreview: string;

@@ -10,6 +10,7 @@ const tmpDir = resolve(import.meta.dirname, "../../.test-write-file-tmp");
 const mockContext = {
   renderInteractive: vi.fn().mockResolvedValue("approved"),
   reportProgress: vi.fn(),
+  permissions: {},
 };
 
 beforeEach(() => {
@@ -97,6 +98,53 @@ describe("write_file tool", () => {
 
   it("calls renderInteractive for confirmation", async () => {
     const filePath = resolve(tmpDir, "confirm.txt");
+    const tool = getTool("write_file");
+
+    await tool?.execute(
+      JSON.stringify({ path: filePath, content: "test\n" }),
+      mockContext,
+    );
+
+    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips confirmation when write_file permission granted and path in cwd", async () => {
+    const filePath = resolve(process.cwd(), ".test-write-perm.txt");
+    const tool = getTool("write_file");
+    const ctx = {
+      ...mockContext,
+      permissions: { write_file: true },
+    };
+
+    const result = await tool?.execute(
+      JSON.stringify({ path: filePath, content: "auto\n" }),
+      ctx,
+    );
+
+    expect(result).toContain("Successfully wrote to");
+    expect(ctx.renderInteractive).not.toHaveBeenCalled();
+    // Clean up
+    rmSync(filePath, { force: true });
+  });
+
+  it("still prompts when write_file permission granted but path outside cwd", async () => {
+    const filePath = "/tmp/.test-write-perm-outside.txt";
+    const tool = getTool("write_file");
+    const ctx = {
+      ...mockContext,
+      permissions: { write_file: true },
+    };
+
+    await tool?.execute(
+      JSON.stringify({ path: filePath, content: "test\n" }),
+      ctx,
+    );
+
+    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
+  });
+
+  it("prompts when write_file permission not granted even for cwd paths", async () => {
+    const filePath = resolve(tmpDir, "no-perm.txt");
     const tool = getTool("write_file");
 
     await tool?.execute(
