@@ -375,11 +375,13 @@ export function useChat(
     // re-call to the provider includes prior tool results.
     let currentMessages: DisplayMessage[] = [...messages, userMsg];
 
+    // Reload config from disk so we pick up changes from /grant and /tools.
+    const freshConfig = loadConfig();
     const maxTokens = getMaxTokens(config, activeProvider, activeModel);
-    const toolAvailability = resolveToolAvailability(loadConfig().tools);
+    const toolAvailability = resolveToolAvailability(freshConfig.tools);
     const toolDefs = getToolDefinitions(toolAvailability);
 
-    const permissions = resolvePermissions(loadConfig().permissions);
+    const permissions = resolvePermissions(freshConfig.permissions);
 
     const toolContext: ToolContext = {
       renderInteractive: (factory) =>
