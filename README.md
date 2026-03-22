@@ -67,15 +67,18 @@ File operations targeting paths outside the current working directory always req
 
 Tools are model-initiated actions the LLM can call during a conversation.
 
-| Tool          | Description                                           | Permission   |
-| ------------- | ----------------------------------------------------- | ------------ |
-| `read_file`   | Read file contents with line numbers                  | `read_file`  |
-| `write_file`  | Create or overwrite a file                            | `write_file` |
-| `edit_file`   | Apply string replacements to a file                   | `edit_file`  |
-| `glob`        | Find files by glob pattern (respects `.gitignore`)    | `read_file`  |
-| `grep`        | Search file contents by regex (respects `.gitignore`) | `read_file`  |
-| `run_command` | Run a shell command (always prompts)                  | —            |
-| `ask`         | Ask the user a multiple-choice question               | —            |
+| Tool          | Description                                           | Permission   | Default  |
+| ------------- | ----------------------------------------------------- | ------------ | -------- |
+| `read_file`   | Read file contents with line numbers                  | `read_file`  | Enabled  |
+| `write_file`  | Create or overwrite a file                            | `write_file` | Enabled  |
+| `edit_file`   | Apply string replacements to a file                   | `edit_file`  | Enabled  |
+| `glob`        | Find files by glob pattern (respects `.gitignore`)    | `read_file`  | Enabled  |
+| `grep`        | Search file contents by regex (respects `.gitignore`) | `read_file`  | Enabled  |
+| `run_command` | Run a shell command (always prompts)                  | —            | Enabled  |
+| `ask`         | Ask the user a multiple-choice question               | —            | Enabled  |
+| `web_search`  | Search the web via Tavily API                         | —            | Disabled |
+
+`web_search` uses the [Tavily](https://tavily.com) search API. Set `TAVILY_API_KEY` in your environment and enable the tool with `/tools`.
 
 ## Slash Commands
 
