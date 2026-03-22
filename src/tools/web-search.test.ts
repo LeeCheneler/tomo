@@ -68,9 +68,10 @@ describe("web_search tool", () => {
     expect(tool?.warning?.()).toBeUndefined();
   });
 
-  it("returns formatted results on success", async () => {
+  it("returns formatted results with answer on success", async () => {
     process.env.TAVILY_API_KEY = "test-key";
     const mockResponse = {
+      answer: "This is the summarised answer.",
       results: [
         {
           title: "Test Result",
@@ -97,6 +98,7 @@ describe("web_search tool", () => {
       mockContext,
     );
 
+    expect(result).toContain("Answer: This is the summarised answer.");
     expect(result).toContain("1. Test Result");
     expect(result).toContain("https://example.com");
     expect(result).toContain("A test snippet");

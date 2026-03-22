@@ -48,6 +48,7 @@ interface TavilyResult {
 }
 
 interface TavilyResponse {
+  answer?: string;
   results: TavilyResult[];
 }
 
@@ -62,6 +63,7 @@ async function search(query: string, apiKey: string): Promise<string> {
       query,
       max_results: 5,
       search_depth: "basic",
+      include_answer: true,
     }),
   });
 
@@ -82,7 +84,17 @@ async function search(query: string, apiKey: string): Promise<string> {
     return "No results found.";
   }
 
-  return data.results
-    .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.content}`)
-    .join("\n\n");
+  const parts: string[] = [];
+
+  if (data.answer) {
+    parts.push(`Answer: ${data.answer}`);
+  }
+
+  parts.push(
+    ...data.results.map(
+      (r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.content}`,
+    ),
+  );
+
+  return parts.join("\n\n");
 }
