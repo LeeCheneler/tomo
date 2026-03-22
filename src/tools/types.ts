@@ -25,6 +25,8 @@ export interface Tool {
   interactive?: boolean;
   /** Whether the tool is enabled by default. Defaults to true. */
   enabled?: boolean;
+  /** Returns a warning message when the tool is enabled but misconfigured, or undefined if OK. */
+  warning?: () => string | undefined;
   execute: (args: string, context: ToolContext) => Promise<string>;
 }
 

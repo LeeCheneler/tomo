@@ -4,6 +4,7 @@ import { Box, Text, useInput } from "ink";
 interface ToolSelectorProps {
   tools: string[];
   currentAvailability: Record<string, boolean>;
+  warnings?: Record<string, string>;
   onSave: (availability: Record<string, boolean>) => void;
   onCancel: () => void;
 }
@@ -12,6 +13,7 @@ interface ToolSelectorProps {
 export function ToolSelector({
   tools,
   currentAvailability,
+  warnings,
   onSave,
   onCancel,
 }: ToolSelectorProps) {
@@ -59,12 +61,21 @@ export function ToolSelector({
       {tools.map((name, i) => {
         const isCurrent = i === cursor;
         const enabled = availability[name] ?? true;
+        const warning = enabled ? warnings?.[name] : undefined;
 
         return (
-          <Text key={name} color={isCurrent ? "cyan" : undefined}>
-            {"  "}
-            {isCurrent ? "❯" : " "} {enabled ? "[✔]" : "[ ]"} {name}
-          </Text>
+          <Box key={name} flexDirection="column">
+            <Text color={isCurrent ? "cyan" : undefined}>
+              {"  "}
+              {isCurrent ? "❯" : " "} {enabled ? "[✔]" : "[ ]"} {name}
+            </Text>
+            {warning && (
+              <Text color="yellow">
+                {"      ⚠ "}
+                {warning}
+              </Text>
+            )}
+          </Box>
         );
       })}
       <Text>{""}</Text>

@@ -141,6 +141,37 @@ describe("ToolSelector", () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
+  it("shows warning for enabled tools with warnings", () => {
+    const { lastFrame } = render(
+      <ToolSelector
+        tools={toolNames}
+        currentAvailability={defaults}
+        warnings={{ read_file: "Missing config" }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const output = lastFrame() ?? "";
+    expect(output).toContain("Missing config");
+  });
+
+  it("hides warning for disabled tools", () => {
+    const availability = { ...defaults, read_file: false };
+    const { lastFrame } = render(
+      <ToolSelector
+        tools={toolNames}
+        currentAvailability={availability}
+        warnings={{ read_file: "Missing config" }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const output = lastFrame() ?? "";
+    expect(output).not.toContain("Missing config");
+  });
+
   it("saves unchanged state on Esc", async () => {
     const onSave = vi.fn();
     const { stdin } = render(

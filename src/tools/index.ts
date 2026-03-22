@@ -5,6 +5,7 @@ import "./glob";
 import "./grep";
 import "./read-file";
 import "./run-command";
+import "./web-search";
 import "./write-file";
 
 // Re-export registry functions
