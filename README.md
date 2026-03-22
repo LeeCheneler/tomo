@@ -78,7 +78,7 @@ Tools are model-initiated actions the LLM can call during a conversation.
 | `ask`         | Ask the user a multiple-choice question               | —            | Enabled  |
 | `web_search`  | Search the web via Tavily API                         | —            | Disabled |
 
-`web_search` requires a `TAVILY_API_KEY` environment variable. Enable it with `/tools`.
+`web_search` uses the [Tavily](https://tavily.com) search API. Set `TAVILY_API_KEY` in your environment and enable the tool with `/tools`.
 
 ## Slash Commands
 
