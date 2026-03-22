@@ -10,6 +10,7 @@ const tmpDir = resolve(import.meta.dirname, "../../.test-edit-file-tmp");
 const mockContext = {
   renderInteractive: vi.fn().mockResolvedValue("approved"),
   reportProgress: vi.fn(),
+  permissions: {},
 };
 
 beforeEach(() => {
@@ -158,6 +159,69 @@ describe("edit_file tool", () => {
   });
 
   it("calls renderInteractive for confirmation", async () => {
+    const filePath = resolve(tmpDir, "test.txt");
+    writeFileSync(filePath, "hello\n");
+    const tool = getTool("edit_file");
+
+    await tool?.execute(
+      JSON.stringify({
+        path: filePath,
+        old_string: "hello",
+        new_string: "bye",
+      }),
+      mockContext,
+    );
+
+    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips confirmation when edit_file permission granted and path in cwd", async () => {
+    const filePath = resolve(process.cwd(), ".test-edit-perm.txt");
+    writeFileSync(filePath, "hello\n");
+    const tool = getTool("edit_file");
+    const ctx = {
+      ...mockContext,
+      permissions: { edit_file: true },
+    };
+
+    const result = await tool?.execute(
+      JSON.stringify({
+        path: filePath,
+        old_string: "hello",
+        new_string: "bye",
+      }),
+      ctx,
+    );
+
+    expect(result).toContain("Successfully edited");
+    expect(ctx.renderInteractive).not.toHaveBeenCalled();
+    expect(readFileSync(filePath, "utf-8")).toBe("bye\n");
+    rmSync(filePath, { force: true });
+  });
+
+  it("still prompts when edit_file permission granted but path outside cwd", async () => {
+    const filePath = "/tmp/.test-edit-perm-outside.txt";
+    writeFileSync(filePath, "hello\n");
+    const tool = getTool("edit_file");
+    const ctx = {
+      ...mockContext,
+      permissions: { edit_file: true },
+    };
+
+    await tool?.execute(
+      JSON.stringify({
+        path: filePath,
+        old_string: "hello",
+        new_string: "bye",
+      }),
+      ctx,
+    );
+
+    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
+    rmSync(filePath, { force: true });
+  });
+
+  it("prompts when edit_file permission not granted even for cwd paths", async () => {
     const filePath = resolve(tmpDir, "test.txt");
     writeFileSync(filePath, "hello\n");
     const tool = getTool("edit_file");

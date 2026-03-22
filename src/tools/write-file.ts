@@ -1,10 +1,21 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import React from "react";
+import { createElement } from "react";
 import { WriteFileConfirm } from "../components/write-file-confirm";
+import { isPathWithinCwd } from "../permissions";
 import { formatDiff, formatNewFile } from "./format-diff";
 import { registerTool } from "./registry";
 import type { ToolContext } from "./types";
+
+function performWrite(filePath: string, content: string): string {
+  try {
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, content, "utf-8");
+    return `Successfully wrote to ${filePath}`;
+  } catch (err) {
+    return `Error writing file: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
 
 registerTool({
   name: "write_file",
@@ -34,6 +45,12 @@ registerTool({
     }
 
     const filePath = resolve(rawPath);
+
+    // Skip confirmation if permission granted and path is within cwd
+    if (context.permissions.write_file && isPathWithinCwd(filePath)) {
+      return performWrite(filePath, content);
+    }
+
     const isNewFile = !existsSync(filePath);
 
     let diffPreview: string;
@@ -45,7 +62,7 @@ registerTool({
     }
 
     const approved = await context.renderInteractive((onResult, onCancel) =>
-      React.createElement(WriteFileConfirm, {
+      createElement(WriteFileConfirm, {
         filePath,
         isNewFile,
         diffPreview,
@@ -58,12 +75,6 @@ registerTool({
       return "The user denied this write.";
     }
 
-    try {
-      mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, content, "utf-8");
-      return `Successfully wrote to ${filePath}`;
-    } catch (err) {
-      return `Error writing file: ${err instanceof Error ? err.message : String(err)}`;
-    }
+    return performWrite(filePath, content);
   },
 });

@@ -1,13 +1,64 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { FileAccessConfirm } from "../components/file-access-confirm";
+import { isPathWithinCwd } from "../permissions";
 import { registerTool } from "./registry";
+import type { ToolContext } from "./types";
 
 const MAX_LINES = 500;
 
+function readFile(
+  filePath: string,
+  startLine?: number,
+  endLine?: number,
+): string {
+  try {
+    const stat = statSync(filePath);
+    if (stat.isDirectory()) {
+      return `Error: ${filePath} is a directory, not a file`;
+    }
+  } catch {
+    return `Error: file not found: ${filePath}`;
+  }
+
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    const allLines = content.split("\n");
+    const totalLines = allLines.length;
+
+    // Line range request
+    if (startLine !== undefined || endLine !== undefined) {
+      const start = Math.max(1, startLine ?? 1);
+      const end = Math.min(totalLines, endLine ?? totalLines);
+      const slice = allLines.slice(start - 1, end);
+      const numbered = slice.map(
+        (line, i) => `${String(start + i).padStart(4)} | ${line}`,
+      );
+      return `${filePath} (lines ${start}-${end} of ${totalLines})\n${numbered.join("\n")}`;
+    }
+
+    // Full file — truncate if needed
+    if (totalLines > MAX_LINES) {
+      const slice = allLines.slice(0, MAX_LINES);
+      const numbered = slice.map(
+        (line, i) => `${String(i + 1).padStart(4)} | ${line}`,
+      );
+      return `${filePath} (showing first ${MAX_LINES} of ${totalLines} lines, truncated)\n${numbered.join("\n")}`;
+    }
+
+    const numbered = allLines.map(
+      (line, i) => `${String(i + 1).padStart(4)} | ${line}`,
+    );
+    return `${filePath} (${totalLines} lines)\n${numbered.join("\n")}`;
+  } catch (err) {
+    return `Error reading file: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 registerTool({
   name: "read_file",
-  description:
-    "Read the contents of a file. Returns the file content as text. Non-interactive — does not require user confirmation.",
+  description: "Read the contents of a file. Returns the file content as text.",
   parameters: {
     type: "object",
     properties: {
@@ -29,7 +80,7 @@ registerTool({
     required: ["path"],
   },
   interactive: false,
-  async execute(args: string): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<string> {
     const parsed = JSON.parse(args);
     const rawPath: string = parsed.path ?? "";
     const startLine: number | undefined = parsed.startLine;
@@ -41,46 +92,25 @@ registerTool({
 
     const filePath = resolve(rawPath);
 
-    try {
-      const stat = statSync(filePath);
-      if (stat.isDirectory()) {
-        return `Error: ${filePath} is a directory, not a file`;
-      }
-    } catch {
-      return `Error: file not found: ${filePath}`;
+    // Permission granted and path in cwd — read immediately
+    if (context.permissions.read_file && isPathWithinCwd(filePath)) {
+      return readFile(filePath, startLine, endLine);
     }
 
-    try {
-      const content = readFileSync(filePath, "utf-8");
-      const allLines = content.split("\n");
-      const totalLines = allLines.length;
+    // Permission not granted or outside cwd — ask for approval
+    const approved = await context.renderInteractive((onResult, onCancel) =>
+      createElement(FileAccessConfirm, {
+        filePath,
+        action: "Read this file?",
+        onApprove: () => onResult("approved"),
+        onDeny: () => onCancel(),
+      }),
+    );
 
-      // Line range request
-      if (startLine !== undefined || endLine !== undefined) {
-        const start = Math.max(1, startLine ?? 1);
-        const end = Math.min(totalLines, endLine ?? totalLines);
-        const slice = allLines.slice(start - 1, end);
-        const numbered = slice.map(
-          (line, i) => `${String(start + i).padStart(4)} | ${line}`,
-        );
-        return `${filePath} (lines ${start}-${end} of ${totalLines})\n${numbered.join("\n")}`;
-      }
-
-      // Full file — truncate if needed
-      if (totalLines > MAX_LINES) {
-        const slice = allLines.slice(0, MAX_LINES);
-        const numbered = slice.map(
-          (line, i) => `${String(i + 1).padStart(4)} | ${line}`,
-        );
-        return `${filePath} (showing first ${MAX_LINES} of ${totalLines} lines, truncated)\n${numbered.join("\n")}`;
-      }
-
-      const numbered = allLines.map(
-        (line, i) => `${String(i + 1).padStart(4)} | ${line}`,
-      );
-      return `${filePath} (${totalLines} lines)\n${numbered.join("\n")}`;
-    } catch (err) {
-      return `Error reading file: ${err instanceof Error ? err.message : String(err)}`;
+    if (approved !== "approved") {
+      return "The user denied this read.";
     }
+
+    return readFile(filePath, startLine, endLine);
   },
 });

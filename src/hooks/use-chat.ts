@@ -8,6 +8,7 @@ import {
   type ProviderConfig,
   getMaxTokens,
   getProviderByName,
+  loadConfig,
   updateActiveModel,
   updateActiveProvider,
 } from "../config";
@@ -24,6 +25,7 @@ import {
   createSession,
   loadSession,
 } from "../session";
+import { resolvePermissions } from "../permissions";
 import { type ToolContext, getTool, getToolDefinitions } from "../tools";
 
 export interface ChatState {
@@ -366,6 +368,8 @@ export function useChat(
     const maxTokens = getMaxTokens(config, activeProvider, activeModel);
     const toolDefs = getToolDefinitions();
 
+    const permissions = resolvePermissions(loadConfig().permissions);
+
     const toolContext: ToolContext = {
       renderInteractive: (factory) =>
         new Promise<string>((resolve, reject) => {
@@ -382,6 +386,7 @@ export function useChat(
       reportProgress: (progressContent: string) => {
         setStreamingContent(progressContent);
       },
+      permissions,
     };
 
     let aborted = false;

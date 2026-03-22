@@ -18,6 +18,14 @@ const providerSchema = z.object({
   models: z.record(z.string(), modelOverrideSchema).optional(),
 });
 
+const permissionsSchema = z
+  .object({
+    read_file: z.boolean().optional(),
+    write_file: z.boolean().optional(),
+    edit_file: z.boolean().optional(),
+  })
+  .optional();
+
 const configSchema = z
   .object({
     activeProvider: z.string().min(1, "activeProvider is required"),
@@ -26,6 +34,7 @@ const configSchema = z
     providers: z
       .array(providerSchema)
       .min(1, "providers must be a non-empty array"),
+    permissions: permissionsSchema,
   })
   .check((ctx) => {
     const names = ctx.value.providers.map((p) => p.name);
@@ -144,6 +153,19 @@ export function updateActiveModel(model: string): void {
 /** Updates activeProvider in config files on disk. */
 export function updateActiveProvider(provider: string): void {
   updateConfigFiles({ activeProvider: provider });
+}
+
+/** Updates permissions in the local project config (.tomo/config.yaml). Creates the file if absent. */
+export function updateLocalPermissions(
+  permissions: Record<string, boolean>,
+): void {
+  const path = localConfigPath();
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+
+  const raw = loadYaml(path) ?? {};
+  raw.permissions = permissions;
+  writeFileSync(path, stringify(raw), "utf-8");
 }
 
 /** Returns a provider config by name, or undefined if not found. */

@@ -74,6 +74,7 @@ vi.mock("../session", () => ({
 vi.mock("../config", () => ({
   getMaxTokens: () => 8192,
   getProviderByName: vi.fn(),
+  loadConfig: () => ({}),
   updateActiveModel: vi.fn(),
   updateActiveProvider: vi.fn(),
 }));

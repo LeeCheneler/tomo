@@ -35,6 +35,7 @@ describe("ask tool", () => {
     const context = {
       renderInteractive: vi.fn(),
       reportProgress: vi.fn(),
+      permissions: {},
     };
 
     const result = await tool?.execute(
@@ -50,6 +51,7 @@ describe("ask tool", () => {
     const context = {
       reportProgress: vi.fn(),
       renderInteractive: vi.fn().mockResolvedValue("A"),
+      permissions: {},
     };
 
     await tool?.execute(JSON.stringify({ options: ["A", "B"] }), context);
@@ -63,6 +65,7 @@ describe("ask tool", () => {
     const context = {
       reportProgress: vi.fn(),
       renderInteractive: vi.fn().mockResolvedValue("option A"),
+      permissions: {},
     };
 
     const result = await tool?.execute(

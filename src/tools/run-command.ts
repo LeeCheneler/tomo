@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import React from "react";
+import { createElement } from "react";
 import { CommandConfirm } from "../components/command-confirm";
 import { registerTool } from "./registry";
 import type { ToolContext } from "./types";
@@ -75,7 +75,7 @@ registerTool({
     }
 
     const approved = await context.renderInteractive((onResult, onCancel) =>
-      React.createElement(CommandConfirm, {
+      createElement(CommandConfirm, {
         command,
         onApprove: () => onResult("approved"),
         onDeny: () => onCancel(),
