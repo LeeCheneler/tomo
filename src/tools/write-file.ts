@@ -1,11 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createElement } from "react";
+import { z } from "zod";
 import { WriteFileConfirm } from "../components/write-file-confirm";
 import { isPathWithinCwd } from "../permissions";
 import { formatDiff, formatNewFile } from "./format-diff";
 import { registerTool } from "./registry";
-import type { ToolContext } from "./types";
+import { type ToolContext, parseToolArgs } from "./types";
+
+const argsSchema = z.object({
+  path: z.string().min(1, "no file path provided"),
+  content: z.string(),
+});
 
 function performWrite(filePath: string, content: string): string {
   try {
@@ -36,15 +42,10 @@ registerTool({
     required: ["path", "content"],
   },
   async execute(args: string, context: ToolContext): Promise<string> {
-    const parsed = JSON.parse(args);
-    const rawPath: string = parsed.path ?? "";
-    const content: string = parsed.content ?? "";
+    const parsed = parseToolArgs(argsSchema, args);
+    const { content } = parsed;
 
-    if (!rawPath.trim()) {
-      return "Error: no file path provided";
-    }
-
-    const filePath = resolve(rawPath);
+    const filePath = resolve(parsed.path);
 
     // Skip confirmation if permission granted and path is within cwd
     if (context.permissions.write_file && isPathWithinCwd(filePath)) {

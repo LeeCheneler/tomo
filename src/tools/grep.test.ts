@@ -97,14 +97,11 @@ describe("grep tool", () => {
     expect(result).toBe("No matches found.");
   });
 
-  it("returns error for empty pattern", async () => {
+  it("throws for empty pattern", async () => {
     const tool = getTool("grep");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "" }),
-      mockContext,
-    );
-
-    expect(result).toBe("Error: no search pattern provided");
+    await expect(
+      tool?.execute(JSON.stringify({ pattern: "" }), mockContext),
+    ).rejects.toThrow("no search pattern provided");
   });
 
   it("filters by include glob pattern", async () => {

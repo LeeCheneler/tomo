@@ -93,7 +93,11 @@ export function App({ onRestart }: AppProps) {
       return chalk.cyan(msg.content);
     });
     const content = parts.filter(Boolean).join("\n\n");
+    const ALLOWED_PAGERS = new Set(["less", "more", "most", "bat", "cat"]);
     const pager = process.env.PAGER || "less";
+    if (!ALLOWED_PAGERS.has(pager)) {
+      return;
+    }
     spawnSync(pager, ["-R", "+G"], {
       input: content,
       stdio: ["pipe", "inherit", "inherit"],

@@ -100,28 +100,28 @@ describe("edit_file tool", () => {
     expect(result).toContain("file not found");
   });
 
-  it("returns error for empty path", async () => {
+  it("throws for empty path", async () => {
     const tool = getTool("edit_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: "", old_string: "x", new_string: "y" }),
-      mockContext,
-    );
-
-    expect(result).toBe("Error: no file path provided");
+    await expect(
+      tool?.execute(
+        JSON.stringify({ path: "", old_string: "x", new_string: "y" }),
+        mockContext,
+      ),
+    ).rejects.toThrow("no file path provided");
   });
 
-  it("returns error for empty old_string", async () => {
+  it("throws for empty old_string", async () => {
     const tool = getTool("edit_file");
-    const result = await tool?.execute(
-      JSON.stringify({
-        path: resolve(tmpDir, "test.txt"),
-        old_string: "",
-        new_string: "y",
-      }),
-      mockContext,
-    );
-
-    expect(result).toBe("Error: old_string must not be empty");
+    await expect(
+      tool?.execute(
+        JSON.stringify({
+          path: resolve(tmpDir, "test.txt"),
+          old_string: "",
+          new_string: "y",
+        }),
+        mockContext,
+      ),
+    ).rejects.toThrow("old_string must not be empty");
   });
 
   it("returns error when old_string equals new_string", async () => {

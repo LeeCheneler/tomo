@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import type { z } from "zod";
 import type { ToolDefinition } from "../provider/client";
 
 /** Context provided to a tool's execute function. */
@@ -28,6 +29,20 @@ export interface Tool {
   /** Returns a warning message when the tool is enabled but misconfigured, or undefined if OK. */
   warning?: () => string | undefined;
   execute: (args: string, context: ToolContext) => Promise<string>;
+}
+
+/** Parse and validate tool arguments against a Zod schema. Throws with a clean message on failure. */
+export function parseToolArgs<T extends z.ZodType>(
+  schema: T,
+  args: string,
+): z.infer<T> {
+  const json = JSON.parse(args);
+  const result = schema.safeParse(json);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => i.message);
+    throw new Error(messages.join("; "));
+  }
+  return result.data;
 }
 
 /** Converts a Tool to the OpenAI tool definition format for the API request. */

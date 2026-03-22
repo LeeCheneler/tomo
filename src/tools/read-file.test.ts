@@ -57,14 +57,11 @@ describe("read_file tool", () => {
     expect(result).toContain("Error: file not found");
   });
 
-  it("returns error for empty path", async () => {
+  it("throws for empty path", async () => {
     const tool = getTool("read_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: "" }),
-      mockContext,
-    );
-
-    expect(result).toBe("Error: no file path provided");
+    await expect(
+      tool?.execute(JSON.stringify({ path: "" }), mockContext),
+    ).rejects.toThrow("no file path provided");
   });
 
   it("returns error for directories", async () => {

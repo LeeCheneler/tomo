@@ -1,11 +1,18 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createElement } from "react";
+import { z } from "zod";
 import { WriteFileConfirm } from "../components/write-file-confirm";
 import { isPathWithinCwd } from "../permissions";
 import { formatDiff } from "./format-diff";
 import { registerTool } from "./registry";
-import type { ToolContext } from "./types";
+import { type ToolContext, parseToolArgs } from "./types";
+
+const argsSchema = z.object({
+  path: z.string().min(1, "no file path provided"),
+  old_string: z.string().min(1, "old_string must not be empty"),
+  new_string: z.string(),
+});
 
 function performEdit(filePath: string, content: string): string {
   try {
@@ -40,24 +47,14 @@ registerTool({
     required: ["path", "old_string", "new_string"],
   },
   async execute(args: string, context: ToolContext): Promise<string> {
-    const parsed = JSON.parse(args);
-    const rawPath: string = parsed.path ?? "";
-    const oldString: string = parsed.old_string ?? "";
-    const newString: string = parsed.new_string ?? "";
-
-    if (!rawPath.trim()) {
-      return "Error: no file path provided";
-    }
-
-    if (!oldString) {
-      return "Error: old_string must not be empty";
-    }
+    const parsed = parseToolArgs(argsSchema, args);
+    const { old_string: oldString, new_string: newString } = parsed;
 
     if (oldString === newString) {
       return "Error: old_string and new_string are identical";
     }
 
-    const filePath = resolve(rawPath);
+    const filePath = resolve(parsed.path);
 
     if (!existsSync(filePath)) {
       return `Error: file not found: ${filePath}`;

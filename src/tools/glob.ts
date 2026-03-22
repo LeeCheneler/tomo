@@ -2,10 +2,18 @@ import { execSync } from "node:child_process";
 import { globSync } from "node:fs";
 import { resolve } from "node:path";
 import { createElement } from "react";
+import { z } from "zod";
 import { FileAccessConfirm } from "../components/file-access-confirm";
 import { isPathWithinCwd } from "../permissions";
+import { isGitRepo } from "./git";
 import { registerTool } from "./registry";
-import type { ToolContext } from "./types";
+import { type ToolContext, parseToolArgs } from "./types";
+
+const argsSchema = z.object({
+  pattern: z.string().min(1, "no glob pattern provided"),
+  path: z.string().optional(),
+  gitignore: z.boolean().default(true),
+});
 
 registerTool({
   name: "glob",
@@ -34,16 +42,10 @@ registerTool({
   },
   interactive: false,
   async execute(args: string, context: ToolContext): Promise<string> {
-    const parsed = JSON.parse(args);
-    const pattern: string = parsed.pattern ?? "";
-    const rawPath: string | undefined = parsed.path;
-    const gitignore: boolean = parsed.gitignore ?? true;
+    const parsed = parseToolArgs(argsSchema, args);
+    const { pattern, gitignore } = parsed;
 
-    if (!pattern.trim()) {
-      return "Error: no glob pattern provided";
-    }
-
-    const searchDir = rawPath ? resolve(rawPath) : process.cwd();
+    const searchDir = parsed.path ? resolve(parsed.path) : process.cwd();
 
     // Permission granted and path in cwd — search immediately
     if (context.permissions.read_file && isPathWithinCwd(searchDir)) {
@@ -67,19 +69,6 @@ registerTool({
     return runGlob(pattern, searchDir, gitignore);
   },
 });
-
-/** Check whether a directory is inside a git repository. */
-function isGitRepo(cwd: string): boolean {
-  try {
-    execSync("git rev-parse --is-inside-work-tree", {
-      cwd,
-      stdio: "pipe",
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Use `git ls-files` to list tracked + untracked-but-not-ignored files
