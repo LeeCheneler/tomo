@@ -74,7 +74,7 @@ registerTool({
       return "Error: no command provided";
     }
 
-    const approved = await context.renderInteractive((onResult, onCancel) =>
+    const approved = await context.renderInteractive((onResult, _onCancel) =>
       createElement(CommandConfirm, {
         command,
         onApprove: () => onResult("approved"),

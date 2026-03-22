@@ -61,7 +61,7 @@ registerTool({
       diffPreview = formatDiff(existing, content);
     }
 
-    const approved = await context.renderInteractive((onResult, onCancel) =>
+    const approved = await context.renderInteractive((onResult, _onCancel) =>
       createElement(WriteFileConfirm, {
         filePath,
         isNewFile,
