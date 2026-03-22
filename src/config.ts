@@ -26,6 +26,8 @@ const permissionsSchema = z
   })
   .optional();
 
+const toolsSchema = z.record(z.string(), z.boolean()).optional();
+
 const configSchema = z
   .object({
     activeProvider: z.string().min(1, "activeProvider is required"),
@@ -35,6 +37,7 @@ const configSchema = z
       .array(providerSchema)
       .min(1, "providers must be a non-empty array"),
     permissions: permissionsSchema,
+    tools: toolsSchema,
   })
   .check((ctx) => {
     const names = ctx.value.providers.map((p) => p.name);
@@ -165,6 +168,17 @@ export function updateLocalPermissions(
 
   const raw = loadYaml(path) ?? {};
   raw.permissions = permissions;
+  writeFileSync(path, stringify(raw), "utf-8");
+}
+
+/** Updates tool availability in the local project config (.tomo/config.yaml). Creates the file if absent. */
+export function updateLocalToolConfig(tools: Record<string, boolean>): void {
+  const path = localConfigPath();
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+
+  const raw = loadYaml(path) ?? {};
+  raw.tools = tools;
   writeFileSync(path, stringify(raw), "utf-8");
 }
 

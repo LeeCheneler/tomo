@@ -13,5 +13,6 @@ export {
   getTool,
   getAllTools,
   getToolDefinitions,
+  resolveToolAvailability,
 } from "./registry";
 export type { Tool, ToolContext } from "./types";

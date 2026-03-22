@@ -26,7 +26,12 @@ import {
   loadSession,
 } from "../session";
 import { resolvePermissions } from "../permissions";
-import { type ToolContext, getTool, getToolDefinitions } from "../tools";
+import {
+  type ToolContext,
+  getTool,
+  getToolDefinitions,
+  resolveToolAvailability,
+} from "../tools";
 
 export interface ChatState {
   messages: DisplayMessage[];
@@ -366,7 +371,8 @@ export function useChat(
     let currentMessages: DisplayMessage[] = [...messages, userMsg];
 
     const maxTokens = getMaxTokens(config, activeProvider, activeModel);
-    const toolDefs = getToolDefinitions();
+    const toolAvailability = resolveToolAvailability(loadConfig().tools);
+    const toolDefs = getToolDefinitions(toolAvailability);
 
     const permissions = resolvePermissions(loadConfig().permissions);
 

@@ -19,7 +19,28 @@ export function getAllTools(): Tool[] {
   return [...tools.values()];
 }
 
-/** Returns all registered tools as OpenAI tool definitions for the API request. */
-export function getToolDefinitions(): ToolDefinition[] {
-  return getAllTools().map(toToolDefinition);
+/**
+ * Resolves which tools are enabled. Config overrides take priority,
+ * then the tool's own `enabled` default, then true.
+ * Returns a map of tool name → boolean.
+ */
+export function resolveToolAvailability(
+  config?: Record<string, boolean>,
+): Record<string, boolean> {
+  const result: Record<string, boolean> = {};
+  for (const tool of getAllTools()) {
+    result[tool.name] = config?.[tool.name] ?? tool.enabled ?? true;
+  }
+  return result;
+}
+
+/** Returns enabled tools as OpenAI tool definitions for the API request. */
+export function getToolDefinitions(
+  availability?: Record<string, boolean>,
+): ToolDefinition[] {
+  const all = getAllTools();
+  if (!availability) return all.map(toToolDefinition);
+  return all
+    .filter((t) => availability[t.name] !== false)
+    .map(toToolDefinition);
 }
