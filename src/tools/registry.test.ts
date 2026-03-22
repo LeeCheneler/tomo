@@ -4,6 +4,7 @@ import {
   getTool,
   getToolDefinitions,
   registerTool,
+  resolveToolAvailability,
 } from "./registry";
 import type { Tool } from "./types";
 
@@ -63,5 +64,70 @@ describe("tool registry", () => {
     registerTool(tool2);
 
     expect(getTool("test-overwrite")?.description).toBe("updated");
+  });
+
+  it("resolves tool availability defaulting all to enabled", () => {
+    registerTool(makeTool("test-avail-a"));
+    registerTool(makeTool("test-avail-b"));
+
+    const result = resolveToolAvailability();
+    expect(result["test-avail-a"]).toBe(true);
+    expect(result["test-avail-b"]).toBe(true);
+  });
+
+  it("resolves tool availability with overrides from config", () => {
+    registerTool(makeTool("test-avail-c"));
+    registerTool(makeTool("test-avail-d"));
+
+    const result = resolveToolAvailability({ "test-avail-c": false });
+    expect(result["test-avail-c"]).toBe(false);
+    expect(result["test-avail-d"]).toBe(true);
+  });
+
+  it("filters tool definitions by availability", () => {
+    registerTool(makeTool("test-filter-on"));
+    registerTool(makeTool("test-filter-off"));
+
+    const defs = getToolDefinitions({
+      "test-filter-on": true,
+      "test-filter-off": false,
+    });
+
+    expect(
+      defs.find((d) => d.function.name === "test-filter-on"),
+    ).toBeDefined();
+    expect(
+      defs.find((d) => d.function.name === "test-filter-off"),
+    ).toBeUndefined();
+  });
+
+  it("returns all tools when no availability passed", () => {
+    registerTool(makeTool("test-nofilter"));
+    const defs = getToolDefinitions();
+    expect(defs.find((d) => d.function.name === "test-nofilter")).toBeDefined();
+  });
+
+  it("respects tool enabled default when no config override", () => {
+    const disabledTool = makeTool("test-disabled-default");
+    disabledTool.enabled = false;
+    registerTool(disabledTool);
+
+    const enabledTool = makeTool("test-enabled-default");
+    registerTool(enabledTool);
+
+    const result = resolveToolAvailability();
+    expect(result["test-disabled-default"]).toBe(false);
+    expect(result["test-enabled-default"]).toBe(true);
+  });
+
+  it("config override takes priority over tool enabled default", () => {
+    const disabledTool = makeTool("test-override-default");
+    disabledTool.enabled = false;
+    registerTool(disabledTool);
+
+    const result = resolveToolAvailability({
+      "test-override-default": true,
+    });
+    expect(result["test-override-default"]).toBe(true);
   });
 });

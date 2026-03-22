@@ -91,6 +91,7 @@ vi.mock("../context/truncate", () => ({
 vi.mock("../tools", () => ({
   getTool: vi.fn(),
   getToolDefinitions: vi.fn().mockReturnValue([]),
+  resolveToolAvailability: vi.fn().mockReturnValue({}),
 }));
 
 const testProvider = {

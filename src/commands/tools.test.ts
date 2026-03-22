@@ -9,17 +9,17 @@ describe("/tools command", () => {
     const cmd = getCommand("tools");
     expect(cmd).toBeDefined();
     expect(cmd?.name).toBe("tools");
-    expect(cmd?.description).toBe("List available tools");
+    expect(cmd?.description).toBe("Manage tool availability");
   });
 
-  it("lists registered tools with name and description", () => {
+  it("returns an interactive element", () => {
     const cmd = getCommand("tools");
-    const result = cmd?.execute("", {} as never);
-    expect(result).toBeDefined();
+    const result = cmd?.execute("", {
+      onComplete: () => {},
+      onCancel: () => {},
+    } as never);
 
-    if (result && "output" in result) {
-      // The "ask" tool should be registered from the tools index
-      expect(result.output).toContain("ask");
-    }
+    expect(result).toBeDefined();
+    expect(result).toHaveProperty("interactive");
   });
 });

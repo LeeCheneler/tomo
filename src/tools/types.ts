@@ -23,6 +23,8 @@ export interface Tool {
   parameters: Record<string, unknown>;
   /** Whether the tool requires user interaction (confirmation, input). Defaults to true. */
   interactive?: boolean;
+  /** Whether the tool is enabled by default. Defaults to true. */
+  enabled?: boolean;
   execute: (args: string, context: ToolContext) => Promise<string>;
 }
 
