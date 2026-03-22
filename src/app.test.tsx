@@ -4,7 +4,7 @@ import { App } from "./app";
 
 describe("App", () => {
   it("renders the chat input", () => {
-    const { lastFrame } = render(<App />);
+    const { lastFrame } = render(<App onRestart={() => {}} />);
     const output = lastFrame() ?? "";
     expect(output).toContain(">");
   });
