@@ -63,6 +63,20 @@ permissions:
 
 File operations targeting paths outside the current working directory always require confirmation regardless of permission settings.
 
+## Tools
+
+Tools are model-initiated actions the LLM can call during a conversation.
+
+| Tool          | Description                                           | Permission   |
+| ------------- | ----------------------------------------------------- | ------------ |
+| `read_file`   | Read file contents with line numbers                  | `read_file`  |
+| `write_file`  | Create or overwrite a file                            | `write_file` |
+| `edit_file`   | Apply string replacements to a file                   | `edit_file`  |
+| `glob`        | Find files by glob pattern (respects `.gitignore`)    | `read_file`  |
+| `grep`        | Search file contents by regex (respects `.gitignore`) | `read_file`  |
+| `run_command` | Run a shell command (always prompts)                  | —            |
+| `ask`         | Ask the user a multiple-choice question               | —            |
+
 ## Slash Commands
 
 | Command                 | Description                             |
