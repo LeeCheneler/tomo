@@ -48,12 +48,13 @@ export function FileAccessConfirm({
       <Text bold color="yellow">
         {`  ${action}`}
       </Text>
-      <Text>{""}</Text>
+      <Text> </Text>
       <Text>
         {"  "}
         {chalk.bold(filePath)}
       </Text>
-      <Text>{""}</Text>
+      <Text> </Text>
+      <Text> </Text>
       <Text color={cursor === 0 ? "green" : undefined}>
         {"  "}
         {cursor === 0 ? "❯" : " "} Approve (y)

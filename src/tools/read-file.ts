@@ -103,7 +103,7 @@ registerTool({
         filePath,
         action: "Read this file?",
         onApprove: () => onResult("approved"),
-        onDeny: () => onCancel(),
+        onDeny: () => onResult("denied"),
       }),
     );
 

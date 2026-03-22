@@ -67,7 +67,7 @@ registerTool({
         isNewFile,
         diffPreview,
         onApprove: () => onResult("approved"),
-        onDeny: () => onCancel(),
+        onDeny: () => onResult("denied"),
       }),
     );
 

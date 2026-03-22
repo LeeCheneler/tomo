@@ -78,7 +78,7 @@ registerTool({
       createElement(CommandConfirm, {
         command,
         onApprove: () => onResult("approved"),
-        onDeny: () => onCancel(),
+        onDeny: () => onResult("denied"),
       }),
     );
 
