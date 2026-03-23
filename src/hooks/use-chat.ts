@@ -24,6 +24,7 @@ import {
   createSession,
   loadSession,
 } from "../session";
+import chalk from "chalk";
 import { resolvePermissions } from "../permissions";
 import { getSkill } from "../skills";
 import {
@@ -169,6 +170,7 @@ export function useChat(
 
     // Skill invocation: //skill-name [args]
     let chatText = text;
+    let skillDisplay: DisplayMessage | null = null;
     if (text.startsWith("//")) {
       const rest = text.slice(2);
       const spaceIndex = rest.indexOf(" ");
@@ -191,6 +193,15 @@ export function useChat(
 
       // Replace input with skill body, appending any args.
       chatText = skillArgs ? `${skill.body}\n\n${skillArgs}` : skill.body;
+
+      // Format a tool-style display message for the UI.
+      skillDisplay = {
+        id: crypto.randomUUID(),
+        role: "system",
+        content: skillArgs
+          ? `${chalk.bold.yellow(`skill(${skillName})`)}  ${chalk.dim(skillArgs)}`
+          : chalk.bold.yellow(`skill(${skillName})`),
+      };
     }
 
     const parsed = parse(chatText);
@@ -278,7 +289,11 @@ export function useChat(
       content: chatText,
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    if (skillDisplay) {
+      setMessages((prev) => [...prev, skillDisplay]);
+    } else {
+      setMessages((prev) => [...prev, userMsg]);
+    }
     appendMessage(sessionRef.current, userMsg);
     streamingRef.current = true;
     setStreaming(true);

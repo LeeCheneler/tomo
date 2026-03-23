@@ -176,6 +176,12 @@ export function ChatInput({
       return;
     }
     if (key.rightArrow) {
+      if (isAutocomplete && autocomplete.submitValue && showGhost) {
+        const accepted = `${autocomplete.submitValue} `;
+        setValue(accepted);
+        setCursor(accepted.length);
+        return;
+      }
       setCursor((c) => Math.min(value.length, c + 1));
       return;
     }

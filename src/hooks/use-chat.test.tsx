@@ -846,8 +846,9 @@ describe("useChat", () => {
       await flush();
 
       expect(getSkill).toHaveBeenCalledWith("commit");
-      expect(chat.messages[0].role).toBe("user");
-      expect(chat.messages[0].content).toBe("Follow conventional commits.");
+      // Display shows skill header, not raw body
+      expect(chat.messages[0].role).toBe("system");
+      expect(chat.messages[0].content).toContain("skill(commit)");
     });
 
     it("appends args to skill body", async () => {
@@ -864,9 +865,9 @@ describe("useChat", () => {
       chat.submit("//review src/config.ts");
       await flush();
 
-      expect(chat.messages[0].content).toBe(
-        "Review the code.\n\nsrc/config.ts",
-      );
+      // Display shows skill header with args
+      expect(chat.messages[0].content).toContain("skill(review)");
+      expect(chat.messages[0].content).toContain("src/config.ts");
     });
 
     it("shows error for unknown skill", async () => {
