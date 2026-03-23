@@ -7,6 +7,13 @@ const flush = () => new Promise((r) => setTimeout(r, 50));
 const mockModelsResponse = (ids: string[]) =>
   new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }));
 
+const singleProvider = [{ name: "ollama", baseUrl: "http://localhost:11434" }];
+
+const multiProvider = [
+  { name: "ollama", baseUrl: "http://localhost:11434" },
+  { name: "openai", baseUrl: "http://localhost:4000" },
+];
+
 describe("ModelSelector", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -16,7 +23,8 @@ describe("ModelSelector", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const { lastFrame } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="qwen3:8b"
         onSelect={vi.fn()}
         onCancel={vi.fn()}
@@ -25,13 +33,14 @@ describe("ModelSelector", () => {
     expect(lastFrame()).toContain("Fetching models...");
   });
 
-  it("renders models after loading", async () => {
+  it("renders models grouped by provider", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       mockModelsResponse(["qwen3:8b", "llama3:70b"]),
     );
     const { lastFrame } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="qwen3:8b"
         onSelect={vi.fn()}
         onCancel={vi.fn()}
@@ -39,6 +48,7 @@ describe("ModelSelector", () => {
     );
     await flush();
     const output = lastFrame() ?? "";
+    expect(output).toContain("ollama");
     expect(output).toContain("qwen3:8b");
     expect(output).toContain("llama3:70b");
   });
@@ -49,7 +59,8 @@ describe("ModelSelector", () => {
     );
     const { lastFrame } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="qwen3:8b"
         onSelect={vi.fn()}
         onCancel={vi.fn()}
@@ -59,14 +70,15 @@ describe("ModelSelector", () => {
     expect(lastFrame()).toContain("(active)");
   });
 
-  it("calls onSelect with the chosen model on Enter", async () => {
+  it("calls onSelect with provider and model on Enter", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       mockModelsResponse(["qwen3:8b", "llama3:70b"]),
     );
     const onSelect = vi.fn();
     const { stdin } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="qwen3:8b"
         onSelect={onSelect}
         onCancel={vi.fn()}
@@ -78,7 +90,7 @@ describe("ModelSelector", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    expect(onSelect).toHaveBeenCalledWith("llama3:70b");
+    expect(onSelect).toHaveBeenCalledWith("ollama", "llama3:70b");
   });
 
   it("calls onCancel on Escape", async () => {
@@ -88,7 +100,8 @@ describe("ModelSelector", () => {
     const onCancel = vi.fn();
     const { stdin } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="qwen3:8b"
         onSelect={vi.fn()}
         onCancel={onCancel}
@@ -106,21 +119,24 @@ describe("ModelSelector", () => {
     );
     const { lastFrame } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="qwen3:8b"
         onSelect={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
     await flush();
-    expect(lastFrame()).toContain("Failed to fetch models");
+    // With no selectable models and all providers erroring, shows no models message
+    expect(lastFrame()).toContain("No models available");
   });
 
   it("shows empty state when no models available", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(mockModelsResponse([]));
     const { lastFrame } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="qwen3:8b"
         onSelect={vi.fn()}
         onCancel={vi.fn()}
@@ -137,7 +153,8 @@ describe("ModelSelector", () => {
     const onSelect = vi.fn();
     const { stdin } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="model-a"
         onSelect={onSelect}
         onCancel={vi.fn()}
@@ -150,7 +167,7 @@ describe("ModelSelector", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    expect(onSelect).toHaveBeenCalledWith("model-c");
+    expect(onSelect).toHaveBeenCalledWith("ollama", "model-c");
   });
 
   it("wraps cursor from bottom to top", async () => {
@@ -160,7 +177,8 @@ describe("ModelSelector", () => {
     const onSelect = vi.fn();
     const { stdin } = render(
       <ModelSelector
-        baseUrl="http://localhost:11434"
+        providers={singleProvider}
+        activeProvider="ollama"
         activeModel="model-a"
         onSelect={onSelect}
         onCancel={vi.fn()}
@@ -173,6 +191,60 @@ describe("ModelSelector", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    expect(onSelect).toHaveBeenCalledWith("model-a");
+    expect(onSelect).toHaveBeenCalledWith("ollama", "model-a");
+  });
+
+  it("renders models from multiple providers", async () => {
+    let callCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve(mockModelsResponse(["qwen3:8b"]));
+      }
+      return Promise.resolve(mockModelsResponse(["gpt-4o"]));
+    });
+    const { lastFrame } = render(
+      <ModelSelector
+        providers={multiProvider}
+        activeProvider="ollama"
+        activeModel="qwen3:8b"
+        onSelect={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).toContain("ollama");
+    expect(output).toContain("qwen3:8b");
+    expect(output).toContain("openai");
+    expect(output).toContain("gpt-4o");
+  });
+
+  it("selects model from second provider", async () => {
+    let callCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve(mockModelsResponse(["qwen3:8b"]));
+      }
+      return Promise.resolve(mockModelsResponse(["gpt-4o"]));
+    });
+    const onSelect = vi.fn();
+    const { stdin } = render(
+      <ModelSelector
+        providers={multiProvider}
+        activeProvider="ollama"
+        activeModel="qwen3:8b"
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />,
+    );
+    await flush();
+    // Cursor on qwen3:8b (active). Down once to gpt-4o (skips header).
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSelect).toHaveBeenCalledWith("openai", "gpt-4o");
   });
 });

@@ -21,7 +21,7 @@ export interface CommandCallbacks {
   providerBaseUrl: string;
   activeModel: string;
   activeProvider: string;
-  providerNames: string[];
+  providers: Array<{ name: string; baseUrl: string }>;
   contextWindow: number;
   maxTokens: number;
   tokenUsage: { promptTokens: number; completionTokens: number } | null;

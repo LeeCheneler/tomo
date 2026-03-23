@@ -3,37 +3,94 @@ import { Box, Text, useInput } from "ink";
 import type { ModelInfo } from "../provider/client";
 import { fetchModels } from "../provider/client";
 
-interface ModelSelectorProps {
+interface ProviderEntry {
+  name: string;
   baseUrl: string;
+}
+
+type Row =
+  | { kind: "header"; provider: string }
+  | { kind: "model"; provider: string; model: string };
+
+interface ProviderResult {
+  provider: string;
+  models: ModelInfo[];
+  error: string | null;
+}
+
+interface ModelSelectorProps {
+  providers: ProviderEntry[];
+  activeProvider: string;
   activeModel: string;
-  onSelect: (model: string) => void;
+  onSelect: (provider: string, model: string) => void;
   onCancel: () => void;
 }
 
-/** Interactive model selector with arrow key navigation. */
+/** Interactive model selector with arrow key navigation, grouped by provider. */
 export function ModelSelector({
-  baseUrl,
+  providers,
+  activeProvider,
   activeModel,
   onSelect,
   onCancel,
 }: ModelSelectorProps) {
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [cursor, setCursor] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<ProviderResult[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchModels(baseUrl)
-      .then((result) => {
-        setModels(result);
-        const activeIndex = result.findIndex((m) => m.id === activeModel);
-        if (activeIndex >= 0) setCursor(activeIndex);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => setLoading(false));
-  }, [baseUrl, activeModel]);
+    Promise.all(
+      providers.map(async (p) => {
+        try {
+          const models = await fetchModels(p.baseUrl);
+          return { provider: p.name, models, error: null };
+        } catch (err) {
+          return {
+            provider: p.name,
+            models: [],
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    ).then((all) => {
+      setResults(all);
+      setLoading(false);
+    });
+  }, [providers]);
+
+  // Build flat row list from results
+  const rows: Row[] = [];
+  for (const r of results) {
+    rows.push({ kind: "header", provider: r.provider });
+    for (const m of r.models) {
+      rows.push({ kind: "model", provider: r.provider, model: m.id });
+    }
+  }
+
+  // Selectable indices (model rows only)
+  const selectableIndices = rows
+    .map((r, i) => (r.kind === "model" ? i : -1))
+    .filter((i) => i >= 0);
+
+  // Find the initial cursor position (active model on active provider)
+  const initialSelectable = selectableIndices.findIndex((idx) => {
+    const row = rows[idx];
+    return (
+      row?.kind === "model" &&
+      row.provider === activeProvider &&
+      row.model === activeModel
+    );
+  });
+
+  const [cursor, setCursor] = useState(0);
+  const [initialised, setInitialised] = useState(false);
+
+  // Set cursor to active model once results arrive
+  useEffect(() => {
+    if (!loading && !initialised && selectableIndices.length > 0) {
+      setCursor(initialSelectable >= 0 ? initialSelectable : 0);
+      setInitialised(true);
+    }
+  }, [loading, initialised, initialSelectable, selectableIndices.length]);
 
   useInput((_, key) => {
     if (key.escape) {
@@ -41,16 +98,21 @@ export function ModelSelector({
       return;
     }
 
-    if (key.return && models.length > 0) {
-      onSelect((models[cursor] as ModelInfo).id);
+    if (key.return && selectableIndices.length > 0) {
+      const idx = selectableIndices[cursor];
+      if (idx === undefined) return;
+      const row = rows[idx];
+      if (row?.kind === "model") {
+        onSelect(row.provider, row.model);
+      }
       return;
     }
 
     if (key.upArrow) {
-      setCursor((c) => (c > 0 ? c - 1 : models.length - 1));
+      setCursor((c) => (c > 0 ? c - 1 : selectableIndices.length - 1));
     }
     if (key.downArrow) {
-      setCursor((c) => (c < models.length - 1 ? c + 1 : 0));
+      setCursor((c) => (c < selectableIndices.length - 1 ? c + 1 : 0));
     }
   });
 
@@ -58,28 +120,49 @@ export function ModelSelector({
     return <Text dimColor>{"  Fetching models..."}</Text>;
   }
 
-  if (error) {
-    return <Text color="red">{`  Failed to fetch models: ${error}`}</Text>;
-  }
-
-  if (models.length === 0) {
+  if (selectableIndices.length === 0) {
     return <Text dimColor>{"  No models available."}</Text>;
   }
+
+  const currentSelectableIdx = selectableIndices[cursor];
 
   return (
     <Box flexDirection="column">
       <Text dimColor>
         {"  Select a model (↑↓ navigate, Enter select, Esc cancel):"}
       </Text>
-      {models.map((model, i) => {
-        const isCursor = i === cursor;
-        const isActive = model.id === activeModel;
+      <Text> </Text>
+      {rows.map((row, i) => {
+        if (row.kind === "header") {
+          const providerResult = results.find(
+            (r) => r.provider === row.provider,
+          );
+          return (
+            <Box key={`header-${row.provider}`} flexDirection="column">
+              <Text dimColor bold>
+                {"  "}
+                {row.provider}
+                {providerResult?.error
+                  ? ` (error: ${providerResult.error})`
+                  : ""}
+              </Text>
+            </Box>
+          );
+        }
+
+        const isCursor = i === currentSelectableIdx;
+        const isActive =
+          row.provider === activeProvider && row.model === activeModel;
         const prefix = isCursor ? "❯" : " ";
         const suffix = isActive ? " (active)" : "";
+
         return (
-          <Text key={model.id} color={isCursor ? "cyan" : undefined}>
-            {"  "}
-            {prefix} {model.id}
+          <Text
+            key={`${row.provider}-${row.model}`}
+            color={isCursor ? "cyan" : undefined}
+          >
+            {"    "}
+            {prefix} {row.model}
             {suffix}
           </Text>
         );

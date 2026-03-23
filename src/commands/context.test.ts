@@ -16,7 +16,7 @@ function makeCallbacks(
     providerBaseUrl: "http://localhost:11434",
     activeModel: "test-model",
     activeProvider: "test",
-    providerNames: ["test"],
+    providers: [{ name: "test", baseUrl: "http://localhost:11434" }],
     contextWindow: 32768,
     maxTokens: 8192,
     tokenUsage: null,
