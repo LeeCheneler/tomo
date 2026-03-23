@@ -5,6 +5,7 @@ import "./help";
 import "./model";
 import "./new";
 import "./session";
+import "./skills";
 import "./tools";
 
 // Re-export registry functions

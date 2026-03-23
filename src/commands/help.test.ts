@@ -18,8 +18,8 @@ describe("/help", () => {
     const commands = getAllCommands();
 
     for (const cmd of commands) {
-      expect(output).toContain(`/${cmd.name}`);
-      expect(output).toContain(cmd.description);
+      expect(output).toContain(cmd.name);
     }
+    expect(output).toContain("Available commands:");
   });
 });

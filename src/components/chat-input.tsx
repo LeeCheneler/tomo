@@ -6,6 +6,7 @@ import {
   type AutocompleteProvider,
   useAutocomplete,
 } from "../hooks/use-autocomplete";
+import { getAllSkills } from "../skills";
 
 interface ChatInputProps {
   onSubmit: (text: string) => void;
@@ -24,7 +25,19 @@ const commandProvider: AutocompleteProvider = {
     })),
 };
 
-const defaultProviders: AutocompleteProvider[] = [commandProvider];
+const skillProvider: AutocompleteProvider = {
+  prefix: "//",
+  items: () =>
+    getAllSkills().map((s) => ({
+      name: s.name,
+      description: s.description,
+    })),
+};
+
+const defaultProviders: AutocompleteProvider[] = [
+  commandProvider,
+  skillProvider,
+];
 
 function findPrevWordBoundary(text: string, pos: number): number {
   let i = pos - 1;
@@ -259,18 +272,30 @@ export function ChatInput({
       </Text>
       {isAutocomplete && autocomplete.visibleEntries.length > 0 ? (
         <Box flexDirection="column">
-          {autocomplete.visibleEntries.map((entry, i) => (
-            <Text
-              key={entry.name}
-              color={
-                i === autocomplete.visibleSelectedIndex ? "cyan" : undefined
-              }
-              dimColor={i !== autocomplete.visibleSelectedIndex}
-            >
-              {"  "}
-              {`${autocomplete.prefix}${entry.name}`} — {entry.description}
-            </Text>
-          ))}
+          {(() => {
+            const maxName = Math.max(
+              ...autocomplete.visibleEntries.map((e) => e.name.length),
+            );
+            return autocomplete.visibleEntries.map((entry, i) => {
+              const selected = i === autocomplete.visibleSelectedIndex;
+              const desc =
+                entry.description.length > 50
+                  ? `${entry.description.slice(0, 49)}…`
+                  : entry.description;
+              return (
+                <Box key={entry.name}>
+                  <Text bold color="cyan" dimColor={!selected}>
+                    {"  "}
+                    {entry.name.padEnd(maxName)}
+                  </Text>
+                  <Text dimColor>
+                    {"  "}
+                    {desc}
+                  </Text>
+                </Box>
+              );
+            });
+          })()}
         </Box>
       ) : null}
       {exitWarning ? (
