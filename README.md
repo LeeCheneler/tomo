@@ -25,19 +25,17 @@ That's it. Tomo creates a default config on first run pointing at Ollama on loca
 
 Type `/` to see available commands with autocomplete suggestions.
 
-| Command                 | Description                             |
-| ----------------------- | --------------------------------------- |
-| `/new`                  | Start a new conversation                |
-| `/session`              | Browse and load previous sessions       |
-| `/session <id>`         | Load a session by ID                    |
-| `/models`               | List available models from the provider |
-| `/use`                  | Interactive model picker                |
-| `/use <model>`          | Switch to a different model             |
-| `/use <provider/model>` | Switch provider and model               |
-| `/context`              | Show context window usage stats         |
-| `/tools`                | Toggle tools on/off                     |
-| `/grant`                | Manage tool permissions                 |
-| `/help`                 | List available commands                 |
+| Command         | Description                        |
+| --------------- | ---------------------------------- |
+| `/new`          | Start a new conversation           |
+| `/session`      | Browse and load previous sessions  |
+| `/session <id>` | Load a session by ID               |
+| `/model`        | Switch the active model            |
+| `/context`      | Show context window usage stats    |
+| `/tools`        | Toggle tools on/off                |
+| `/grant`        | Manage tool permissions            |
+| `/skills`       | List available skills              |
+| `/help`         | List available commands            |
 
 ## Tools
 
@@ -52,6 +50,7 @@ Tomo can read, write, and search files, run commands, and more. Tools are enable
 | `grep`        | Search file contents by regex (respects `.gitignore`) | Enabled  |
 | `run_command` | Run a shell command (always prompts)                  | Enabled  |
 | `ask`         | Ask the user a question                               | Enabled  |
+| `skill`       | Load specialized task instructions                    | Enabled  |
 | `web_search`  | Search the web via Tavily API                         | Disabled |
 
 `web_search` requires a [Tavily](https://tavily.com) API key. Set `TAVILY_API_KEY` in your environment and enable the tool with `/tools`.
@@ -91,6 +90,30 @@ providers:
 ## Instruction Files
 
 Tomo loads instruction files as system messages. It checks `.tomo/`, `.claude/`, and the current directory for `claude.md` or `agents.md`. Both global (`~/`) and local (`./`) files are combined.
+
+## Skills
+
+Skills are reusable instruction sets that the model can load for specialized tasks. Each skill lives in its own directory with a `SKILL.md` file.
+
+**Locations:**
+
+- Global: `~/.tomo/skills/<skill-name>/SKILL.md`
+- Local: `./.tomo/skills/<skill-name>/SKILL.md`
+
+Local skills override global skills with the same name.
+
+**Format:**
+
+```markdown
+---
+name: my-skill
+description: What this skill does
+---
+
+Instruction content loaded as context when the skill is invoked.
+```
+
+Use `/skills` to list available skills. The model will automatically load relevant skills when appropriate, or you can ask it to use a specific skill.
 
 ## Sessions
 
