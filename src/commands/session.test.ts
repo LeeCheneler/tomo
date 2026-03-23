@@ -13,7 +13,7 @@ const mockCallbacks = () => ({
   providerBaseUrl: "http://localhost:11434",
   activeModel: "qwen3:8b",
   activeProvider: "ollama",
-  providerNames: ["ollama"],
+  providers: [{ name: "ollama", baseUrl: "http://localhost:11434" }],
   contextWindow: 8192,
   maxTokens: 8192,
   tokenUsage: null,

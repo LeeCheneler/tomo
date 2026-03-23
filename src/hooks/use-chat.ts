@@ -222,7 +222,10 @@ export function useChat(
         providerBaseUrl: activeProvider.baseUrl,
         activeModel,
         activeProvider: activeProvider.name,
-        providerNames: config.providers.map((p) => p.name),
+        providers: config.providers.map((p) => ({
+          name: p.name,
+          baseUrl: p.baseUrl,
+        })),
         contextWindow,
         maxTokens: getMaxTokens(config, activeProvider, activeModel),
         tokenUsage,
