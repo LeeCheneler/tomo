@@ -165,23 +165,21 @@ export function App({ onRestart }: AppProps) {
         <ThinkingIndicator />
       ) : null}
 
-      {chat.activeCommand ? (
-        chat.activeCommand
-      ) : (
-        <ChatInput
-          onSubmit={chat.submit}
-          onEscape={chat.cancel}
-          onTab={chat.messages.length > 0 ? handleTab : undefined}
-          contextPercent={
-            chat.tokenUsage
-              ? ((chat.tokenUsage.promptTokens +
-                  chat.tokenUsage.completionTokens) /
-                  chat.contextWindow) *
-                100
-              : null
-          }
-        />
-      )}
+      {chat.activeCommand}
+      <ChatInput
+        onSubmit={chat.submit}
+        onEscape={chat.cancel}
+        onTab={chat.messages.length > 0 ? handleTab : undefined}
+        hidden={!!chat.activeCommand}
+        contextPercent={
+          chat.tokenUsage
+            ? ((chat.tokenUsage.promptTokens +
+                chat.tokenUsage.completionTokens) /
+                chat.contextWindow) *
+              100
+            : null
+        }
+      />
     </Box>
   );
 }
