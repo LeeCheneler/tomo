@@ -11,6 +11,7 @@ import { getAllSkills } from "../skills";
 interface ChatInputProps {
   onSubmit: (text: string) => void;
   disabled?: boolean;
+  hidden?: boolean;
   onEscape?: () => void;
   onTab?: () => void;
   contextPercent?: number | null;
@@ -57,6 +58,7 @@ function findNextWordBoundary(text: string, pos: number): number {
 export function ChatInput({
   onSubmit,
   disabled,
+  hidden,
   onEscape,
   onTab,
   contextPercent,
@@ -79,166 +81,173 @@ export function ChatInput({
   const autocomplete = useAutocomplete(defaultProviders, value, cursor);
   const { active: isAutocomplete, ghost, showGhost } = autocomplete;
 
-  useInput((input, key) => {
-    const isCtrlC = input === "c" && key.ctrl;
+  useInput(
+    (input, key) => {
+      const isCtrlC = input === "c" && key.ctrl;
 
-    if (isCtrlC) {
-      if (exitWarning) {
-        exit();
-        return;
-      }
-      if (disabled) {
+      if (isCtrlC) {
+        if (exitWarning) {
+          exit();
+          return;
+        }
+        if (disabled) {
+          setExitWarning(true);
+          return;
+        }
+        if (value) {
+          setValue("");
+          setCursor(0);
+          return;
+        }
         setExitWarning(true);
         return;
       }
-      if (value) {
-        setValue("");
+
+      if (exitWarning) {
+        setExitWarning(false);
+      }
+
+      if (key.escape) {
+        onEscape?.();
+        return;
+      }
+
+      if (key.tab) {
+        onTab?.();
+        return;
+      }
+
+      if (disabled) return;
+
+      // Word-skip: Option/Alt+Arrow or Alt+B/F
+      if (key.leftArrow && key.meta) {
+        setCursor((c) => findPrevWordBoundary(value, c));
+        return;
+      }
+      if (key.rightArrow && key.meta) {
+        setCursor((c) => findNextWordBoundary(value, c));
+        return;
+      }
+      if (input === "b" && key.meta) {
+        setCursor((c) => findPrevWordBoundary(value, c));
+        return;
+      }
+      if (input === "f" && key.meta) {
+        setCursor((c) => findNextWordBoundary(value, c));
+        return;
+      }
+
+      // Vertical cursor movement — autocomplete navigation or multi-line movement
+      if (key.upArrow) {
+        if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
+          autocomplete.moveUp();
+          return;
+        }
+        const lineStart = value.lastIndexOf("\n", cursor - 1);
+        if (lineStart >= 0) {
+          const col = cursor - lineStart - 1;
+          const prevLineStart =
+            lineStart === 0 ? 0 : value.lastIndexOf("\n", lineStart - 1) + 1;
+          const prevLineLength = lineStart - prevLineStart;
+          setCursor(prevLineStart + Math.min(col, prevLineLength));
+        }
+        return;
+      }
+      if (key.downArrow) {
+        if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
+          autocomplete.moveDown();
+          return;
+        }
+        const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
+        const col = cursor - lineStart;
+        const nextLineBreak = value.indexOf("\n", cursor);
+        if (nextLineBreak >= 0) {
+          const nextLineStart = nextLineBreak + 1;
+          const nextNextLineBreak = value.indexOf("\n", nextLineStart);
+          const nextLineLength =
+            nextNextLineBreak >= 0
+              ? nextNextLineBreak - nextLineStart
+              : value.length - nextLineStart;
+          setCursor(nextLineStart + Math.min(col, nextLineLength));
+        }
+        return;
+      }
+
+      // Cursor navigation
+      if (key.leftArrow) {
+        setCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.rightArrow) {
+        if (isAutocomplete && autocomplete.submitValue && showGhost) {
+          const accepted = `${autocomplete.submitValue} `;
+          setValue(accepted);
+          setCursor(accepted.length);
+          return;
+        }
+        setCursor((c) => Math.min(value.length, c + 1));
+        return;
+      }
+      if (input === "a" && key.ctrl) {
         setCursor(0);
         return;
       }
-      setExitWarning(true);
-      return;
-    }
-
-    if (exitWarning) {
-      setExitWarning(false);
-    }
-
-    if (key.escape) {
-      onEscape?.();
-      return;
-    }
-
-    if (key.tab) {
-      onTab?.();
-      return;
-    }
-
-    if (disabled) return;
-
-    // Word-skip: Option/Alt+Arrow or Alt+B/F
-    if (key.leftArrow && key.meta) {
-      setCursor((c) => findPrevWordBoundary(value, c));
-      return;
-    }
-    if (key.rightArrow && key.meta) {
-      setCursor((c) => findNextWordBoundary(value, c));
-      return;
-    }
-    if (input === "b" && key.meta) {
-      setCursor((c) => findPrevWordBoundary(value, c));
-      return;
-    }
-    if (input === "f" && key.meta) {
-      setCursor((c) => findNextWordBoundary(value, c));
-      return;
-    }
-
-    // Vertical cursor movement — autocomplete navigation or multi-line movement
-    if (key.upArrow) {
-      if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
-        autocomplete.moveUp();
+      if (input === "e" && key.ctrl) {
+        setCursor(value.length);
         return;
       }
-      const lineStart = value.lastIndexOf("\n", cursor - 1);
-      if (lineStart >= 0) {
-        const col = cursor - lineStart - 1;
-        const prevLineStart =
-          lineStart === 0 ? 0 : value.lastIndexOf("\n", lineStart - 1) + 1;
-        const prevLineLength = lineStart - prevLineStart;
-        setCursor(prevLineStart + Math.min(col, prevLineLength));
-      }
-      return;
-    }
-    if (key.downArrow) {
-      if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
-        autocomplete.moveDown();
+
+      if (key.return) {
+        if (key.shift) {
+          setValue((v) => `${v.slice(0, cursor)}\n${v.slice(cursor)}`);
+          setCursor((c) => c + 1);
+        } else if (isAutocomplete && autocomplete.submitValue) {
+          onSubmit(autocomplete.submitValue);
+          setValue("");
+          setCursor(0);
+        } else if (value.trim()) {
+          onSubmit(value);
+          setValue("");
+          setCursor(0);
+        }
         return;
       }
-      const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
-      const col = cursor - lineStart;
-      const nextLineBreak = value.indexOf("\n", cursor);
-      if (nextLineBreak >= 0) {
-        const nextLineStart = nextLineBreak + 1;
-        const nextNextLineBreak = value.indexOf("\n", nextLineStart);
-        const nextLineLength =
-          nextNextLineBreak >= 0
-            ? nextNextLineBreak - nextLineStart
-            : value.length - nextLineStart;
-        setCursor(nextLineStart + Math.min(col, nextLineLength));
-      }
-      return;
-    }
 
-    // Cursor navigation
-    if (key.leftArrow) {
-      setCursor((c) => Math.max(0, c - 1));
-      return;
-    }
-    if (key.rightArrow) {
-      if (isAutocomplete && autocomplete.submitValue && showGhost) {
-        const accepted = `${autocomplete.submitValue} `;
-        setValue(accepted);
-        setCursor(accepted.length);
+      // Delete previous word: Ctrl+Backspace, Option+Backspace, Ctrl+W
+      // Ink maps \x08 (Ctrl+Backspace) to key.backspace, \x7f (regular Backspace)
+      // to key.delete, and \x1b\x7f (Option+Backspace) to key.delete + key.meta.
+      if (
+        key.backspace ||
+        (key.delete && (key.ctrl || key.meta)) ||
+        (input === "w" && key.ctrl)
+      ) {
+        if (cursor > 0) {
+          const boundary = findPrevWordBoundary(value, cursor);
+          setValue((v) => v.slice(0, boundary) + v.slice(cursor));
+          setCursor(boundary);
+        }
         return;
       }
-      setCursor((c) => Math.min(value.length, c + 1));
-      return;
-    }
-    if (input === "a" && key.ctrl) {
-      setCursor(0);
-      return;
-    }
-    if (input === "e" && key.ctrl) {
-      setCursor(value.length);
-      return;
-    }
 
-    if (key.return) {
-      if (key.shift) {
-        setValue((v) => `${v.slice(0, cursor)}\n${v.slice(cursor)}`);
-        setCursor((c) => c + 1);
-      } else if (isAutocomplete && autocomplete.submitValue) {
-        onSubmit(autocomplete.submitValue);
-        setValue("");
-        setCursor(0);
-      } else if (value.trim()) {
-        onSubmit(value);
-        setValue("");
-        setCursor(0);
+      if (key.delete) {
+        if (cursor > 0) {
+          setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));
+          setCursor((c) => c - 1);
+        }
+        return;
       }
-      return;
-    }
 
-    // Delete previous word: Ctrl+Backspace, Option+Backspace, Ctrl+W
-    // Ink maps \x08 (Ctrl+Backspace) to key.backspace, \x7f (regular Backspace)
-    // to key.delete, and \x1b\x7f (Option+Backspace) to key.delete + key.meta.
-    if (
-      key.backspace ||
-      (key.delete && (key.ctrl || key.meta)) ||
-      (input === "w" && key.ctrl)
-    ) {
-      if (cursor > 0) {
-        const boundary = findPrevWordBoundary(value, cursor);
-        setValue((v) => v.slice(0, boundary) + v.slice(cursor));
-        setCursor(boundary);
+      if (input && !key.ctrl && !key.meta) {
+        setValue((v) => v.slice(0, cursor) + input + v.slice(cursor));
+        setCursor((c) => c + input.length);
       }
-      return;
-    }
+    },
+    {
+      isActive: !hidden,
+    },
+  );
 
-    if (key.delete) {
-      if (cursor > 0) {
-        setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));
-        setCursor((c) => c - 1);
-      }
-      return;
-    }
-
-    if (input && !key.ctrl && !key.meta) {
-      setValue((v) => v.slice(0, cursor) + input + v.slice(cursor));
-      setCursor((c) => c + input.length);
-    }
-  });
+  if (hidden) return null;
 
   // Build input display as a single string so newlines render correctly
   const before = value.slice(0, cursor);
