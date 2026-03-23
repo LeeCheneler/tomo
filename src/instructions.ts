@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { arch, homedir, platform, release, userInfo } from "node:os";
 import { resolve } from "node:path";
 import { env } from "./env";
+import { getAllSkills } from "./skills";
 
 const FILENAMES = ["claude.md", "agents.md"];
 
@@ -100,6 +101,16 @@ export function loadInstructions(): string | null {
   }
 
   const root = findAcrossDirs(rootDirs);
-  if (root) return `${systemInfo}\n\n${root.content}`;
-  return systemInfo;
+  const base = root ? `${systemInfo}\n\n${root.content}` : systemInfo;
+
+  return appendSkillsNotice(base);
+}
+
+/** Appends a skills notice to the system instructions if any skills are available. */
+function appendSkillsNotice(instructions: string): string {
+  const skills = getAllSkills();
+  if (skills.length === 0) return instructions;
+
+  const list = skills.map((s) => `- ${s.name}: ${s.description}`).join("\n");
+  return `${instructions}\n\n## Skills\n\nYou have access to skills — specialized instructions for common tasks. When the user's request matches an available skill, use the skill tool to load its instructions before starting work.\n\nAvailable skills:\n${list}`;
 }

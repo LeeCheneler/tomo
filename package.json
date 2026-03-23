@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsup",
     "build:sea": "bash scripts/build-sea.sh",
-    "dev": "tsx src/index.tsx",
+    "dev": "exec tsx src/index.tsx",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",

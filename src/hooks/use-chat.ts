@@ -24,7 +24,9 @@ import {
   createSession,
   loadSession,
 } from "../session";
+import chalk from "chalk";
 import { resolvePermissions } from "../permissions";
+import { getSkill } from "../skills";
 import {
   type ToolContext,
   getToolDefinitions,
@@ -166,7 +168,43 @@ export function useChat(
       return;
     }
 
-    const parsed = parse(text);
+    // Skill invocation: //skill-name [args]
+    let chatText = text;
+    let skillDisplay: DisplayMessage | null = null;
+    if (text.startsWith("//")) {
+      const rest = text.slice(2);
+      const spaceIndex = rest.indexOf(" ");
+      const skillName = spaceIndex === -1 ? rest : rest.slice(0, spaceIndex);
+      const skillArgs =
+        spaceIndex === -1 ? "" : rest.slice(spaceIndex + 1).trim();
+      const skill = getSkill(skillName);
+
+      if (!skill) {
+        addMessages(
+          { id: crypto.randomUUID(), role: "user", content: text },
+          {
+            id: crypto.randomUUID(),
+            role: "system",
+            content: `Unknown skill: //${skillName}. Type /skills for available skills.`,
+          },
+        );
+        return;
+      }
+
+      // Replace input with skill body, appending any args.
+      chatText = skillArgs ? `${skill.body}\n\n${skillArgs}` : skill.body;
+
+      // Format a tool-style display message for the UI.
+      skillDisplay = {
+        id: crypto.randomUUID(),
+        role: "system",
+        content: skillArgs
+          ? `${chalk.bold.yellow(`skill(${skillName})`)}  ${chalk.dim(skillArgs)}`
+          : chalk.bold.yellow(`skill(${skillName})`),
+      };
+    }
+
+    const parsed = parse(chatText);
 
     if (parsed) {
       const userMsg: DisplayMessage = {
@@ -248,10 +286,14 @@ export function useChat(
     const userMsg: DisplayMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      content: text,
+      content: chatText,
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    if (skillDisplay) {
+      setMessages((prev) => [...prev, skillDisplay]);
+    } else {
+      setMessages((prev) => [...prev, userMsg]);
+    }
     appendMessage(sessionRef.current, userMsg);
     streamingRef.current = true;
     setStreaming(true);

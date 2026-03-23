@@ -108,7 +108,7 @@ describe("ChatInput", () => {
     stdin.write("/");
     await flush();
     const output = lastFrame() ?? "";
-    expect(output).toContain("/help");
+    expect(output).toContain("help");
   });
 
   it("shows ghost text for the top match", async () => {

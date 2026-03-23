@@ -5,6 +5,7 @@ import { parse, getCommand } from "../commands";
 import { appendMessage } from "../session";
 import { streamChatCompletion } from "../provider/client";
 import type { ToolCall } from "../provider/client";
+import { getSkill } from "../skills";
 import { getTool, getToolDefinitions } from "../tools";
 import { type ChatState, useChat } from "./use-chat";
 
@@ -82,6 +83,10 @@ vi.mock("../config", () => ({
 vi.mock("../commands", () => ({
   parse: vi.fn(),
   getCommand: vi.fn(),
+}));
+
+vi.mock("../skills", () => ({
+  getSkill: vi.fn(),
 }));
 
 vi.mock("../context/truncate", () => ({
@@ -815,6 +820,70 @@ describe("useChat", () => {
 
       expect(chat.tokenUsage).toBeNull();
       expect(chat.messages).toEqual([]);
+    });
+  });
+
+  describe("skill invocation", () => {
+    beforeEach(() => {
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(streamChatCompletion).mockImplementation(async (options) =>
+        createDeferredStream(options.signal),
+      );
+    });
+
+    it("injects skill body as user message on //skill-name", async () => {
+      vi.mocked(getSkill).mockReturnValue({
+        name: "commit",
+        description: "Commit changes",
+        body: "Follow conventional commits.",
+        local: false,
+      });
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("//commit");
+      await flush();
+
+      expect(getSkill).toHaveBeenCalledWith("commit");
+      // Display shows skill header, not raw body
+      expect(chat.messages[0].role).toBe("system");
+      expect(chat.messages[0].content).toContain("skill(commit)");
+    });
+
+    it("appends args to skill body", async () => {
+      vi.mocked(getSkill).mockReturnValue({
+        name: "review",
+        description: "Review code",
+        body: "Review the code.",
+        local: false,
+      });
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("//review src/config.ts");
+      await flush();
+
+      // Display shows skill header with args
+      expect(chat.messages[0].content).toContain("skill(review)");
+      expect(chat.messages[0].content).toContain("src/config.ts");
+    });
+
+    it("shows error for unknown skill", async () => {
+      vi.mocked(getSkill).mockReturnValue(undefined);
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("//nonexistent");
+      await flush();
+
+      expect(chat.messages).toHaveLength(2);
+      expect(chat.messages[0].role).toBe("user");
+      expect(chat.messages[0].content).toBe("//nonexistent");
+      expect(chat.messages[1].role).toBe("system");
+      expect(chat.messages[1].content).toContain("Unknown skill");
     });
   });
 });

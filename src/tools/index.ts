@@ -5,6 +5,7 @@ import "./glob";
 import "./grep";
 import "./read-file";
 import "./run-command";
+import "./skill";
 import "./web-search";
 import "./write-file";
 
