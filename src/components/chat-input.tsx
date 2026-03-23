@@ -210,7 +210,23 @@ export function ChatInput({
       return;
     }
 
-    if (key.backspace || key.delete) {
+    // Delete previous word: Ctrl+Backspace, Option+Backspace, Ctrl+W
+    // Ink maps \x08 (Ctrl+Backspace) to key.backspace, \x7f (regular Backspace)
+    // to key.delete, and \x1b\x7f (Option+Backspace) to key.delete + key.meta.
+    if (
+      key.backspace ||
+      (key.delete && (key.ctrl || key.meta)) ||
+      (input === "w" && key.ctrl)
+    ) {
+      if (cursor > 0) {
+        const boundary = findPrevWordBoundary(value, cursor);
+        setValue((v) => v.slice(0, boundary) + v.slice(cursor));
+        setCursor(boundary);
+      }
+      return;
+    }
+
+    if (key.delete) {
       if (cursor > 0) {
         setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));
         setCursor((c) => c - 1);

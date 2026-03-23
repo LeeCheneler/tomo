@@ -385,6 +385,59 @@ describe("ChatInput", () => {
     expect(onSubmit).toHaveBeenCalledWith("helloX world");
   });
 
+  it("Ctrl+W deletes previous word", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("hello world foo");
+    await flush();
+    stdin.write("\x17"); // Ctrl+W
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("hello world ");
+  });
+
+  it("Ctrl+W deletes previous word from middle of text", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("hello world foo");
+    await flush();
+    // Move cursor back to end of "world" (skip " foo" = 4 chars)
+    stdin.write("\x1B[D\x1B[D\x1B[D\x1B[D");
+    await flush();
+    stdin.write("\x17"); // Ctrl+W
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("hello  foo");
+  });
+
+  it("Option+Backspace deletes previous word", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("hello world foo");
+    await flush();
+    stdin.write("\x1b\x7f"); // Option+Backspace
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("hello world ");
+  });
+
+  it("Ctrl+W does nothing at start of input", async () => {
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    stdin.write("hello");
+    await flush();
+    stdin.write("\x01"); // Ctrl+A — go to start
+    await flush();
+    stdin.write("\x17"); // Ctrl+W
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("hello");
+  });
+
   it("Ctrl+C shows exit warning when disabled", async () => {
     const onEscape = vi.fn();
     const { lastFrame, stdin } = render(
