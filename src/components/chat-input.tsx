@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import chalk from "chalk";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { getAllCommands } from "../commands";
+import {
+  type AutocompleteProvider,
+  useAutocomplete,
+} from "../hooks/use-autocomplete";
 
 interface ChatInputProps {
   onSubmit: (text: string) => void;
@@ -11,7 +15,16 @@ interface ChatInputProps {
   contextPercent?: number | null;
 }
 
-const MAX_SUGGESTIONS = 5;
+const commandProvider: AutocompleteProvider = {
+  prefix: "/",
+  items: () =>
+    getAllCommands().map((cmd) => ({
+      name: cmd.name,
+      description: cmd.description,
+    })),
+};
+
+const defaultProviders: AutocompleteProvider[] = [commandProvider];
 
 function findPrevWordBoundary(text: string, pos: number): number {
   let i = pos - 1;
@@ -50,21 +63,8 @@ export function ChatInput({
     };
   }, [stdout]);
 
-  const isAutocomplete = value.startsWith("/") && !value.includes(" ");
-  const partial = isAutocomplete ? value.slice(1) : "";
-  const matches = isAutocomplete
-    ? getAllCommands()
-        .filter((cmd) => cmd.name.startsWith(partial))
-        .slice(0, MAX_SUGGESTIONS)
-    : [];
-  const topMatch = matches[0];
-  const ghost =
-    topMatch && partial.length > 0
-      ? topMatch.name.slice(partial.length)
-      : topMatch
-        ? topMatch.name
-        : "";
-  const showGhost = isAutocomplete && ghost && cursor === value.length;
+  const autocomplete = useAutocomplete(defaultProviders, value, cursor);
+  const { active: isAutocomplete, ghost, showGhost } = autocomplete;
 
   useInput((input, key) => {
     const isCtrlC = input === "c" && key.ctrl;
@@ -121,8 +121,12 @@ export function ChatInput({
       return;
     }
 
-    // Vertical cursor movement across lines
+    // Vertical cursor movement — autocomplete navigation or multi-line movement
     if (key.upArrow) {
+      if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
+        autocomplete.moveUp();
+        return;
+      }
       const lineStart = value.lastIndexOf("\n", cursor - 1);
       if (lineStart >= 0) {
         const col = cursor - lineStart - 1;
@@ -134,6 +138,10 @@ export function ChatInput({
       return;
     }
     if (key.downArrow) {
+      if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
+        autocomplete.moveDown();
+        return;
+      }
       const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
       const col = cursor - lineStart;
       const nextLineBreak = value.indexOf("\n", cursor);
@@ -171,8 +179,8 @@ export function ChatInput({
       if (key.shift) {
         setValue((v) => `${v.slice(0, cursor)}\n${v.slice(cursor)}`);
         setCursor((c) => c + 1);
-      } else if (isAutocomplete && topMatch) {
-        onSubmit(`/${topMatch.name}`);
+      } else if (isAutocomplete && autocomplete.submitValue) {
+        onSubmit(autocomplete.submitValue);
         setValue("");
         setCursor(0);
       } else if (value.trim()) {
@@ -249,16 +257,18 @@ export function ChatInput({
         {"─".repeat(bottomLineWidth)}
         {contextLabel}
       </Text>
-      {isAutocomplete && matches.length > 0 ? (
+      {isAutocomplete && autocomplete.visibleEntries.length > 0 ? (
         <Box flexDirection="column">
-          {matches.map((cmd, i) => (
+          {autocomplete.visibleEntries.map((entry, i) => (
             <Text
-              key={cmd.name}
-              color={i === 0 ? "cyan" : undefined}
-              dimColor={i !== 0}
+              key={entry.name}
+              color={
+                i === autocomplete.visibleSelectedIndex ? "cyan" : undefined
+              }
+              dimColor={i !== autocomplete.visibleSelectedIndex}
             >
               {"  "}
-              {`/${cmd.name}`} — {cmd.description}
+              {`${autocomplete.prefix}${entry.name}`} — {entry.description}
             </Text>
           ))}
         </Box>
