@@ -23,7 +23,7 @@ describe("ModelSelector", () => {
 
   it("shows loading state initially", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-    const { lastFrame } = render(
+    const { lastFrame, unmount } = render(
       <ModelSelector
         providers={singleProvider}
         activeProvider="ollama"
@@ -33,6 +33,7 @@ describe("ModelSelector", () => {
       />,
     );
     expect(lastFrame()).toContain("Fetching models...");
+    unmount();
   });
 
   it("renders models grouped by provider", async () => {

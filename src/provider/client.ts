@@ -35,12 +35,17 @@ function buildHeaders(apiKey?: string): Record<string, string> {
 /**
  * Fetches the raw JSON from an OpenAI-compatible /v1/models endpoint.
  * Handles both `{ data: [...] }` (OpenRouter, Ollama) and bare array (Zen) responses.
+ * For OpenRouter with an API key, uses /v1/models/user to return only user-enabled models.
  */
 async function fetchModelsRaw(
   baseUrl: string,
   apiKey?: string,
+  providerType?: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const url = `${baseUrl.replace(/\/+$/, "")}/v1/models`;
+  const base = baseUrl.replace(/\/+$/, "");
+  const modelsPath =
+    providerType === "openrouter" && apiKey ? "/v1/models/user" : "/v1/models";
+  const url = `${base}${modelsPath}`;
 
   let response: Response;
   try {
@@ -73,8 +78,9 @@ async function fetchModelsRaw(
 export async function fetchModels(
   baseUrl: string,
   apiKey?: string,
+  providerType?: string,
 ): Promise<ModelInfo[]> {
-  const models = await fetchModelsRaw(baseUrl, apiKey);
+  const models = await fetchModelsRaw(baseUrl, apiKey, providerType);
   return models.map((m) => ({ id: String(m.id) }));
 }
 
@@ -126,8 +132,9 @@ async function fetchModelsContextWindow(
   baseUrl: string,
   model: string,
   apiKey?: string,
+  providerType?: string,
 ): Promise<number | null> {
-  const models = await fetchModelsRaw(baseUrl, apiKey);
+  const models = await fetchModelsRaw(baseUrl, apiKey, providerType);
   const entry = models.find((m) => m.id === model);
   if (!entry) return null;
   // Both Zen and OpenRouter use context_length
@@ -161,7 +168,12 @@ export async function fetchContextWindow(
       providerType === "opencode-zen" ||
       providerType === "openrouter"
     ) {
-      contextLength = await fetchModelsContextWindow(baseUrl, model, apiKey);
+      contextLength = await fetchModelsContextWindow(
+        baseUrl,
+        model,
+        apiKey,
+        providerType,
+      );
     }
 
     const result = contextLength ?? DEFAULT_CONTEXT_WINDOW;
