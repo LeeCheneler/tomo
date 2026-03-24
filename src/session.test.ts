@@ -130,6 +130,7 @@ describe("appendMessage / loadSession", () => {
       tool_calls: [
         {
           id: "call-1",
+          type: "function" as const,
           function: {
             name: "ask",
             arguments: '{"question":"pick one","options":["a","b"]}',

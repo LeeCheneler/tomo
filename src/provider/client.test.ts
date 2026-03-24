@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   streamChatCompletion,
   fetchContextWindow,
+  fetchModels,
   clearContextWindowCache,
+  resolveApiKey,
   type ChatMessage,
 } from "./client";
 
@@ -297,6 +299,7 @@ describe("streamChatCompletion", () => {
     expect(completion.getToolCalls()).toEqual([
       {
         id: "call-1",
+        type: "function",
         function: { name: "ask", arguments: '{"question":"hi"}' },
       },
     ]);
@@ -402,6 +405,111 @@ describe("streamChatCompletion", () => {
       promptTokens: 10,
       completionTokens: 5,
     });
+  });
+});
+
+describe("resolveApiKey", () => {
+  it("returns configApiKey when set", () => {
+    expect(resolveApiKey("opencode-zen", "sk-config")).toBe("sk-config");
+  });
+
+  it("falls back to OPENCODE_API_KEY env var for opencode-zen type", () => {
+    vi.stubEnv("OPENCODE_API_KEY", "sk-env");
+    expect(resolveApiKey("opencode-zen")).toBe("sk-env");
+    vi.unstubAllEnvs();
+  });
+
+  it("falls back to OPENROUTER_API_KEY env var for openrouter type", () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-env");
+    expect(resolveApiKey("openrouter")).toBe("sk-env");
+    vi.unstubAllEnvs();
+  });
+
+  it("returns undefined for ollama type with no config key", () => {
+    expect(resolveApiKey("ollama")).toBeUndefined();
+  });
+
+  it("prefers configApiKey over env var", () => {
+    vi.stubEnv("OPENCODE_API_KEY", "sk-env");
+    expect(resolveApiKey("opencode-zen", "sk-config")).toBe("sk-config");
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("fetchModels", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends Authorization header when apiKey provided", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "gpt-4o" }] }), {
+        status: 200,
+      }),
+    );
+
+    await fetchModels("https://api.openai.com", "sk-test");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer sk-test");
+  });
+
+  it("does not send Authorization header when no apiKey", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "llama3" }] }), {
+        status: 200,
+      }),
+    );
+
+    await fetchModels("http://localhost:11434");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+  });
+});
+
+describe("streamChatCompletion auth", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends Authorization header when apiKey provided", async () => {
+    vi.mocked(fetch).mockResolvedValue(createSSEResponse(["data: [DONE]\n\n"]));
+
+    const completion = await streamChatCompletion({
+      ...defaultOptions,
+      apiKey: "sk-test",
+    });
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer sk-test");
+  });
+
+  it("does not send Authorization header when no apiKey", async () => {
+    vi.mocked(fetch).mockResolvedValue(createSSEResponse(["data: [DONE]\n\n"]));
+
+    const completion = await streamChatCompletion(defaultOptions);
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
   });
 });
 
@@ -525,13 +633,60 @@ describe("fetchContextWindow", () => {
     );
   });
 
-  it("returns default without fetching for non-ollama providers", async () => {
+  it("extracts context_length from openrouter /v1/models response", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { id: "anthropic/claude-sonnet-4", context_length: 200000 },
+            { id: "openai/gpt-4o", context_length: 128000 },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
     const result = await fetchContextWindow(
-      "http://localhost:8080",
-      "model",
-      "openai",
+      "https://openrouter.ai/api",
+      "anthropic/claude-sonnet-4",
+      "openrouter",
+    );
+    expect(result).toBe(200000);
+  });
+
+  it("extracts context_length from opencode-zen /v1/models response", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { id: "opencode/gpt-5.3-codex", context_length: 256000 },
+        ]),
+        { status: 200 },
+      ),
+    );
+
+    const result = await fetchContextWindow(
+      "https://opencode.ai/zen",
+      "opencode/gpt-5.3-codex",
+      "opencode-zen",
+    );
+    expect(result).toBe(256000);
+  });
+
+  it("returns default when model not found in models list", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ id: "other-model", context_length: 128000 }],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await fetchContextWindow(
+      "https://openrouter.ai/api",
+      "missing-model",
+      "openrouter",
     );
     expect(result).toBe(8192);
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 });

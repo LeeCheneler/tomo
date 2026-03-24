@@ -7,11 +7,13 @@ const flush = () => new Promise((r) => setTimeout(r, 50));
 const mockModelsResponse = (ids: string[]) =>
   new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }));
 
-const singleProvider = [{ name: "ollama", baseUrl: "http://localhost:11434" }];
+const singleProvider = [
+  { name: "ollama", baseUrl: "http://localhost:11434", type: "ollama" },
+];
 
 const multiProvider = [
-  { name: "ollama", baseUrl: "http://localhost:11434" },
-  { name: "openai", baseUrl: "http://localhost:4000" },
+  { name: "ollama", baseUrl: "http://localhost:11434", type: "ollama" },
+  { name: "openrouter", baseUrl: "http://localhost:4000", type: "openrouter" },
 ];
 
 describe("ModelSelector", () => {
@@ -216,8 +218,104 @@ describe("ModelSelector", () => {
     const output = lastFrame() ?? "";
     expect(output).toContain("ollama");
     expect(output).toContain("qwen3:8b");
-    expect(output).toContain("openai");
+    expect(output).toContain("openrouter");
     expect(output).toContain("gpt-4o");
+  });
+
+  it("filters models by typing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockModelsResponse(["qwen3:8b", "llama3:70b", "llama3:8b"]),
+    );
+    const { stdin, lastFrame } = render(
+      <ModelSelector
+        providers={singleProvider}
+        activeProvider="ollama"
+        activeModel="qwen3:8b"
+        onSelect={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    await flush();
+    // Type "llama" to filter
+    stdin.write("llama");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).toContain("llama3:70b");
+    expect(output).toContain("llama3:8b");
+    expect(output).not.toContain("qwen3:8b");
+    expect(output).toContain("2 of 3");
+  });
+
+  it("selects filtered model on Enter", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockModelsResponse(["qwen3:8b", "llama3:70b", "llama3:8b"]),
+    );
+    const onSelect = vi.fn();
+    const { stdin } = render(
+      <ModelSelector
+        providers={singleProvider}
+        activeProvider="ollama"
+        activeModel="qwen3:8b"
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />,
+    );
+    await flush();
+    // Type "llama" to filter, cursor should be on first match (llama3:70b)
+    stdin.write("llama");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSelect).toHaveBeenCalledWith("ollama", "llama3:70b");
+  });
+
+  it("clears filter on Escape without cancelling", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockModelsResponse(["qwen3:8b", "llama3:70b"]),
+    );
+    const onCancel = vi.fn();
+    const { stdin, lastFrame } = render(
+      <ModelSelector
+        providers={singleProvider}
+        activeProvider="ollama"
+        activeModel="qwen3:8b"
+        onSelect={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+    await flush();
+    // Type to filter
+    stdin.write("llama");
+    await flush();
+    expect(lastFrame()).not.toContain("qwen3:8b");
+    // Escape clears filter
+    stdin.write("\x1B");
+    await flush();
+    expect(lastFrame()).toContain("qwen3:8b");
+    expect(onCancel).not.toHaveBeenCalled();
+    // Second Escape cancels
+    stdin.write("\x1B");
+    await flush();
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("shows no match message when filter has no results", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockModelsResponse(["qwen3:8b", "llama3:70b"]),
+    );
+    const { stdin, lastFrame } = render(
+      <ModelSelector
+        providers={singleProvider}
+        activeProvider="ollama"
+        activeModel="qwen3:8b"
+        onSelect={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    await flush();
+    stdin.write("zzzzz");
+    await flush();
+    expect(lastFrame()).toContain("No models match");
   });
 
   it("selects model from second provider", async () => {
@@ -245,6 +343,6 @@ describe("ModelSelector", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    expect(onSelect).toHaveBeenCalledWith("openai", "gpt-4o");
+    expect(onSelect).toHaveBeenCalledWith("openrouter", "gpt-4o");
   });
 });

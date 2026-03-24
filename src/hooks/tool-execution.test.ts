@@ -75,6 +75,7 @@ describe("executeToolCalls", () => {
       [
         {
           id: "tc1",
+          type: "function",
           function: { name: "read_file", arguments: '{"path":"x"}' },
         },
       ],
@@ -95,7 +96,13 @@ describe("executeToolCalls", () => {
 
     const controller = new AbortController();
     const results = await executeToolCalls(
-      [{ id: "tc1", function: { name: "bogus", arguments: "{}" } }],
+      [
+        {
+          id: "tc1",
+          type: "function",
+          function: { name: "bogus", arguments: "{}" },
+        },
+      ],
       controller.signal,
       mockContext,
     );
@@ -115,7 +122,13 @@ describe("executeToolCalls", () => {
 
     const controller = new AbortController();
     const results = await executeToolCalls(
-      [{ id: "tc1", function: { name: "fail", arguments: "{}" } }],
+      [
+        {
+          id: "tc1",
+          type: "function",
+          function: { name: "fail", arguments: "{}" },
+        },
+      ],
       controller.signal,
       mockContext,
     );
@@ -136,7 +149,13 @@ describe("executeToolCalls", () => {
     const controller = new AbortController();
     await expect(
       executeToolCalls(
-        [{ id: "tc1", function: { name: "ask", arguments: "{}" } }],
+        [
+          {
+            id: "tc1",
+            type: "function",
+            function: { name: "ask", arguments: "{}" },
+          },
+        ],
         controller.signal,
         mockContext,
       ),
@@ -159,8 +178,16 @@ describe("executeToolCalls", () => {
     const controller = new AbortController();
     const results = await executeToolCalls(
       [
-        { id: "tc1", function: { name: "glob", arguments: "{}" } },
-        { id: "tc2", function: { name: "grep", arguments: "{}" } },
+        {
+          id: "tc1",
+          type: "function",
+          function: { name: "glob", arguments: "{}" },
+        },
+        {
+          id: "tc2",
+          type: "function",
+          function: { name: "grep", arguments: "{}" },
+        },
       ],
       controller.signal,
       mockContext,
@@ -190,9 +217,21 @@ describe("executeToolCalls", () => {
     const controller = new AbortController();
     const results = await executeToolCalls(
       [
-        { id: "tc1", function: { name: "ask", arguments: "{}" } },
-        { id: "tc2", function: { name: "glob", arguments: "{}" } },
-        { id: "tc3", function: { name: "ask", arguments: "{}" } },
+        {
+          id: "tc1",
+          type: "function",
+          function: { name: "ask", arguments: "{}" },
+        },
+        {
+          id: "tc2",
+          type: "function",
+          function: { name: "glob", arguments: "{}" },
+        },
+        {
+          id: "tc3",
+          type: "function",
+          function: { name: "ask", arguments: "{}" },
+        },
       ],
       controller.signal,
       mockContext,
@@ -224,7 +263,13 @@ describe("executeToolCalls", () => {
 
     await expect(
       executeToolCalls(
-        [{ id: "tc1", function: { name: "ask", arguments: "{}" } }],
+        [
+          {
+            id: "tc1",
+            type: "function",
+            function: { name: "ask", arguments: "{}" },
+          },
+        ],
         controller.signal,
         mockContext,
       ),

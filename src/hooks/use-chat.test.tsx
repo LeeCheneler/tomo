@@ -57,6 +57,7 @@ vi.mock("../provider/client", () => ({
   fetchContextWindow: vi.fn().mockResolvedValue(8192),
   getDefaultContextWindow: () => 8192,
   streamChatCompletion: vi.fn(),
+  resolveApiKey: () => undefined,
 }));
 
 vi.mock("../session", () => ({
@@ -462,6 +463,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "ask", arguments: '{"question":"pick"}' },
             },
           ]),
@@ -497,6 +499,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "bogus", arguments: "{}" },
             },
           ]),
@@ -530,6 +533,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "ask", arguments: "{}" },
             },
           ]),
@@ -570,6 +574,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "ask", arguments: "{}" },
             },
           ]),
@@ -605,6 +610,7 @@ describe("useChat", () => {
         createToolCallStream([
           {
             id: "call-1",
+            type: "function",
             function: { name: "ask", arguments: "{}" },
           },
         ]),
@@ -686,6 +692,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "ask", arguments: "{}" },
             },
           ]),

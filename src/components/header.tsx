@@ -11,10 +11,11 @@ const LOGO = `
 
 interface HeaderProps {
   model: string;
+  provider: string;
 }
 
 /** Renders the app logo, tagline, version, and active model. */
-export function Header({ model }: HeaderProps) {
+export function Header({ model, provider }: HeaderProps) {
   return (
     <>
       <Text color="cyan" bold>
@@ -28,7 +29,7 @@ export function Header({ model }: HeaderProps) {
         <Text dimColor> — your local AI companion</Text>
       </Text>
       <Text> </Text>
-      <Text dimColor>{`  v${version} · ${model}`}</Text>
+      <Text dimColor>{`  v${version} · ${model} (${provider})`}</Text>
       <Text> </Text>
     </>
   );

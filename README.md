@@ -31,6 +31,7 @@ Type `/` to see available commands with autocomplete suggestions.
 | `/session`      | Browse and load previous sessions  |
 | `/session <id>` | Load a session by ID               |
 | `/model`        | Switch the active model            |
+| `/configure`    | Manage providers (add/remove)      |
 | `/context`      | Show context window usage stats    |
 | `/tools`        | Toggle tools on/off                |
 | `/grant`        | Manage tool permissions            |
@@ -81,11 +82,21 @@ providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
-    # contextWindow: 32768  # optional (auto-detected for Ollama)
+    # contextWindow: 32768  # optional (auto-detected)
     # models:
     #   qwen3:4b:
     #     maxTokens: 16384
+  # - name: zen
+  #   type: opencode-zen
+  #   baseUrl: https://opencode.ai/zen
+  #   apiKey: ...  # or set OPENCODE_API_KEY env var
+  # - name: openrouter
+  #   type: openrouter
+  #   baseUrl: https://openrouter.ai/api
+  #   apiKey: ...  # or set OPENROUTER_API_KEY env var
 ```
+
+Use `/configure` to add or remove providers interactively, or edit the config file directly.
 
 ## Instruction Files
 

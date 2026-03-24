@@ -1,4 +1,5 @@
 // Register built-in commands
+import "./configure";
 import "./context";
 import "./grant";
 import "./help";
