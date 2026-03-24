@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { Markdown, completePartialMarkdown } from "./markdown";
 
 describe("Markdown", () => {
