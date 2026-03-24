@@ -40,7 +40,7 @@ vi.mock("./config", () => ({
       { name: "test", type: "ollama", baseUrl: "http://localhost:11434" },
     ],
   }),
-  getActiveProvider: () => ({
+  getProviderByName: () => ({
     name: "test",
     type: "ollama",
     baseUrl: "http://localhost:11434",
