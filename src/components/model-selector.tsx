@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ModelInfo } from "../provider/client";
 import { fetchModels, resolveApiKey } from "../provider/client";
@@ -84,13 +84,24 @@ export function ModelSelector({
     );
   });
 
+  const MAX_VISIBLE = 5;
   const [cursor, setCursor] = useState(0);
   const [initialised, setInitialised] = useState(false);
+  const windowStartRef = useRef(0);
 
   // Set cursor to active model once results arrive
   useEffect(() => {
     if (!loading && !initialised && selectableIndices.length > 0) {
-      setCursor(initialSelectable >= 0 ? initialSelectable : 0);
+      const initial = initialSelectable >= 0 ? initialSelectable : 0;
+      setCursor(initial);
+      // Centre the window on the initial selection
+      windowStartRef.current = Math.max(
+        0,
+        Math.min(
+          initial - Math.floor(MAX_VISIBLE / 2),
+          selectableIndices.length - MAX_VISIBLE,
+        ),
+      );
       setInitialised(true);
     }
   }, [loading, initialised, initialSelectable, selectableIndices.length]);
@@ -119,6 +130,17 @@ export function ModelSelector({
     }
   });
 
+  // Keep the scroll window around the cursor
+  if (cursor < windowStartRef.current) {
+    windowStartRef.current = cursor;
+  } else if (cursor >= windowStartRef.current + MAX_VISIBLE) {
+    windowStartRef.current = cursor - MAX_VISIBLE + 1;
+  }
+  windowStartRef.current = Math.min(
+    windowStartRef.current,
+    Math.max(0, selectableIndices.length - MAX_VISIBLE),
+  );
+
   if (loading) {
     return <Text dimColor>{"  Fetching models..."}</Text>;
   }
@@ -127,7 +149,12 @@ export function ModelSelector({
     return <Text dimColor>{"  No models available."}</Text>;
   }
 
-  const currentSelectableIdx = selectableIndices[cursor];
+  // Visible window of selectable model rows
+  const visibleSelectables = selectableIndices.slice(
+    windowStartRef.current,
+    windowStartRef.current + MAX_VISIBLE,
+  );
+  const hasMore = selectableIndices.length > MAX_VISIBLE;
 
   return (
     <Box flexDirection="column">
@@ -135,13 +162,29 @@ export function ModelSelector({
         {"  Select a model (↑↓ navigate, Enter select, Esc cancel):"}
       </Text>
       <Text> </Text>
-      {rows.map((row, i) => {
-        if (row.kind === "header") {
-          const providerResult = results.find(
-            (r) => r.provider === row.provider,
-          );
-          return (
-            <Box key={`header-${row.provider}`} flexDirection="column">
+      {visibleSelectables.map((rowIdx) => {
+        const row = rows[rowIdx];
+        if (!row || row.kind !== "model") return null;
+
+        // Show provider header before the first model of each provider in the window
+        const prevVisible =
+          visibleSelectables[visibleSelectables.indexOf(rowIdx) - 1];
+        const prevRow = prevVisible !== undefined ? rows[prevVisible] : null;
+        const showHeader =
+          !prevRow ||
+          (prevRow.kind === "model" && prevRow.provider !== row.provider);
+
+        const providerResult = results.find((r) => r.provider === row.provider);
+
+        const isCursor = selectableIndices.indexOf(rowIdx) === cursor;
+        const isActive =
+          row.provider === activeProvider && row.model === activeModel;
+        const prefix = isCursor ? "❯" : " ";
+        const suffix = isActive ? " (active)" : "";
+
+        return (
+          <Box key={`${row.provider}-${row.model}`} flexDirection="column">
+            {showHeader && (
               <Text dimColor bold>
                 {"  "}
                 {row.provider}
@@ -149,27 +192,21 @@ export function ModelSelector({
                   ? ` (error: ${providerResult.error})`
                   : ""}
               </Text>
-            </Box>
-          );
-        }
-
-        const isCursor = i === currentSelectableIdx;
-        const isActive =
-          row.provider === activeProvider && row.model === activeModel;
-        const prefix = isCursor ? "❯" : " ";
-        const suffix = isActive ? " (active)" : "";
-
-        return (
-          <Text
-            key={`${row.provider}-${row.model}`}
-            color={isCursor ? "cyan" : undefined}
-          >
-            {"    "}
-            {prefix} {row.model}
-            {suffix}
-          </Text>
+            )}
+            <Text color={isCursor ? "cyan" : undefined}>
+              {"    "}
+              {prefix} {row.model}
+              {suffix}
+            </Text>
+          </Box>
         );
       })}
+      {hasMore && (
+        <Text dimColor>
+          {"    "}
+          {`${selectableIndices.length - MAX_VISIBLE} more...`}
+        </Text>
+      )}
     </Box>
   );
 }

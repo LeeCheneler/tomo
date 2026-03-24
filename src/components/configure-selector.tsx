@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { fetchModels, type ModelInfo } from "../provider/client";
 
@@ -61,15 +61,18 @@ export function ConfigureSelector({
   const [selectedModelIdx, setSelectedModelIdx] = useState(0);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
+  const modelWindowRef = useRef(0);
 
+  const MAX_VISIBLE = 5;
   const menuOptions = ["Add provider", "Remove provider"];
 
   const removableProviders = providers.filter((p) => p.name !== activeProvider);
 
-  // Reset cursor when step changes
+  // Reset cursor and scroll window when step changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset cursor on step change
   useEffect(() => {
     setCursor(0);
+    modelWindowRef.current = 0;
   }, [step]);
 
   useInput((input, key) => {
@@ -330,15 +333,31 @@ export function ConfigureSelector({
       }
       return <Text dimColor>{"  Fetching models..."}</Text>;
 
-    case "selectModel":
+    case "selectModel": {
+      // Keep scroll window around cursor
+      if (cursor < modelWindowRef.current) {
+        modelWindowRef.current = cursor;
+      } else if (cursor >= modelWindowRef.current + MAX_VISIBLE) {
+        modelWindowRef.current = cursor - MAX_VISIBLE + 1;
+      }
+      modelWindowRef.current = Math.min(
+        modelWindowRef.current,
+        Math.max(0, models.length - MAX_VISIBLE),
+      );
+      const visibleModels = models.slice(
+        modelWindowRef.current,
+        modelWindowRef.current + MAX_VISIBLE,
+      );
+      const hasMoreModels = models.length > MAX_VISIBLE;
       return (
         <Box flexDirection="column">
           <Text dimColor>
             {"  Select a model (↑↓ navigate, Enter select, Esc back):"}
           </Text>
           <Text> </Text>
-          {models.map((model, i) => {
-            const isCursor = i === cursor;
+          {visibleModels.map((model, i) => {
+            const actualIdx = modelWindowRef.current + i;
+            const isCursor = actualIdx === cursor;
             const prefix = isCursor ? "❯" : " ";
             return (
               <Text key={model.id} color={isCursor ? "cyan" : undefined}>
@@ -347,8 +366,15 @@ export function ConfigureSelector({
               </Text>
             );
           })}
+          {hasMoreModels && (
+            <Text dimColor>
+              {"    "}
+              {`${models.length - MAX_VISIBLE} more...`}
+            </Text>
+          )}
         </Box>
       );
+    }
 
     case "enterName":
       return (
