@@ -39,10 +39,9 @@ afterEach(() => {
 describe("loadConfig", () => {
   it("creates default config when none exists", () => {
     const config = loadConfig();
-    expect(config.activeProvider).toBe("ollama");
-    expect(config.activeModel).toBe("qwen3:8b");
-    expect(config.providers).toHaveLength(1);
-    expect(config.providers[0].name).toBe("ollama");
+    expect(config.activeProvider).toBe("");
+    expect(config.activeModel).toBe("");
+    expect(config.providers).toHaveLength(0);
     expect(existsSync(globalPath)).toBe(true);
   });
 
@@ -92,7 +91,7 @@ providers:
     expect(config.activeModel).toBe("mistral");
   });
 
-  it("throws on empty providers", () => {
+  it("accepts empty providers array", () => {
     writeYaml(
       globalPath,
       `
@@ -101,7 +100,8 @@ activeModel: qwen3:8b
 providers: []
 `,
     );
-    expect(() => loadConfig()).toThrow("non-empty");
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(0);
   });
 
   it("throws on missing provider name", () => {
@@ -147,7 +147,7 @@ providers:
     expect(() => loadConfig()).toThrow("validation failed");
   });
 
-  it("throws when activeProvider does not match any provider", () => {
+  it("loads when activeProvider does not match any provider", () => {
     writeYaml(
       globalPath,
       `
@@ -159,9 +159,9 @@ providers:
     baseUrl: http://localhost:11434
 `,
     );
-    expect(() => loadConfig()).toThrow(
-      'activeProvider "nonexistent" does not match any provider',
-    );
+    const config = loadConfig();
+    expect(config.activeProvider).toBe("nonexistent");
+    expect(config.providers).toHaveLength(1);
   });
 });
 
@@ -248,9 +248,9 @@ describe("addProvider", () => {
       apiKey: "sk-test",
     });
     const config = loadConfig();
-    expect(config.providers).toHaveLength(2);
-    expect(config.providers[1].name).toBe("openrouter");
-    expect(config.providers[1].apiKey).toBe("sk-test");
+    expect(config.providers).toHaveLength(1);
+    expect(config.providers[0].name).toBe("openrouter");
+    expect(config.providers[0].apiKey).toBe("sk-test");
   });
 });
 
@@ -280,7 +280,7 @@ providers:
     loadConfig(); // create default
     removeProvider("nonexistent");
     const config = loadConfig();
-    expect(config.providers).toHaveLength(1);
+    expect(config.providers).toHaveLength(0);
   });
 });
 
@@ -292,7 +292,7 @@ describe("updateActiveModel", () => {
     expect(config.activeModel).toBe("llama3:70b");
   });
 
-  it("updates activeModel in local config when present", () => {
+  it("does not modify local config", () => {
     writeYaml(
       globalPath,
       `
@@ -307,16 +307,13 @@ providers:
     writeYaml(
       localPath,
       `
-activeProvider: ollama
-activeModel: qwen3:8b
-providers:
-  - name: ollama
-    type: ollama
-    baseUrl: http://localhost:11434
+activeModel: original-model
 `,
     );
     updateActiveModel("mistral");
+    // Local config should still override to original-model since we
+    // only wrote to global. loadConfig merges local on top.
     const config = loadConfig();
-    expect(config.activeModel).toBe("mistral");
+    expect(config.activeModel).toBe("original-model");
   });
 });

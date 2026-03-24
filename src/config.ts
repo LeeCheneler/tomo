@@ -30,53 +30,29 @@ const permissionsSchema = z
 
 const toolsSchema = z.record(z.string(), z.boolean()).optional();
 
-const configSchema = z
-  .object({
-    activeProvider: z.string().min(1, "activeProvider is required"),
-    activeModel: z.string().min(1, "activeModel is required"),
-    maxTokens: z.number().int().positive().default(8192),
-    providers: z
-      .array(providerSchema)
-      .min(1, "providers must be a non-empty array"),
-    permissions: permissionsSchema,
-    tools: toolsSchema,
-  })
-  .check((ctx) => {
-    const names = ctx.value.providers.map((p) => p.name);
-    if (!names.includes(ctx.value.activeProvider)) {
-      ctx.issues.push({
-        code: "custom",
-        message: `activeProvider "${ctx.value.activeProvider}" does not match any provider. Available: ${names.join(", ")}`,
-        input: ctx.value,
-        path: ["activeProvider"],
-      });
-    }
-  });
+const configSchema = z.object({
+  activeProvider: z.string().default(""),
+  activeModel: z.string().default(""),
+  maxTokens: z.number().int().positive().default(8192),
+  providers: z.array(providerSchema),
+  permissions: permissionsSchema,
+  tools: toolsSchema,
+});
 
 export type ProviderConfig = z.infer<typeof providerSchema>;
 export type Config = z.infer<typeof configSchema>;
 
 const DEFAULT_CONFIG: Config = {
-  activeProvider: "ollama",
-  activeModel: "qwen3:8b",
+  activeProvider: "",
+  activeModel: "",
   maxTokens: 8192,
-  providers: [
-    {
-      name: "ollama",
-      type: "ollama",
-      baseUrl: "http://localhost:11434",
-    },
-  ],
+  providers: [],
 };
 
-const DEFAULT_CONFIG_YAML = `activeProvider: ollama
-activeModel: qwen3:8b
+const DEFAULT_CONFIG_YAML = `activeProvider: ""
+activeModel: ""
 maxTokens: 8192
-
-providers:
-  - name: ollama
-    type: ollama
-    baseUrl: http://localhost:11434
+providers: []
 `;
 
 /** Returns the path to the global config file (~/.tomo/config.yaml). */
@@ -136,28 +112,23 @@ export function loadConfig(): Config {
   return result.data;
 }
 
-/** Updates fields in config files on disk. Updates local if present, always updates global. */
-function updateConfigFiles(updates: Record<string, unknown>): void {
-  const paths = [globalConfigPath()];
-  const local = localConfigPath();
-  if (existsSync(local)) paths.push(local);
-
-  for (const path of paths) {
-    const raw = loadYaml(path);
-    if (!raw) continue;
-    Object.assign(raw, updates);
-    writeFileSync(path, stringify(raw), "utf-8");
-  }
+/** Updates fields in the global config file on disk. */
+function updateGlobalConfig(updates: Record<string, unknown>): void {
+  const path = globalConfigPath();
+  const raw = loadYaml(path);
+  if (!raw) return;
+  Object.assign(raw, updates);
+  writeFileSync(path, stringify(raw), "utf-8");
 }
 
-/** Updates activeModel in config files on disk. */
+/** Updates activeModel in the global config. */
 export function updateActiveModel(model: string): void {
-  updateConfigFiles({ activeModel: model });
+  updateGlobalConfig({ activeModel: model });
 }
 
-/** Updates activeProvider in config files on disk. */
+/** Updates activeProvider in the global config. */
 export function updateActiveProvider(provider: string): void {
-  updateConfigFiles({ activeProvider: provider });
+  updateGlobalConfig({ activeProvider: provider });
 }
 
 /** Updates permissions in the local project config (.tomo/config.yaml). Creates the file if absent. */

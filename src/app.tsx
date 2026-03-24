@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { spawnSync } from "node:child_process";
 import chalk from "chalk";
 import { Box, Static, Text } from "ink";
@@ -10,7 +10,7 @@ import { completePartialMarkdown, renderMarkdown } from "./components/markdown";
 import type { DisplayMessage } from "./components/message-list";
 import { Message } from "./components/message-list";
 import { ThinkingIndicator } from "./components/thinking-indicator";
-import { getActiveProvider, loadConfig } from "./config";
+import { getProviderByName, loadConfig } from "./config";
 import { useChat } from "./hooks/use-chat";
 import { loadInstructions } from "./instructions";
 import { createSession } from "./session";
@@ -32,11 +32,10 @@ function getToolWarnings(): string[] {
 
 function initApp() {
   const config = loadConfig();
-  const initialProvider = getActiveProvider(config);
-  const initialSession = createSession(
-    initialProvider.name,
-    config.activeModel,
-  );
+  const initialProvider = getProviderByName(config, config.activeProvider);
+  const initialSession = initialProvider
+    ? createSession(initialProvider.name, config.activeModel)
+    : createSession("none", "none");
   const instructions = loadInstructions();
   const startupWarnings = getToolWarnings();
   return {
@@ -45,6 +44,7 @@ function initApp() {
     initialSession,
     instructions,
     startupWarnings,
+    needsSetup: !initialProvider,
   };
 }
 
@@ -65,16 +65,31 @@ export function App({ onRestart }: AppProps) {
     initialSession,
     instructions,
     startupWarnings,
+    needsSetup,
   } = useMemo(() => initApp(), []);
+
+  const placeholderProvider = {
+    name: "none",
+    type: "ollama" as const,
+    baseUrl: "http://localhost:11434",
+  };
 
   const chat = useChat(
     config,
-    initialProvider,
-    config.activeModel,
+    initialProvider ?? placeholderProvider,
+    initialProvider ? config.activeModel : "none",
     initialSession,
     instructions,
     onRestart,
   );
+
+  // Auto-launch /configure when no providers are configured.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only run once on mount
+  useEffect(() => {
+    if (needsSetup) {
+      chat.submit("/configure");
+    }
+  }, []);
 
   const headerItem = useMemo(
     (): StaticItem => ({ type: "header", id: "__header__" }),
