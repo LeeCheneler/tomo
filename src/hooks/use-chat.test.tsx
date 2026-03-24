@@ -709,7 +709,7 @@ describe("useChat", () => {
       const lastCallMessages =
         vi.mocked(streamChatCompletion).mock.calls[2][0].messages;
       const nudge = lastCallMessages.find(
-        (m: { content: string }) =>
+        (m: { content: string | unknown }) =>
           typeof m.content === "string" &&
           m.content.includes("previous response was empty"),
       );

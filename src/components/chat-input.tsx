@@ -1,15 +1,20 @@
-import { useEffect, useState } from "react";
 import chalk from "chalk";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { useEffect, useRef, useState } from "react";
 import { getAllCommands } from "../commands";
 import {
   type AutocompleteProvider,
   useAutocomplete,
 } from "../hooks/use-autocomplete";
+import {
+  detectImagePath,
+  type ImageAttachment,
+  readClipboardImage,
+} from "../images";
 import { getAllSkills } from "../skills";
 
 interface ChatInputProps {
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string, clipboardImages?: ImageAttachment[]) => void;
   disabled?: boolean;
   hidden?: boolean;
   onEscape?: () => void;
@@ -69,6 +74,15 @@ export function ChatInput({
   const [value, setValue] = useState("");
   const [cursor, setCursor] = useState(0);
   const [exitWarning, setExitWarning] = useState(false);
+  const [clipboardImages, setClipboardImages] = useState<ImageAttachment[]>([]);
+  const [imageNavActive, setImageNavActive] = useState(false);
+  const [selectedImageIdx, setSelectedImageIdx] = useState(0);
+
+  // Refs track the real value/cursor across React batched updates (paste bursts).
+  const valueRef = useRef(value);
+  const cursorRef = useRef(cursor);
+  valueRef.current = value;
+  cursorRef.current = cursor;
 
   useEffect(() => {
     const onResize = () => setColumns(stdout.columns || 80);
@@ -77,6 +91,8 @@ export function ChatInput({
       stdout.off("resize", onResize);
     };
   }, [stdout]);
+
+  const totalImages = clipboardImages.length;
 
   const autocomplete = useAutocomplete(defaultProviders, value, cursor);
   const { active: isAutocomplete, ghost, showGhost } = autocomplete;
@@ -94,9 +110,12 @@ export function ChatInput({
           setExitWarning(true);
           return;
         }
-        if (value) {
+        if (value || clipboardImages.length > 0) {
           setValue("");
           setCursor(0);
+          setClipboardImages([]);
+          setImageNavActive(false);
+          setSelectedImageIdx(0);
           return;
         }
         setExitWarning(true);
@@ -105,6 +124,37 @@ export function ChatInput({
 
       if (exitWarning) {
         setExitWarning(false);
+      }
+
+      // Image navigation mode — intercept keys before normal handling
+      if (imageNavActive) {
+        if (key.upArrow || key.escape) {
+          setImageNavActive(false);
+          return;
+        }
+        if (key.leftArrow) {
+          setSelectedImageIdx((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (key.rightArrow) {
+          setSelectedImageIdx((i) => Math.min(totalImages - 1, i + 1));
+          return;
+        }
+        if (key.delete || key.backspace) {
+          setClipboardImages((prev) =>
+            prev.filter((_, i) => i !== selectedImageIdx),
+          );
+          const newTotal = totalImages - 1;
+          if (newTotal === 0) {
+            setImageNavActive(false);
+            setSelectedImageIdx(0);
+          } else {
+            setSelectedImageIdx((i) => Math.min(i, newTotal - 1));
+          }
+          return;
+        }
+        // Ignore all other keys in image nav mode
+        return;
       }
 
       if (key.escape) {
@@ -118,6 +168,15 @@ export function ChatInput({
       }
 
       if (disabled) return;
+
+      // Ctrl+V: paste image from system clipboard
+      if (input === "v" && key.ctrl) {
+        const img = readClipboardImage();
+        if (img) {
+          setClipboardImages((prev) => [...prev, img]);
+        }
+        return;
+      }
 
       // Word-skip: Option/Alt+Arrow or Alt+B/F
       if (key.leftArrow && key.meta) {
@@ -169,6 +228,12 @@ export function ChatInput({
               ? nextNextLineBreak - nextLineStart
               : value.length - nextLineStart;
           setCursor(nextLineStart + Math.min(col, nextLineLength));
+          return;
+        }
+        // On last line — enter image navigation if images exist
+        if (totalImages > 0) {
+          setImageNavActive(true);
+          setSelectedImageIdx(0);
         }
         return;
       }
@@ -202,13 +267,23 @@ export function ChatInput({
           setValue((v) => `${v.slice(0, cursor)}\n${v.slice(cursor)}`);
           setCursor((c) => c + 1);
         } else if (isAutocomplete && autocomplete.submitValue) {
-          onSubmit(autocomplete.submitValue);
+          if (clipboardImages.length > 0) {
+            onSubmit(autocomplete.submitValue, clipboardImages);
+          } else {
+            onSubmit(autocomplete.submitValue);
+          }
           setValue("");
           setCursor(0);
-        } else if (value.trim()) {
-          onSubmit(value);
+          setClipboardImages([]);
+        } else if (value.trim() || clipboardImages.length > 0) {
+          if (clipboardImages.length > 0) {
+            onSubmit(value, clipboardImages);
+          } else {
+            onSubmit(value);
+          }
           setValue("");
           setCursor(0);
+          setClipboardImages([]);
         }
         return;
       }
@@ -238,8 +313,28 @@ export function ChatInput({
       }
 
       if (input && !key.ctrl && !key.meta) {
-        setValue((v) => v.slice(0, cursor) + input + v.slice(cursor));
-        setCursor((c) => c + input.length);
+        // Use refs to get the real accumulated value during paste bursts
+        // (React batches setValue calls, so the closure `value` may be stale).
+        const prev = valueRef.current;
+        const cur = cursorRef.current;
+        const newValue = prev.slice(0, cur) + input + prev.slice(cur);
+        const newCursor = cur + input.length;
+
+        // Auto-detect pasted image file paths (e.g. Cmd+V of a file from Finder)
+        const detected = detectImagePath(newValue);
+        if (detected) {
+          const prefix = newValue.slice(0, detected.pathStart).trimEnd();
+          setValue(prefix);
+          setCursor(prefix.length);
+          setClipboardImages((prev) => [...prev, detected.attachment]);
+          valueRef.current = prefix;
+          cursorRef.current = prefix.length;
+        } else {
+          setValue(newValue);
+          setCursor(newCursor);
+          valueRef.current = newValue;
+          cursorRef.current = newCursor;
+        }
       }
     },
     {
@@ -256,6 +351,9 @@ export function ChatInput({
 
   let inputDisplay: string;
   if (disabled) {
+    inputDisplay = value;
+  } else if (imageNavActive) {
+    // No cursor highlight when navigating images
     inputDisplay = value;
   } else {
     const charAtCursor = cursor < value.length ? value[cursor] : null;
@@ -286,7 +384,63 @@ export function ChatInput({
     ? ` ${Math.round(contextPercent)}% context `
     : "";
   const topLineWidth = columns - 2;
-  const bottomLineWidth = Math.max(0, columns - 2 - contextLabel.length);
+
+  // Build image tags for the bottom bar
+  const maxVisible = 5;
+  let imageDisplayStr = "";
+  let imagePlainWidth = 0;
+
+  if (totalImages > 0) {
+    // Determine visible window
+    let start = 0;
+    let end = Math.min(totalImages, maxVisible);
+
+    if (imageNavActive && selectedImageIdx >= end) {
+      end = Math.min(totalImages, selectedImageIdx + 1);
+      start = Math.max(0, end - maxVisible);
+    }
+
+    const showLeading = start > 0;
+    const showTrailing = end < totalImages;
+
+    const parts: string[] = [];
+    imagePlainWidth = 2; // leading ──
+
+    if (showLeading) {
+      parts.push("...");
+      imagePlainWidth += 3;
+    }
+
+    for (let i = start; i < end; i++) {
+      const label = `[Img ${i + 1}]`;
+      imagePlainWidth += label.length;
+      parts.push(
+        imageNavActive && i === selectedImageIdx
+          ? chalk.bgWhite.black(label)
+          : label,
+      );
+    }
+
+    if (showTrailing) {
+      parts.push("...");
+      imagePlainWidth += 3;
+    }
+
+    imageDisplayStr = `──${parts.join("")}`;
+  }
+
+  const bottomLineWidth = Math.max(
+    0,
+    columns - 2 - imagePlainWidth - contextLabel.length,
+  );
+
+  // Hint text below the bottom bar
+  let hintText: string | null = null;
+  if (imageNavActive) {
+    hintText = "  ↑ input  ←→ select  ⌫ remove";
+  } else if (totalImages > 0 && !disabled) {
+    hintText = "  ↓ images";
+  }
 
   return (
     <Box flexDirection="column">
@@ -298,6 +452,7 @@ export function ChatInput({
         {inputDisplay}
       </Text>
       <Text dimColor={dividerDim} color={dividerColor}>
+        {imageDisplayStr}
         {"─".repeat(bottomLineWidth)}
         {contextLabel}
       </Text>
@@ -329,6 +484,7 @@ export function ChatInput({
           })()}
         </Box>
       ) : null}
+      {hintText ? <Text dimColor>{hintText}</Text> : null}
       {exitWarning ? (
         <Text dimColor>{"  Ctrl+C again to close Tomo"}</Text>
       ) : null}

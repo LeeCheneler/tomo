@@ -1,6 +1,7 @@
 import { render } from "ink-testing-library";
 import { describe, it, expect, vi } from "vitest";
 import "../commands";
+import * as images from "../images";
 import { ChatInput } from "./chat-input";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
@@ -447,5 +448,173 @@ describe("ChatInput", () => {
     await flush();
     expect(onEscape).not.toHaveBeenCalled();
     expect(lastFrame()).toContain("Ctrl+C again to close Tomo");
+  });
+
+  it("Ctrl+V pastes clipboard image and shows tag", async () => {
+    const mockImage = {
+      name: "clipboard.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(mockImage);
+
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    // Ctrl+V
+    stdin.write("\x16");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).toContain("[Img 1]");
+
+    vi.restoreAllMocks();
+  });
+
+  it("Ctrl+V with no clipboard image does nothing", async () => {
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(null);
+
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x16");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).not.toContain("[Img");
+
+    vi.restoreAllMocks();
+  });
+
+  it("Ctrl+C clears clipboard images", async () => {
+    const mockImage = {
+      name: "clipboard.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(mockImage);
+
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x16");
+    await flush();
+    expect(lastFrame()).toContain("[Img 1]");
+    // Ctrl+C to clear
+    stdin.write("\x03");
+    await flush();
+    expect(lastFrame()).not.toContain("[Img");
+
+    vi.restoreAllMocks();
+  });
+
+  it("passes clipboard images through onSubmit", async () => {
+    const mockImage = {
+      name: "clipboard.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(mockImage);
+
+    const onSubmit = vi.fn();
+    const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
+    // Paste image then type and submit
+    stdin.write("\x16");
+    await flush();
+    stdin.write("describe this");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    expect(onSubmit).toHaveBeenCalledWith("describe this", [mockImage]);
+
+    vi.restoreAllMocks();
+  });
+
+  it("shows down arrow hint when clipboard images are present", async () => {
+    const mockImage = {
+      name: "clipboard.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(mockImage);
+
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x16");
+    await flush();
+    expect(lastFrame()).toContain("↓ images");
+
+    vi.restoreAllMocks();
+  });
+
+  it("enters image nav on down arrow and shows nav hints", async () => {
+    const mockImage = {
+      name: "clipboard.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(mockImage);
+
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x16");
+    await flush();
+    // Down arrow to enter image nav
+    stdin.write("\x1B[B");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).toContain("←→ select");
+    expect(output).toContain("⌫ remove");
+
+    vi.restoreAllMocks();
+  });
+
+  it("exits image nav on up arrow", async () => {
+    const mockImage = {
+      name: "clipboard.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(mockImage);
+
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x16");
+    await flush();
+    // Enter nav
+    stdin.write("\x1B[B");
+    await flush();
+    expect(lastFrame()).toContain("←→ select");
+    // Exit nav
+    stdin.write("\x1B[A");
+    await flush();
+    expect(lastFrame()).toContain("↓ images");
+
+    vi.restoreAllMocks();
+  });
+
+  it("removes clipboard image with backspace in image nav", async () => {
+    const mockImage = {
+      name: "clipboard.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(mockImage);
+
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x16");
+    await flush();
+    expect(lastFrame()).toContain("[Img 1]");
+    // Enter nav then backspace to remove
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\x7f");
+    await flush();
+    expect(lastFrame()).not.toContain("[Img");
+    // Should exit nav since no images left
+    expect(lastFrame()).not.toContain("←→ select");
+
+    vi.restoreAllMocks();
+  });
+
+  it("shows multiple image tags for multiple clipboard pastes", async () => {
+    const mockImage = {
+      name: "clipboard.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+    vi.spyOn(images, "readClipboardImage").mockReturnValue(mockImage);
+
+    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
+    stdin.write("\x16");
+    await flush();
+    stdin.write("\x16");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).toContain("[Img 1]");
+    expect(output).toContain("[Img 2]");
+
+    vi.restoreAllMocks();
   });
 });

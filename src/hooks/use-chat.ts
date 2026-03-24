@@ -1,38 +1,39 @@
+import chalk from "chalk";
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 import { getCommand, parse } from "../commands";
 import type { DisplayMessage } from "../components/message-list";
 import {
   type Config,
-  type ProviderConfig,
   getMaxTokens,
   getProviderByName,
   loadConfig,
+  type ProviderConfig,
   updateActiveModel,
   updateActiveProvider,
 } from "../config";
 import { truncateMessages } from "../context/truncate";
-import type { ChatMessage, TokenUsage } from "../provider/client";
+import type { ImageAttachment } from "../images";
+import { resolvePermissions } from "../permissions";
+import type { ChatMessage, ContentPart, TokenUsage } from "../provider/client";
 import {
   fetchContextWindow,
   getDefaultContextWindow,
   streamChatCompletion,
 } from "../provider/client";
 import {
-  type Session,
   appendMessage,
   createSession,
   loadSession,
+  type Session,
 } from "../session";
-import chalk from "chalk";
-import { resolvePermissions } from "../permissions";
 import { getSkill } from "../skills";
 import {
-  type ToolContext,
   getToolDefinitions,
   resolveToolAvailability,
+  type ToolContext,
 } from "../tools";
-import { ToolDismissedError, executeToolCalls } from "./tool-execution";
+import { executeToolCalls, ToolDismissedError } from "./tool-execution";
 
 export interface ChatState {
   messages: DisplayMessage[];
@@ -46,7 +47,7 @@ export interface ChatState {
   contextWindow: number;
   pendingMessage: string | null;
   toolActive: boolean;
-  submit: (text: string) => void;
+  submit: (text: string, clipboardImages?: ImageAttachment[]) => void;
   cancel: () => void;
   clearMessages: () => void;
 }
@@ -76,6 +77,18 @@ function toChatMessages(
             content: m.content,
             tool_calls: m.tool_calls,
           };
+        }
+        if (m.role === "user" && m.images && m.images.length > 0) {
+          const parts: ContentPart[] = [
+            { type: "text", text: m.content },
+            ...m.images.map(
+              (img): ContentPart => ({
+                type: "image_url",
+                image_url: { url: img.dataUri },
+              }),
+            ),
+          ];
+          return { role: "user", content: parts };
         }
         return { role: m.role as "user" | "assistant", content: m.content };
       }),
@@ -161,7 +174,7 @@ export function useChat(
     setTokenUsage(null);
   };
 
-  const submit = async (text: string) => {
+  const submit = async (text: string, clipboardImages?: ImageAttachment[]) => {
     if (streamingRef.current) {
       pendingMessageRef.current = text;
       setPendingMessage(text);
@@ -287,6 +300,8 @@ export function useChat(
       id: crypto.randomUUID(),
       role: "user",
       content: chatText,
+      ...(clipboardImages &&
+        clipboardImages.length > 0 && { images: clipboardImages }),
     };
 
     if (skillDisplay) {

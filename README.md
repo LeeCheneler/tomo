@@ -115,6 +115,15 @@ Instruction content loaded as context when the skill is invoked.
 
 Use `/skills` to list available skills. The model will automatically load relevant skills when appropriate, or you can ask it to use a specific skill.
 
+## Images
+
+Tomo supports sending images to vision-capable models (e.g. Qwen 2.5 VL).
+
+- **Paste a file** — copy an image file in Finder and `Cmd+V` in tomo. The file path is detected and the image is auto-attached.
+- **Paste a screenshot** — take a screenshot or copy image content, then press `Ctrl+V` to attach from clipboard (macOS).
+
+Attached images appear in the bottom bar as `[Img 1][Img 2]` etc. Press `↓` to navigate into images, `←→` to select, and `⌫` to remove.
+
 ## Sessions
 
 Conversations are saved automatically. Use `/session` to browse or `/session <id>` to resume.
