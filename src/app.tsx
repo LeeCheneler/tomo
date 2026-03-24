@@ -16,13 +16,9 @@ import { loadInstructions } from "./instructions";
 import { createSession } from "./session";
 import { getAllTools, resolveToolAvailability } from "./tools";
 
-const config = loadConfig();
-const initialProvider = getActiveProvider(config);
-const initialSession = createSession(initialProvider.name, config.activeModel);
-const instructions = loadInstructions();
-
 /** Build startup warnings for enabled tools that are misconfigured. */
 function getToolWarnings(): string[] {
+  const config = loadConfig();
   const availability = resolveToolAvailability(config.tools);
   const warnings: string[] = [];
   for (const tool of getAllTools()) {
@@ -34,7 +30,23 @@ function getToolWarnings(): string[] {
   return warnings;
 }
 
-const startupWarnings = getToolWarnings();
+function initApp() {
+  const config = loadConfig();
+  const initialProvider = getActiveProvider(config);
+  const initialSession = createSession(
+    initialProvider.name,
+    config.activeModel,
+  );
+  const instructions = loadInstructions();
+  const startupWarnings = getToolWarnings();
+  return {
+    config,
+    initialProvider,
+    initialSession,
+    instructions,
+    startupWarnings,
+  };
+}
 
 type StaticItem =
   | { type: "header"; id: string }
@@ -47,6 +59,14 @@ interface AppProps {
 
 /** Root application component. Renders the chat UI and delegates state to useChat. */
 export function App({ onRestart }: AppProps) {
+  const {
+    config,
+    initialProvider,
+    initialSession,
+    instructions,
+    startupWarnings,
+  } = useMemo(() => initApp(), []);
+
   const chat = useChat(
     config,
     initialProvider,
@@ -67,7 +87,7 @@ export function App({ onRestart }: AppProps) {
         id: `__warning_${i}__`,
         text,
       })),
-    [],
+    [startupWarnings],
   );
   const staticItems: StaticItem[] = [
     headerItem,

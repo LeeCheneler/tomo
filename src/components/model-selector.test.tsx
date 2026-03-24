@@ -13,7 +13,7 @@ const singleProvider = [
 
 const multiProvider = [
   { name: "ollama", baseUrl: "http://localhost:11434", type: "ollama" },
-  { name: "openai", baseUrl: "http://localhost:4000", type: "openai" },
+  { name: "openrouter", baseUrl: "http://localhost:4000", type: "openrouter" },
 ];
 
 describe("ModelSelector", () => {
@@ -218,7 +218,7 @@ describe("ModelSelector", () => {
     const output = lastFrame() ?? "";
     expect(output).toContain("ollama");
     expect(output).toContain("qwen3:8b");
-    expect(output).toContain("openai");
+    expect(output).toContain("openrouter");
     expect(output).toContain("gpt-4o");
   });
 
@@ -247,6 +247,6 @@ describe("ModelSelector", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    expect(onSelect).toHaveBeenCalledWith("openai", "gpt-4o");
+    expect(onSelect).toHaveBeenCalledWith("openrouter", "gpt-4o");
   });
 });

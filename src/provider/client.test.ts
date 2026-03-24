@@ -409,12 +409,18 @@ describe("streamChatCompletion", () => {
 
 describe("resolveApiKey", () => {
   it("returns configApiKey when set", () => {
-    expect(resolveApiKey("openai", "sk-config")).toBe("sk-config");
+    expect(resolveApiKey("opencode-zen", "sk-config")).toBe("sk-config");
   });
 
-  it("falls back to OPENAI_API_KEY env var for openai type", () => {
-    vi.stubEnv("OPENAI_API_KEY", "sk-env");
-    expect(resolveApiKey("openai")).toBe("sk-env");
+  it("falls back to OPENCODE_API_KEY env var for opencode-zen type", () => {
+    vi.stubEnv("OPENCODE_API_KEY", "sk-env");
+    expect(resolveApiKey("opencode-zen")).toBe("sk-env");
+    vi.unstubAllEnvs();
+  });
+
+  it("falls back to OPENROUTER_API_KEY env var for openrouter type", () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-env");
+    expect(resolveApiKey("openrouter")).toBe("sk-env");
     vi.unstubAllEnvs();
   });
 
@@ -423,8 +429,8 @@ describe("resolveApiKey", () => {
   });
 
   it("prefers configApiKey over env var", () => {
-    vi.stubEnv("OPENAI_API_KEY", "sk-env");
-    expect(resolveApiKey("openai", "sk-config")).toBe("sk-config");
+    vi.stubEnv("OPENCODE_API_KEY", "sk-env");
+    expect(resolveApiKey("opencode-zen", "sk-config")).toBe("sk-config");
     vi.unstubAllEnvs();
   });
 });
@@ -626,13 +632,60 @@ describe("fetchContextWindow", () => {
     );
   });
 
-  it("returns default without fetching for non-ollama providers", async () => {
+  it("extracts context_length from openrouter /v1/models response", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { id: "anthropic/claude-sonnet-4", context_length: 200000 },
+            { id: "openai/gpt-4o", context_length: 128000 },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
     const result = await fetchContextWindow(
-      "http://localhost:8080",
-      "model",
-      "openai",
+      "https://openrouter.ai/api",
+      "anthropic/claude-sonnet-4",
+      "openrouter",
+    );
+    expect(result).toBe(200000);
+  });
+
+  it("extracts context_length from opencode-zen /v1/models response", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { id: "opencode/gpt-5.3-codex", context_length: 256000 },
+        ]),
+        { status: 200 },
+      ),
+    );
+
+    const result = await fetchContextWindow(
+      "https://opencode.ai/zen",
+      "opencode/gpt-5.3-codex",
+      "opencode-zen",
+    );
+    expect(result).toBe(256000);
+  });
+
+  it("returns default when model not found in models list", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ id: "other-model", context_length: 128000 }],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await fetchContextWindow(
+      "https://openrouter.ai/api",
+      "missing-model",
+      "openrouter",
     );
     expect(result).toBe(8192);
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 });

@@ -82,14 +82,18 @@ providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
-    # contextWindow: 32768  # optional (auto-detected for Ollama)
+    # contextWindow: 32768  # optional (auto-detected)
     # models:
     #   qwen3:4b:
     #     maxTokens: 16384
-  # - name: openai
-  #   type: openai
-  #   baseUrl: https://api.openai.com
-  #   apiKey: sk-...  # or set OPENAI_API_KEY env var
+  # - name: zen
+  #   type: opencode-zen
+  #   baseUrl: https://opencode.ai/zen
+  #   apiKey: ...  # or set OPENCODE_API_KEY env var
+  # - name: openrouter
+  #   type: openrouter
+  #   baseUrl: https://openrouter.ai/api
+  #   apiKey: ...  # or set OPENROUTER_API_KEY env var
 ```
 
 Use `/configure` to add or remove providers interactively, or edit the config file directly.

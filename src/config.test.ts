@@ -208,11 +208,11 @@ describe("loadConfig with apiKey", () => {
     writeYaml(
       globalPath,
       `
-activeProvider: openai
+activeProvider: openrouter
 activeModel: gpt-4o
 providers:
-  - name: openai
-    type: openai
+  - name: openrouter
+    type: openrouter
     baseUrl: https://api.openai.com
     apiKey: sk-test-123
 `,
@@ -242,14 +242,14 @@ describe("addProvider", () => {
   it("adds a provider to the global config", () => {
     loadConfig(); // create default
     addProvider({
-      name: "openai",
-      type: "openai",
+      name: "openrouter",
+      type: "openrouter",
       baseUrl: "https://api.openai.com",
       apiKey: "sk-test",
     });
     const config = loadConfig();
     expect(config.providers).toHaveLength(2);
-    expect(config.providers[1].name).toBe("openai");
+    expect(config.providers[1].name).toBe("openrouter");
     expect(config.providers[1].apiKey).toBe("sk-test");
   });
 });
@@ -265,12 +265,12 @@ providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
-  - name: openai
-    type: openai
+  - name: openrouter
+    type: openrouter
     baseUrl: https://api.openai.com
 `,
     );
-    removeProvider("openai");
+    removeProvider("openrouter");
     const config = loadConfig();
     expect(config.providers).toHaveLength(1);
     expect(config.providers[0].name).toBe("ollama");

@@ -15,7 +15,8 @@ export function resolveApiKey(
 ): string | undefined {
   if (configApiKey) return configApiKey;
   const envVarMap: Record<string, string> = {
-    openai: "OPENAI_API_KEY",
+    "opencode-zen": "OPENCODE_API_KEY",
+    openrouter: "OPENROUTER_API_KEY",
   };
   const envVar = envVarMap[providerType];
   return envVar ? process.env[envVar] : undefined;
@@ -31,11 +32,14 @@ function buildHeaders(apiKey?: string): Record<string, string> {
   return headers;
 }
 
-/** Fetches available models from an OpenAI-compatible /v1/models endpoint. */
-export async function fetchModels(
+/**
+ * Fetches the raw JSON from an OpenAI-compatible /v1/models endpoint.
+ * Handles both `{ data: [...] }` (OpenRouter, Ollama) and bare array (Zen) responses.
+ */
+async function fetchModelsRaw(
   baseUrl: string,
   apiKey?: string,
-): Promise<ModelInfo[]> {
+): Promise<Array<Record<string, unknown>>> {
   const url = `${baseUrl.replace(/\/+$/, "")}/v1/models`;
 
   let response: Response;
@@ -60,8 +64,18 @@ export async function fetchModels(
   }
 
   const json = await response.json();
-  const models = (json.data ?? []) as Array<{ id: string }>;
-  return models.map((m) => ({ id: m.id }));
+  // Handle both { data: [...] } wrapper and bare array responses
+  if (Array.isArray(json)) return json;
+  return (json.data ?? []) as Array<Record<string, unknown>>;
+}
+
+/** Fetches available models from an OpenAI-compatible /v1/models endpoint. */
+export async function fetchModels(
+  baseUrl: string,
+  apiKey?: string,
+): Promise<ModelInfo[]> {
+  const models = await fetchModelsRaw(baseUrl, apiKey);
+  return models.map((m) => ({ id: String(m.id) }));
 }
 
 const DEFAULT_CONTEXT_WINDOW = 8192;
@@ -73,50 +87,81 @@ export function clearContextWindowCache(): void {
   contextWindowCache.clear();
 }
 
+/** Fetches context window from Ollama's native /api/show endpoint. */
+async function fetchOllamaContextWindow(
+  baseUrl: string,
+  model: string,
+): Promise<number | null> {
+  const url = `${baseUrl.replace(/\/+$/, "")}/api/show`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  });
+
+  if (!response.ok) return null;
+
+  const json = await response.json();
+  const modelInfo = json.model_info;
+
+  // Ollama stores context length under `<arch>.context_length` where
+  // the arch prefix varies per model. Find any matching key.
+  if (modelInfo && typeof modelInfo === "object") {
+    for (const key of Object.keys(modelInfo)) {
+      if (key.endsWith(".context_length")) {
+        const val = modelInfo[key];
+        if (typeof val === "number") return val;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetches context window from the /v1/models endpoint metadata.
+ * Works for providers that include context_length in their models response
+ * (OpenCode Zen, OpenRouter).
+ */
+async function fetchModelsContextWindow(
+  baseUrl: string,
+  model: string,
+  apiKey?: string,
+): Promise<number | null> {
+  const models = await fetchModelsRaw(baseUrl, apiKey);
+  const entry = models.find((m) => m.id === model);
+  if (!entry) return null;
+  // Both Zen and OpenRouter use context_length
+  const ctx = entry.context_length;
+  return typeof ctx === "number" ? ctx : null;
+}
+
 /**
  * Fetches the context window size for a model.
  * Dispatches to provider-specific detection based on `providerType`.
- * Only Ollama supports detection — other types return the default.
+ * - Ollama: uses native /api/show endpoint
+ * - OpenCode Zen / OpenRouter: parses context_length from /v1/models metadata
  * Results are cached per `baseUrl + model` key.
  */
 export async function fetchContextWindow(
   baseUrl: string,
   model: string,
   providerType: string,
+  apiKey?: string,
 ): Promise<number> {
-  if (providerType !== "ollama") return DEFAULT_CONTEXT_WINDOW;
-
   const cacheKey = `${baseUrl}::${model}`;
   const cached = contextWindowCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  const url = `${baseUrl.replace(/\/+$/, "")}/api/show`;
-
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model }),
-    });
-
-    if (!response.ok) return DEFAULT_CONTEXT_WINDOW;
-
-    const json = await response.json();
-    const modelInfo = json.model_info;
-
-    // Ollama stores context length under `<arch>.context_length` where
-    // the arch prefix varies per model. Find any matching key.
     let contextLength: number | null = null;
-    if (modelInfo && typeof modelInfo === "object") {
-      for (const key of Object.keys(modelInfo)) {
-        if (key.endsWith(".context_length")) {
-          const val = modelInfo[key];
-          if (typeof val === "number") {
-            contextLength = val;
-            break;
-          }
-        }
-      }
+
+    if (providerType === "ollama") {
+      contextLength = await fetchOllamaContextWindow(baseUrl, model);
+    } else if (
+      providerType === "opencode-zen" ||
+      providerType === "openrouter"
+    ) {
+      contextLength = await fetchModelsContextWindow(baseUrl, model, apiKey);
     }
 
     const result = contextLength ?? DEFAULT_CONTEXT_WINDOW;

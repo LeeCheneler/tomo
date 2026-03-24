@@ -35,11 +35,12 @@ export interface ConfigureSelectorProps {
   onCancel: () => void;
 }
 
-const PROVIDER_TYPES = ["ollama", "openai"] as const;
+const PROVIDER_TYPES = ["ollama", "opencode-zen", "openrouter"] as const;
 
 const DEFAULT_URLS: Record<string, string> = {
   ollama: "http://localhost:11434",
-  openai: "https://api.openai.com",
+  "opencode-zen": "https://opencode.ai/zen",
+  openrouter: "https://openrouter.ai/api",
 };
 
 /** Interactive multi-step wizard for adding or removing providers. */
@@ -125,7 +126,7 @@ export function ConfigureSelector({
           const url = textValue.trim();
           if (!url) return;
           setNewProvider((p) => ({ ...p, baseUrl: url }));
-          if (newProvider.type === "openai") {
+          if (newProvider.type !== "ollama") {
             setTextValue("");
             setStep("enterApiKey");
           } else {

@@ -13,7 +13,11 @@ const defaultProviders = [
 
 const multiProviders = [
   { name: "ollama", baseUrl: "http://localhost:11434", type: "ollama" },
-  { name: "openai", baseUrl: "https://api.openai.com", type: "openai" },
+  {
+    name: "openrouter",
+    baseUrl: "https://openrouter.ai/api",
+    type: "openrouter",
+  },
 ];
 
 describe("ConfigureSelector", () => {
@@ -68,7 +72,7 @@ describe("ConfigureSelector", () => {
     const output = lastFrame() ?? "";
     expect(output).toContain("Select provider type");
     expect(output).toContain("ollama");
-    expect(output).toContain("openai");
+    expect(output).toContain("openrouter");
   });
 
   it("shows remove provider list", async () => {
@@ -88,7 +92,7 @@ describe("ConfigureSelector", () => {
     await flush();
     const output = lastFrame() ?? "";
     expect(output).toContain("Select provider to remove");
-    expect(output).toContain("openai");
+    expect(output).toContain("openrouter");
     // Active provider should be shown but marked as active (not selectable)
     expect(output).toContain("ollama (active)");
     // Cursor should not be on the active provider
@@ -113,7 +117,7 @@ describe("ConfigureSelector", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    expect(onRemoveProvider).toHaveBeenCalledWith("openai");
+    expect(onRemoveProvider).toHaveBeenCalledWith("openrouter");
   });
 
   it("disables remove option when no removable providers", () => {
@@ -189,9 +193,9 @@ describe("ConfigureSelector", () => {
     );
   });
 
-  it("completes full add provider flow for openai with api key", async () => {
+  it("completes full add provider flow for opencode-zen with api key", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockModelsResponse(["gpt-4o", "gpt-4o-mini"]),
+      mockModelsResponse(["opencode/gpt-5.3-codex", "opencode/big-pickle"]),
     );
     const onAddProvider = vi.fn();
     const { stdin, lastFrame } = render(
@@ -208,14 +212,14 @@ describe("ConfigureSelector", () => {
     stdin.write("\r");
     await flush();
 
-    // Select type: openai (second option)
+    // Select type: opencode-zen (second option)
     stdin.write("\x1B[B");
     await flush();
     stdin.write("\r");
     await flush();
 
     // Enter URL: accept default
-    expect(lastFrame()).toContain("https://api.openai.com");
+    expect(lastFrame()).toContain("https://opencode.ai/zen");
     stdin.write("\r");
     await flush();
 
@@ -230,22 +234,22 @@ describe("ConfigureSelector", () => {
     await flush();
 
     // Select model: first one
-    expect(lastFrame()).toContain("gpt-4o");
+    expect(lastFrame()).toContain("opencode/gpt-5.3-codex");
     stdin.write("\r");
     await flush();
 
-    // Enter name: accept default "openai"
+    // Enter name: accept default "opencode-zen"
     stdin.write("\r");
     await flush();
 
     expect(onAddProvider).toHaveBeenCalledWith(
       {
-        name: "openai",
-        type: "openai",
-        baseUrl: "https://api.openai.com",
+        name: "opencode-zen",
+        type: "opencode-zen",
+        baseUrl: "https://opencode.ai/zen",
         apiKey: "sk-test-123",
       },
-      "gpt-4o",
+      "opencode/gpt-5.3-codex",
     );
   });
 

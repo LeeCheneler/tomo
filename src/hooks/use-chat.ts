@@ -134,11 +134,13 @@ export function useChat(
       setContextWindow(activeProvider.contextWindow);
       return;
     }
+    const key = resolveApiKey(activeProvider.type, activeProvider.apiKey);
     let cancelled = false;
     fetchContextWindow(
       activeProvider.baseUrl,
       activeModel,
       activeProvider.type,
+      key,
     ).then((size) => {
       if (!cancelled) setContextWindow(size);
     });
@@ -149,6 +151,7 @@ export function useChat(
     activeProvider.baseUrl,
     activeProvider.contextWindow,
     activeProvider.type,
+    activeProvider.apiKey,
     activeModel,
   ]);
 
