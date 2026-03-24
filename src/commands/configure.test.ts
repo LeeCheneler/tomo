@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { getCommand } from "./registry";
-import "./model";
+import "./configure";
 
 const mockCallbacks = () => ({
   onComplete: vi.fn(),
@@ -22,14 +22,14 @@ const mockCallbacks = () => ({
   messageCount: 0,
 });
 
-describe("/model command", () => {
+describe("/configure command", () => {
   it("is registered", () => {
-    expect(getCommand("model")).toBeDefined();
+    expect(getCommand("configure")).toBeDefined();
   });
 
   it("returns interactive element", () => {
-    const command = getCommand("model");
-    if (!command) throw new Error("model command not registered");
+    const command = getCommand("configure");
+    if (!command) throw new Error("configure command not registered");
     const result = command.execute("", mockCallbacks());
     expect(result).toHaveProperty("interactive");
   });

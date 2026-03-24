@@ -19,6 +19,7 @@ import type { ChatMessage, ContentPart, TokenUsage } from "../provider/client";
 import {
   fetchContextWindow,
   getDefaultContextWindow,
+  resolveApiKey,
   streamChatCompletion,
 } from "../provider/client";
 import {
@@ -118,6 +119,7 @@ export function useChat(
   const [contextWindow, setContextWindow] = useState(
     initialProvider.contextWindow ?? getDefaultContextWindow(),
   );
+  const [providers, setProviders] = useState(config.providers);
   const [toolActive, setToolActive] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<Session>(initialSession);
@@ -261,21 +263,29 @@ export function useChat(
           updateActiveModel(model);
         },
         setActiveProvider: (name: string) => {
-          const provider = getProviderByName(config, name);
+          const freshCfg = loadConfig();
+          const provider = getProviderByName(freshCfg, name);
           if (!provider) {
-            const available = config.providers.map((p) => p.name).join(", ");
+            const available = freshCfg.providers.map((p) => p.name).join(", ");
             return `Unknown provider: ${name}. Available: ${available}`;
           }
           setActiveProviderState(provider);
+          setProviders(freshCfg.providers);
           updateActiveProvider(name);
           return null;
+        },
+        reloadProviders: () => {
+          const freshCfg = loadConfig();
+          setProviders(freshCfg.providers);
         },
         providerBaseUrl: activeProvider.baseUrl,
         activeModel,
         activeProvider: activeProvider.name,
-        providers: config.providers.map((p) => ({
+        providers: providers.map((p) => ({
           name: p.name,
           baseUrl: p.baseUrl,
+          type: p.type,
+          apiKey: p.apiKey,
         })),
         contextWindow,
         maxTokens: getMaxTokens(config, activeProvider, activeModel),
@@ -378,6 +388,10 @@ export function useChat(
           nudgeMessage = null;
         }
 
+        const apiKey = resolveApiKey(
+          activeProvider.type,
+          activeProvider.apiKey,
+        );
         const completion = await streamChatCompletion({
           baseUrl: activeProvider.baseUrl,
           model: activeModel,
@@ -385,6 +399,7 @@ export function useChat(
           maxTokens,
           signal: controller.signal,
           ...(toolDefs.length > 0 && { tools: toolDefs }),
+          ...(apiKey && { apiKey }),
         });
 
         for await (const token of completion.content) {

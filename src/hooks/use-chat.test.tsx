@@ -57,6 +57,7 @@ vi.mock("../provider/client", () => ({
   fetchContextWindow: vi.fn().mockResolvedValue(8192),
   getDefaultContextWindow: () => 8192,
   streamChatCompletion: vi.fn(),
+  resolveApiKey: () => undefined,
 }));
 
 vi.mock("../session", () => ({

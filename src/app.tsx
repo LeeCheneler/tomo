@@ -111,7 +111,10 @@ export function App({ onRestart }: AppProps) {
           if (item.type === "header") {
             return (
               <Box key={item.id} flexDirection="column">
-                <Header model={chat.activeModel} />
+                <Header
+                  model={chat.activeModel}
+                  provider={chat.activeProvider.name}
+                />
               </Box>
             );
           }

@@ -31,6 +31,7 @@ Type `/` to see available commands with autocomplete suggestions.
 | `/session`      | Browse and load previous sessions  |
 | `/session <id>` | Load a session by ID               |
 | `/model`        | Switch the active model            |
+| `/configure`    | Manage providers (add/remove)      |
 | `/context`      | Show context window usage stats    |
 | `/tools`        | Toggle tools on/off                |
 | `/grant`        | Manage tool permissions            |
@@ -85,7 +86,13 @@ providers:
     # models:
     #   qwen3:4b:
     #     maxTokens: 16384
+  # - name: openai
+  #   type: openai
+  #   baseUrl: https://api.openai.com
+  #   apiKey: sk-...  # or set OPENAI_API_KEY env var
 ```
+
+Use `/configure` to add or remove providers interactively, or edit the config file directly.
 
 ## Instruction Files
 

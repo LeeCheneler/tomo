@@ -5,13 +5,44 @@ export interface ModelInfo {
   id: string;
 }
 
+/**
+ * Resolves the API key for a provider.
+ * Uses the config apiKey if set, otherwise falls back to a conventional env var.
+ */
+export function resolveApiKey(
+  providerType: string,
+  configApiKey?: string,
+): string | undefined {
+  if (configApiKey) return configApiKey;
+  const envVarMap: Record<string, string> = {
+    openai: "OPENAI_API_KEY",
+  };
+  const envVar = envVarMap[providerType];
+  return envVar ? process.env[envVar] : undefined;
+}
+
+function buildHeaders(apiKey?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+  return headers;
+}
+
 /** Fetches available models from an OpenAI-compatible /v1/models endpoint. */
-export async function fetchModels(baseUrl: string): Promise<ModelInfo[]> {
+export async function fetchModels(
+  baseUrl: string,
+  apiKey?: string,
+): Promise<ModelInfo[]> {
   const url = `${baseUrl.replace(/\/+$/, "")}/v1/models`;
 
   let response: Response;
   try {
-    response = await fetch(url);
+    response = await fetch(url, {
+      headers: buildHeaders(apiKey),
+    });
   } catch (error) {
     if (error instanceof TypeError) {
       throw new Error(
@@ -142,6 +173,7 @@ export interface CompletionOptions {
   maxTokens?: number;
   signal?: AbortSignal;
   tools?: ToolDefinition[];
+  apiKey?: string;
 }
 
 export interface CompletionStream {
@@ -161,14 +193,15 @@ export interface CompletionStream {
 export async function streamChatCompletion(
   options: CompletionOptions,
 ): Promise<CompletionStream> {
-  const { baseUrl, model, messages, maxTokens, signal, tools } = options;
+  const { baseUrl, model, messages, maxTokens, signal, tools, apiKey } =
+    options;
   const url = `${baseUrl.replace(/\/+$/, "")}/v1/chat/completions`;
 
   let response: Response;
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: buildHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages,

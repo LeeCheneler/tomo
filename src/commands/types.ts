@@ -18,10 +18,11 @@ export interface CommandCallbacks {
   switchSession: (id: string) => string | null;
   setActiveModel: (model: string) => void;
   setActiveProvider: (name: string) => string | null;
+  reloadProviders: () => void;
   providerBaseUrl: string;
   activeModel: string;
   activeProvider: string;
-  providers: Array<{ name: string; baseUrl: string }>;
+  providers: Array<{ name: string; baseUrl: string; type: string }>;
   contextWindow: number;
   maxTokens: number;
   tokenUsage: { promptTokens: number; completionTokens: number } | null;

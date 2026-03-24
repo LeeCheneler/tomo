@@ -3,8 +3,10 @@ import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type Config,
+  addProvider,
   getActiveProvider,
   loadConfig,
+  removeProvider,
   updateActiveModel,
 } from "./config";
 
@@ -198,6 +200,87 @@ describe("getActiveProvider", () => {
     expect(() => getActiveProvider(config)).toThrow(
       'active provider "missing" not found',
     );
+  });
+});
+
+describe("loadConfig with apiKey", () => {
+  it("accepts optional apiKey on provider", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: openai
+activeModel: gpt-4o
+providers:
+  - name: openai
+    type: openai
+    baseUrl: https://api.openai.com
+    apiKey: sk-test-123
+`,
+    );
+    const config = loadConfig();
+    expect(config.providers[0].apiKey).toBe("sk-test-123");
+  });
+
+  it("loads without apiKey (optional)", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ollama
+activeModel: qwen3:8b
+providers:
+  - name: ollama
+    type: ollama
+    baseUrl: http://localhost:11434
+`,
+    );
+    const config = loadConfig();
+    expect(config.providers[0].apiKey).toBeUndefined();
+  });
+});
+
+describe("addProvider", () => {
+  it("adds a provider to the global config", () => {
+    loadConfig(); // create default
+    addProvider({
+      name: "openai",
+      type: "openai",
+      baseUrl: "https://api.openai.com",
+      apiKey: "sk-test",
+    });
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(2);
+    expect(config.providers[1].name).toBe("openai");
+    expect(config.providers[1].apiKey).toBe("sk-test");
+  });
+});
+
+describe("removeProvider", () => {
+  it("removes a provider from the global config", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ollama
+activeModel: qwen3:8b
+providers:
+  - name: ollama
+    type: ollama
+    baseUrl: http://localhost:11434
+  - name: openai
+    type: openai
+    baseUrl: https://api.openai.com
+`,
+    );
+    removeProvider("openai");
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(1);
+    expect(config.providers[0].name).toBe("ollama");
+  });
+
+  it("is a no-op when provider name not found", () => {
+    loadConfig(); // create default
+    removeProvider("nonexistent");
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(1);
   });
 });
 

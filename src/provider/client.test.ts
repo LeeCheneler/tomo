@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   streamChatCompletion,
   fetchContextWindow,
+  fetchModels,
   clearContextWindowCache,
+  resolveApiKey,
   type ChatMessage,
 } from "./client";
 
@@ -402,6 +404,105 @@ describe("streamChatCompletion", () => {
       promptTokens: 10,
       completionTokens: 5,
     });
+  });
+});
+
+describe("resolveApiKey", () => {
+  it("returns configApiKey when set", () => {
+    expect(resolveApiKey("openai", "sk-config")).toBe("sk-config");
+  });
+
+  it("falls back to OPENAI_API_KEY env var for openai type", () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-env");
+    expect(resolveApiKey("openai")).toBe("sk-env");
+    vi.unstubAllEnvs();
+  });
+
+  it("returns undefined for ollama type with no config key", () => {
+    expect(resolveApiKey("ollama")).toBeUndefined();
+  });
+
+  it("prefers configApiKey over env var", () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-env");
+    expect(resolveApiKey("openai", "sk-config")).toBe("sk-config");
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("fetchModels", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends Authorization header when apiKey provided", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "gpt-4o" }] }), {
+        status: 200,
+      }),
+    );
+
+    await fetchModels("https://api.openai.com", "sk-test");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer sk-test");
+  });
+
+  it("does not send Authorization header when no apiKey", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "llama3" }] }), {
+        status: 200,
+      }),
+    );
+
+    await fetchModels("http://localhost:11434");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+  });
+});
+
+describe("streamChatCompletion auth", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends Authorization header when apiKey provided", async () => {
+    vi.mocked(fetch).mockResolvedValue(createSSEResponse(["data: [DONE]\n\n"]));
+
+    const completion = await streamChatCompletion({
+      ...defaultOptions,
+      apiKey: "sk-test",
+    });
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer sk-test");
+  });
+
+  it("does not send Authorization header when no apiKey", async () => {
+    vi.mocked(fetch).mockResolvedValue(createSSEResponse(["data: [DONE]\n\n"]));
+
+    const completion = await streamChatCompletion(defaultOptions);
+    for await (const _ of completion.content) {
+      // consume
+    }
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
   });
 });
 

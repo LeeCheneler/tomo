@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ModelInfo } from "../provider/client";
-import { fetchModels } from "../provider/client";
+import { fetchModels, resolveApiKey } from "../provider/client";
 
 interface ProviderEntry {
   name: string;
   baseUrl: string;
+  type: string;
+  apiKey?: string;
 }
 
 type Row =
@@ -41,7 +43,8 @@ export function ModelSelector({
     Promise.all(
       providers.map(async (p) => {
         try {
-          const models = await fetchModels(p.baseUrl);
+          const key = resolveApiKey(p.type, p.apiKey);
+          const models = await fetchModels(p.baseUrl, key);
           return { provider: p.name, models, error: null };
         } catch (err) {
           return {

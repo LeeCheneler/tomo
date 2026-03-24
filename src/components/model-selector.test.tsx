@@ -7,11 +7,13 @@ const flush = () => new Promise((r) => setTimeout(r, 50));
 const mockModelsResponse = (ids: string[]) =>
   new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }));
 
-const singleProvider = [{ name: "ollama", baseUrl: "http://localhost:11434" }];
+const singleProvider = [
+  { name: "ollama", baseUrl: "http://localhost:11434", type: "ollama" },
+];
 
 const multiProvider = [
-  { name: "ollama", baseUrl: "http://localhost:11434" },
-  { name: "openai", baseUrl: "http://localhost:4000" },
+  { name: "ollama", baseUrl: "http://localhost:11434", type: "ollama" },
+  { name: "openai", baseUrl: "http://localhost:4000", type: "openai" },
 ];
 
 describe("ModelSelector", () => {

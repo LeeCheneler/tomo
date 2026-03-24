@@ -14,6 +14,7 @@ const providerSchema = z.object({
     message: 'unsupported provider type. Supported: "ollama", "openai"',
   }),
   baseUrl: z.string().url("baseUrl must be a valid URL"),
+  apiKey: z.string().optional(),
   contextWindow: z.number().int().positive().optional(),
   models: z.record(z.string(), modelOverrideSchema).optional(),
 });
@@ -179,6 +180,26 @@ export function updateLocalToolConfig(tools: Record<string, boolean>): void {
 
   const raw = loadYaml(path) ?? {};
   raw.tools = tools;
+  writeFileSync(path, stringify(raw), "utf-8");
+}
+
+/** Adds a provider to the global config file. */
+export function addProvider(provider: ProviderConfig): void {
+  const path = globalConfigPath();
+  const raw = loadYaml(path) ?? {};
+  const providers = (raw.providers as ProviderConfig[]) ?? [];
+  providers.push(provider);
+  raw.providers = providers;
+  writeFileSync(path, stringify(raw), "utf-8");
+}
+
+/** Removes a provider by name from the global config file. */
+export function removeProvider(name: string): void {
+  const path = globalConfigPath();
+  const raw = loadYaml(path);
+  if (!raw) return;
+  const providers = (raw.providers as ProviderConfig[]) ?? [];
+  raw.providers = providers.filter((p) => p.name !== name);
   writeFileSync(path, stringify(raw), "utf-8");
 }
 
