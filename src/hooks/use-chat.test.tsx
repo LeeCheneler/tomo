@@ -463,6 +463,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "ask", arguments: '{"question":"pick"}' },
             },
           ]),
@@ -498,6 +499,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "bogus", arguments: "{}" },
             },
           ]),
@@ -531,6 +533,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "ask", arguments: "{}" },
             },
           ]),
@@ -571,6 +574,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "ask", arguments: "{}" },
             },
           ]),
@@ -606,6 +610,7 @@ describe("useChat", () => {
         createToolCallStream([
           {
             id: "call-1",
+            type: "function",
             function: { name: "ask", arguments: "{}" },
           },
         ]),
@@ -687,6 +692,7 @@ describe("useChat", () => {
           createToolCallStream([
             {
               id: "call-1",
+              type: "function",
               function: { name: "ask", arguments: "{}" },
             },
           ]),

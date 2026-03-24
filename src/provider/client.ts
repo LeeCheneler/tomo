@@ -184,6 +184,7 @@ export interface ToolCallFunction {
 
 export interface ToolCall {
   id: string;
+  type: "function";
   function: ToolCallFunction;
 }
 
@@ -298,6 +299,7 @@ export async function streamChatCompletion(
             if (!toolCalls[idx]) {
               toolCalls[idx] = {
                 id: tc.id ?? "",
+                type: "function",
                 function: {
                   name: tc.function?.name ?? "",
                   arguments: tc.function?.arguments ?? "",

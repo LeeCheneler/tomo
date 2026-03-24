@@ -299,6 +299,7 @@ describe("streamChatCompletion", () => {
     expect(completion.getToolCalls()).toEqual([
       {
         id: "call-1",
+        type: "function",
         function: { name: "ask", arguments: '{"question":"hi"}' },
       },
     ]);
