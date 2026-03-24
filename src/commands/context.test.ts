@@ -32,39 +32,54 @@ describe("/context", () => {
   const cmd = getCommand("context");
   if (!cmd) throw new Error("context command not registered");
 
-  it("shows no-data message when token usage is null", () => {
+  it("shows 0% usage when no token data yet", () => {
     const result = cmd.execute("", makeCallbacks());
-    expect("output" in result).toBe(true);
-
     const output = (result as { output: string }).output;
-    expect(output).toContain("No token usage data yet");
+
+    expect(output).toContain("0% used");
+    expect(output).toContain("░".repeat(30));
+    expect(output).toContain("0 / 32.8k tokens");
+    expect(output).toContain("Context window     32.8k tokens");
+    expect(output).toContain("Response reserve   8.2k tokens");
+    expect(output).toContain("Input budget       24.6k tokens");
   });
 
-  it("shows formatted stats when token usage is present", () => {
+  it("shows progress bar and config with token usage", () => {
     const result = cmd.execute(
       "",
       makeCallbacks({
         tokenUsage: { promptTokens: 1500, completionTokens: 500 },
         contextWindow: 32768,
         maxTokens: 8192,
-        messageCount: 4,
       }),
     );
 
     const output = (result as { output: string }).output;
-    expect(output).toContain("Context window:");
-    expect(output).toContain("32.8k");
-    expect(output).toContain("Prompt tokens:");
-    expect(output).toContain("1.5k");
-    expect(output).toContain("Response tokens:");
-    expect(output).toContain("500");
-    expect(output).toContain("Total used:");
-    expect(output).toContain("2.0k");
-    expect(output).toContain("6%");
-    expect(output).toContain("Input budget:");
-    expect(output).toContain("24.6k");
-    expect(output).toContain("Messages:");
-    expect(output).toContain("4");
+    expect(output).toContain("6% used");
+    expect(output).toContain("2.0k / 32.8k tokens");
+    expect(output).toContain("Context window     32.8k tokens");
+    expect(output).toContain("Response reserve   8.2k tokens");
+    expect(output).toContain("Input budget       24.6k tokens");
+    expect(output).toContain(
+      "input budget = context window - response reserve",
+    );
+  });
+
+  it("shows filled progress bar at high usage", () => {
+    const result = cmd.execute(
+      "",
+      makeCallbacks({
+        tokenUsage: { promptTokens: 30000, completionTokens: 1000 },
+        contextWindow: 32768,
+        maxTokens: 8192,
+      }),
+    );
+
+    const output = (result as { output: string }).output;
+    expect(output).toContain("95% used");
+    const bar = output.split("\n")[0] ?? "";
+    const filledCount = (bar.match(/█/g) || []).length;
+    expect(filledCount).toBeGreaterThanOrEqual(28);
   });
 
   it("formats small token counts without k suffix", () => {
@@ -74,15 +89,12 @@ describe("/context", () => {
         tokenUsage: { promptTokens: 50, completionTokens: 20 },
         contextWindow: 4096,
         maxTokens: 512,
-        messageCount: 2,
       }),
     );
 
     const output = (result as { output: string }).output;
-    expect(output).toContain("4.1k");
-    expect(output).toContain("50");
-    expect(output).toContain("20");
-    expect(output).toContain("70");
-    expect(output).toContain("2%");
+    expect(output).toContain("2% used");
+    expect(output).toContain("70 / 4.1k tokens");
+    expect(output).toContain("Input budget       3.6k tokens");
   });
 });
