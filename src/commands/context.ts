@@ -1,3 +1,4 @@
+import chalk from "chalk";
 import { register } from "./registry";
 import type { Command } from "./types";
 
@@ -6,28 +7,37 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+const BAR_WIDTH = 30;
+const FILLED = "█";
+const EMPTY = "░";
+
+function progressBar(percent: number): string {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const filled = Math.round((clamped / 100) * BAR_WIDTH);
+  return FILLED.repeat(filled) + EMPTY.repeat(BAR_WIDTH - filled);
+}
+
 const context: Command = {
   name: "context",
   description: "Show context window usage stats",
   execute: (_args, callbacks) => {
-    const { tokenUsage, contextWindow, maxTokens, messageCount } = callbacks;
+    const { tokenUsage, contextWindow, maxTokens } = callbacks;
 
-    if (!tokenUsage) {
-      return { output: "No token usage data yet — send a message first." };
-    }
-
-    const total = tokenUsage.promptTokens + tokenUsage.completionTokens;
+    const total = tokenUsage
+      ? tokenUsage.promptTokens + tokenUsage.completionTokens
+      : 0;
     const percent = Math.round((total / contextWindow) * 100);
     const inputBudget = contextWindow - maxTokens;
 
     const lines = [
-      `  Context window:    ${formatTokens(contextWindow)} tokens`,
-      `  Prompt tokens:     ${formatTokens(tokenUsage.promptTokens)}`,
-      `  Response tokens:   ${formatTokens(tokenUsage.completionTokens)}`,
-      `  Total used:        ${formatTokens(total)} (${percent}%)`,
-      `  Input budget:      ${formatTokens(inputBudget)} (window - ${formatTokens(maxTokens)} reserved)`,
-      `  Max tokens:        ${formatTokens(maxTokens)}`,
-      `  Messages:          ${messageCount}`,
+      `  ${progressBar(percent)}  ${percent}% used`,
+      `  ${formatTokens(total)} / ${formatTokens(contextWindow)} tokens`,
+      ``,
+      `  Context window     ${formatTokens(contextWindow)} tokens`,
+      `  Response reserve   ${formatTokens(maxTokens)} tokens`,
+      `  Input budget       ${formatTokens(inputBudget)} tokens`,
+      ``,
+      chalk.dim(`  (input budget = context window - response reserve)`),
     ];
 
     return { output: lines.join("\n") };
