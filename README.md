@@ -2,7 +2,7 @@
 
 > 友 — friend, companion
 
-Terminal-native AI chat client. Local-first, works with Ollama or any OpenAI-compatible endpoint.
+Terminal-native AI chat client. Works with [Ollama](https://ollama.com), [OpenCode Zen](https://opencode.ai), and [OpenRouter](https://openrouter.ai).
 
 ## Install
 
@@ -15,28 +15,36 @@ Or download the latest binary from [Releases](https://github.com/LeeCheneler/tom
 
 ## Quick Start
 
-1. Install and run [Ollama](https://ollama.com)
-2. Pull a model: `ollama pull qwen3:8b`
-3. Run `tomo`
+1. Run `tomo`
+2. On first launch, `/configure` opens automatically — select a provider type, enter the URL and API key (if needed), and pick a model
+3. Start chatting
 
-That's it. Tomo creates a default config on first run pointing at Ollama on localhost.
+Tomo supports three provider types:
+
+| Type           | Description                           | Auth                                               |
+| -------------- | ------------------------------------- | -------------------------------------------------- |
+| `ollama`       | Local Ollama instance                 | None required                                      |
+| `opencode-zen` | OpenCode Zen API                      | `apiKey` in config or `OPENCODE_API_KEY` env var   |
+| `openrouter`   | OpenRouter (access to many providers) | `apiKey` in config or `OPENROUTER_API_KEY` env var |
+
+Context window size is auto-detected for all provider types.
 
 ## Slash Commands
 
 Type `/` to see available commands with autocomplete suggestions.
 
-| Command         | Description                        |
-| --------------- | ---------------------------------- |
-| `/new`          | Start a new conversation           |
-| `/session`      | Browse and load previous sessions  |
-| `/session <id>` | Load a session by ID               |
-| `/model`        | Switch the active model            |
-| `/configure`    | Manage providers (add/remove)      |
-| `/context`      | Show context window usage stats    |
-| `/tools`        | Toggle tools on/off                |
-| `/grant`        | Manage tool permissions            |
-| `/skills`       | List available skills              |
-| `/help`         | List available commands            |
+| Command         | Description                       |
+| --------------- | --------------------------------- |
+| `/new`          | Start a new conversation          |
+| `/session`      | Browse and load previous sessions |
+| `/session <id>` | Load a session by ID              |
+| `/model`        | Switch the active model           |
+| `/configure`    | Manage providers (add/remove)     |
+| `/context`      | Show context window usage stats   |
+| `/tools`        | Toggle tools on/off               |
+| `/grant`        | Manage tool permissions           |
+| `/skills`       | List available skills             |
+| `/help`         | List available commands           |
 
 ## Tools
 
@@ -71,7 +79,9 @@ File operations outside the current working directory always prompt regardless o
 
 ## Config
 
-Config lives at `~/.tomo/config.yaml` (global) with optional local overrides at `./.tomo/config.yaml`. A default is created on first run.
+Config lives at `~/.tomo/config.yaml` (global) with optional local overrides at `./.tomo/config.yaml`.
+
+On first run, an empty config is created and `/configure` launches automatically to set up your first provider. You can also edit the config file directly:
 
 ```yaml
 activeProvider: ollama
@@ -82,21 +92,17 @@ providers:
   - name: ollama
     type: ollama
     baseUrl: http://localhost:11434
-    # contextWindow: 32768  # optional (auto-detected)
-    # models:
+    # contextWindow: 32768  # optional override (auto-detected)
+    # models:               # optional per-model overrides
     #   qwen3:4b:
     #     maxTokens: 16384
-  # - name: zen
-  #   type: opencode-zen
-  #   baseUrl: https://opencode.ai/zen
-  #   apiKey: ...  # or set OPENCODE_API_KEY env var
-  # - name: openrouter
-  #   type: openrouter
-  #   baseUrl: https://openrouter.ai/api
-  #   apiKey: ...  # or set OPENROUTER_API_KEY env var
+  - name: openrouter
+    type: openrouter
+    baseUrl: https://openrouter.ai/api
+    apiKey: sk-or-...  # or set OPENROUTER_API_KEY env var
 ```
 
-Use `/configure` to add or remove providers interactively, or edit the config file directly.
+Use `/configure` to add or remove providers interactively.
 
 ## Instruction Files
 
