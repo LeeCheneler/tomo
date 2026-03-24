@@ -44,7 +44,7 @@ export function ModelSelector({
       providers.map(async (p) => {
         try {
           const key = resolveApiKey(p.type, p.apiKey);
-          const models = await fetchModels(p.baseUrl, key);
+          const models = await fetchModels(p.baseUrl, key, p.type);
           return { provider: p.name, models, error: null };
         } catch (err) {
           return {

@@ -247,7 +247,7 @@ export function ConfigureSelector({
     if (step !== "fetchingModels") return;
     let cancelled = false;
 
-    fetchModels(newProvider.baseUrl, newProvider.apiKey)
+    fetchModels(newProvider.baseUrl, newProvider.apiKey, newProvider.type)
       .then((result) => {
         if (cancelled) return;
         setModels(result);
@@ -265,7 +265,7 @@ export function ConfigureSelector({
     return () => {
       cancelled = true;
     };
-  }, [step, newProvider.baseUrl, newProvider.apiKey]);
+  }, [step, newProvider.baseUrl, newProvider.apiKey, newProvider.type]);
 
   switch (step) {
     case "menu":

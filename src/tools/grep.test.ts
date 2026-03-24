@@ -220,12 +220,22 @@ describe("grep tool", () => {
   });
 
   it("prompts for paths outside cwd even with permission granted", async () => {
+    setupGitRepo();
     const tool = getTool("grep");
-    await tool?.execute(
-      JSON.stringify({ pattern: "test", path: "/tmp" }),
-      mockContext,
-    );
+    await tool?.execute(JSON.stringify({ pattern: "hello", path: tmpDir }), {
+      ...mockContext,
+      permissions: { read_file: true },
+    });
 
-    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
+    // tmpDir is within cwd so this won't prompt — use an outside path instead
+    // but mock renderInteractive to avoid running a real grep on a huge directory
+    const ctx = {
+      ...mockContext,
+      renderInteractive: vi.fn().mockResolvedValue("denied"),
+      permissions: { read_file: true },
+    };
+    await tool?.execute(JSON.stringify({ pattern: "test", path: "/tmp" }), ctx);
+
+    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
   });
 });

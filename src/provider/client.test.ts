@@ -472,6 +472,51 @@ describe("fetchModels", () => {
     const headers = call[1]?.headers as Record<string, string>;
     expect(headers.Authorization).toBeUndefined();
   });
+
+  it("uses /v1/models/user for openrouter with apiKey", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [{ id: "anthropic/claude-sonnet-4" }] }),
+        {
+          status: 200,
+        },
+      ),
+    );
+
+    await fetchModels("https://openrouter.ai/api", "or-key", "openrouter");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("https://openrouter.ai/api/v1/models/user");
+  });
+
+  it("uses /v1/models for openrouter without apiKey", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [{ id: "anthropic/claude-sonnet-4" }] }),
+        {
+          status: 200,
+        },
+      ),
+    );
+
+    await fetchModels("https://openrouter.ai/api", undefined, "openrouter");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("https://openrouter.ai/api/v1/models");
+  });
+
+  it("uses /v1/models for non-openrouter providers", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "llama3" }] }), {
+        status: 200,
+      }),
+    );
+
+    await fetchModels("http://localhost:11434", undefined, "ollama");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("http://localhost:11434/v1/models");
+  });
 });
 
 describe("streamChatCompletion auth", () => {
