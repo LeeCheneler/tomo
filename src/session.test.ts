@@ -101,6 +101,26 @@ describe("appendMessage / loadSession", () => {
     expect(loaded?.messages[2].content).toBe("third");
   });
 
+  it("round-trips user messages with images", () => {
+    const session = createSession("ollama", "qwen3:8b");
+    const msg = {
+      id: "msg-1",
+      role: "user" as const,
+      content: "what is this?",
+      images: [
+        {
+          name: "photo.png",
+          dataUri: "data:image/png;base64,iVBORw0KGgo=",
+        },
+      ],
+    };
+
+    appendMessage(session, msg);
+
+    const loaded = loadSession(session.id);
+    expect(loaded?.messages).toEqual([msg]);
+  });
+
   it("round-trips assistant messages with tool_calls", () => {
     const session = createSession("ollama", "qwen3:8b");
     const msg = {

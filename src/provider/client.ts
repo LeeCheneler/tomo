@@ -111,8 +111,12 @@ export interface ToolCall {
   function: ToolCallFunction;
 }
 
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 export type ChatMessage =
-  | { role: "user"; content: string }
+  | { role: "user"; content: string | ContentPart[] }
   | { role: "system"; content: string }
   | { role: "assistant"; content: string; tool_calls?: ToolCall[] }
   | { role: "tool"; content: string; tool_call_id: string };

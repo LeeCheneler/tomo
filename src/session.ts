@@ -4,15 +4,16 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   readSync,
-  readdirSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import type { DisplayMessage } from "./components/message-list";
+import type { ImageAttachment } from "./images";
 import type { ToolCall } from "./provider/client";
 
 export interface Session {
@@ -33,7 +34,14 @@ interface MetaEntry {
 }
 
 type MessageEntry =
-  | { type: "message"; id: string; role: "user" | "system"; content: string }
+  | {
+      type: "message";
+      id: string;
+      role: "user";
+      content: string;
+      images?: ImageAttachment[];
+    }
+  | { type: "message"; id: string; role: "system"; content: string }
   | {
       type: "message";
       id: string;
