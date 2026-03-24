@@ -16,6 +16,49 @@ function padEnd(str: string, width: number): string {
   return str + " ".repeat(Math.max(0, width - visible));
 }
 
+/** Word-wraps text to fit within a given visible width. Strips ANSI if wrapping is needed. */
+function wrapText(str: string, width: number): string[] {
+  if (width <= 0) return [""];
+  const visible = stripAnsi(str);
+  if (visible.length <= width) return [str];
+
+  const lines: string[] = [];
+  let remaining = visible;
+
+  while (remaining.length > width) {
+    let breakAt = remaining.lastIndexOf(" ", width);
+    if (breakAt <= 0) breakAt = width;
+    lines.push(remaining.slice(0, breakAt));
+    remaining = remaining.slice(breakAt).trimStart();
+  }
+  if (remaining) lines.push(remaining);
+
+  return lines.length > 0 ? lines : [""];
+}
+
+/** Renders a single table row (possibly multi-line due to wrapping). */
+function renderRow(
+  cells: string[],
+  colWidths: number[],
+  bold: boolean,
+): string[] {
+  const wrapped = cells.map((cell, i) =>
+    wrapText(cell, colWidths[i] as number),
+  );
+  const height = Math.max(...wrapped.map((w) => w.length), 1);
+  const lines: string[] = [];
+  for (let line = 0; line < height; line++) {
+    const content = wrapped
+      .map((w, i) => {
+        const text = padEnd(w[line] ?? "", colWidths[i] as number);
+        return ` ${bold ? chalk.bold(text) : text} `;
+      })
+      .join("│");
+    lines.push(`│${content}│`);
+  }
+  return lines;
+}
+
 /** Renders structured table data (headers + rows) as a box-drawn terminal table. */
 function renderTableData(headers: string[], rows: string[][]): string {
   const colWidths = headers.map((h, i) => {
@@ -23,21 +66,31 @@ function renderTableData(headers: string[], rows: string[][]): string {
     return Math.max(stripAnsi(h).length, ...cellWidths);
   });
 
+  // Shrink columns to fit terminal width. Each column adds 3 chars of
+  // border/padding (│·content·), plus 1 for the leading border.
+  // Subtract 2 extra for the app's paddingX={1}.
+  const termWidth = process.stdout.columns || 80;
+  const overhead = 3 * headers.length + 1 + 2;
+  const available = termWidth - overhead;
+  let total = colWidths.reduce((a, b) => a + b, 0);
+  const minColWidth = 3;
+  while (total > available && available > 0) {
+    const maxW = Math.max(...colWidths);
+    if (maxW <= minColWidth) break;
+    const maxIdx = colWidths.indexOf(maxW);
+    colWidths[maxIdx]--;
+    total--;
+  }
+
   const top = `┌${colWidths.map((w) => "─".repeat(w + 2)).join("┬")}┐`;
   const mid = `├${colWidths.map((w) => "─".repeat(w + 2)).join("┼")}┤`;
   const bot = `└${colWidths.map((w) => "─".repeat(w + 2)).join("┴")}┘`;
 
-  const headerRow = `│${headers.map((h, i) => ` ${chalk.bold(padEnd(h, colWidths[i] as number))} `).join("│")}│`;
-  const dataRows = rows.map(
-    (row) =>
-      `│${row.map((cell, i) => ` ${padEnd(cell, colWidths[i] as number)} `).join("│")}│`,
-  );
-
   return [
     chalk.dim(top),
-    headerRow,
+    ...renderRow(headers, colWidths, true),
     chalk.dim(mid),
-    ...dataRows,
+    ...rows.flatMap((row) => renderRow(row, colWidths, false)),
     chalk.dim(bot),
   ].join("\n");
 }

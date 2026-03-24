@@ -98,6 +98,41 @@ describe("Markdown", () => {
     expect(output).not.toContain("<td>");
   });
 
+  it("wraps wide table cell content to fit terminal width", () => {
+    const original = process.stdout.columns;
+    Object.defineProperty(process.stdout, "columns", {
+      value: 40,
+      writable: true,
+      configurable: true,
+    });
+    try {
+      const table =
+        "| Name | Description |\n| --- | --- |\n| Alice | A very long description that should wrap inside the cell |";
+      const { lastFrame } = render(<Markdown>{table}</Markdown>);
+      const output = lastFrame() ?? "";
+      // Every line of the table should fit within terminal width
+      for (const line of output.split("\n")) {
+        const visible = line.replace(
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape codes
+          /\x1b\[[0-9;]*m/g,
+          "",
+        );
+        expect(visible.length).toBeLessThanOrEqual(40);
+      }
+      // Full content should be present across wrapped lines, not truncated
+      expect(output).toContain("Alice");
+      expect(output).toContain("should");
+      expect(output).toContain("wrap");
+      expect(output).toContain("┌");
+    } finally {
+      Object.defineProperty(process.stdout, "columns", {
+        value: original,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+
   it("strips non-table HTML tags", () => {
     const { lastFrame } = render(<Markdown>{"<div>hello</div>"}</Markdown>);
     const output = lastFrame() ?? "";
