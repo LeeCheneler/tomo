@@ -62,6 +62,7 @@ export function ConfigureSelector({
   const [selectedModelIdx, setSelectedModelIdx] = useState(0);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [modelFilter, setModelFilter] = useState("");
   const modelWindowRef = useRef(0);
 
   const MAX_VISIBLE = 5;
@@ -69,17 +70,28 @@ export function ConfigureSelector({
 
   const removableProviders = providers.filter((p) => p.name !== activeProvider);
 
+  const filteredModels = modelFilter
+    ? models.filter((m) =>
+        m.id.toLowerCase().includes(modelFilter.toLowerCase()),
+      )
+    : models;
+
   // Reset cursor and scroll window when step changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset cursor on step change
   useEffect(() => {
     setCursor(0);
     modelWindowRef.current = 0;
+    setModelFilter("");
   }, [step]);
 
   useInput((input, key) => {
     if (key.escape) {
       if (step === "menu") {
         onCancel();
+      } else if (step === "selectModel" && modelFilter) {
+        setModelFilter("");
+        setCursor(0);
+        modelWindowRef.current = 0;
       } else {
         setStep("menu");
         setNewProvider({ type: "", baseUrl: "" });
@@ -160,16 +172,28 @@ export function ConfigureSelector({
 
       case "selectModel": {
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : models.length - 1));
+          setCursor((c) => (c > 0 ? c - 1 : filteredModels.length - 1));
         } else if (key.downArrow) {
-          setCursor((c) => (c < models.length - 1 ? c + 1 : 0));
-        } else if (key.return && models.length > 0) {
-          const model = models[cursor];
+          setCursor((c) => (c < filteredModels.length - 1 ? c + 1 : 0));
+        } else if (key.return && filteredModels.length > 0) {
+          const model = filteredModels[cursor];
           if (!model) return;
-          setSelectedModelIdx(cursor);
+          setSelectedModelIdx(models.indexOf(model));
           setTextValue(newProvider.type);
           setNameError(null);
           setStep("enterName");
+        } else if (key.backspace || key.delete) {
+          setModelFilter((f) => {
+            setCursor(0);
+            modelWindowRef.current = 0;
+            return f.slice(0, -1);
+          });
+        } else if (input && !key.ctrl && !key.meta) {
+          setModelFilter((f) => {
+            setCursor(0);
+            modelWindowRef.current = 0;
+            return f + input;
+          });
         }
         break;
       }
@@ -343,19 +367,35 @@ export function ConfigureSelector({
       }
       modelWindowRef.current = Math.min(
         modelWindowRef.current,
-        Math.max(0, models.length - MAX_VISIBLE),
+        Math.max(0, filteredModels.length - MAX_VISIBLE),
       );
-      const visibleModels = models.slice(
+      const visibleModels = filteredModels.slice(
         modelWindowRef.current,
         modelWindowRef.current + MAX_VISIBLE,
       );
-      const hasMoreModels = models.length > MAX_VISIBLE;
+      const remaining = filteredModels.length - MAX_VISIBLE;
       return (
         <Box flexDirection="column">
           <Text dimColor>
-            {"  Select a model (↑↓ navigate, Enter select, Esc back):"}
+            {
+              "  Select a model (↑↓ navigate, type to filter, Enter select, Esc back):"
+            }
           </Text>
           <Text> </Text>
+          <Text>
+            {"  Search: "}
+            {modelFilter}
+            <Text dimColor>█</Text>
+            {modelFilter && (
+              <Text dimColor>
+                {` (${filteredModels.length} of ${models.length})`}
+              </Text>
+            )}
+          </Text>
+          <Text> </Text>
+          {filteredModels.length === 0 && (
+            <Text dimColor>{"    No models match your search."}</Text>
+          )}
           {visibleModels.map((model, i) => {
             const actualIdx = modelWindowRef.current + i;
             const isCursor = actualIdx === cursor;
@@ -367,10 +407,10 @@ export function ConfigureSelector({
               </Text>
             );
           })}
-          {hasMoreModels && (
+          {remaining > 0 && (
             <Text dimColor>
               {"    "}
-              {`${models.length - MAX_VISIBLE} more...`}
+              {`${remaining} more...`}
             </Text>
           )}
         </Box>

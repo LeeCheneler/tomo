@@ -253,6 +253,85 @@ describe("ConfigureSelector", () => {
     );
   });
 
+  it("filters models by typing in select model step", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockModelsResponse(["llama3:8b", "qwen3:8b", "llama3:70b"]),
+    );
+    const { stdin, lastFrame } = render(
+      <ConfigureSelector
+        providers={defaultProviders}
+        activeProvider="ollama"
+        onAddProvider={vi.fn()}
+        onRemoveProvider={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Add provider -> ollama -> enter URL -> arrive at model select
+    stdin.write("\r");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    await flush();
+
+    // Type "llama" to filter
+    stdin.write("llama");
+    await flush();
+    const output = lastFrame() ?? "";
+    expect(output).toContain("llama3:8b");
+    expect(output).toContain("llama3:70b");
+    expect(output).not.toContain("qwen3:8b");
+    expect(output).toContain("2 of 3");
+  });
+
+  it("selects filtered model in configure flow", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockModelsResponse(["llama3:8b", "qwen3:8b", "llama3:70b"]),
+    );
+    const onAddProvider = vi.fn();
+    const { stdin } = render(
+      <ConfigureSelector
+        providers={defaultProviders}
+        activeProvider="ollama"
+        onAddProvider={onAddProvider}
+        onRemoveProvider={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Add provider -> ollama -> enter URL -> arrive at model select
+    stdin.write("\r");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    await flush();
+
+    // Type "qwen" to filter, cursor on first match
+    stdin.write("qwen");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    // Enter name
+    for (let i = 0; i < 6; i++) {
+      stdin.write("\x7F");
+    }
+    await flush();
+    stdin.write("my-ollama");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    expect(onAddProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "my-ollama" }),
+      "qwen3:8b",
+    );
+  });
+
   it("shows error when model fetch fails", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
       new TypeError("fetch failed"),
