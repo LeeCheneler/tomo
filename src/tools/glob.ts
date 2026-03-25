@@ -75,14 +75,16 @@ registerTool({
  * matching the pattern. Falls back to `fs.globSync` if not in a git repo.
  */
 function gitGlob(pattern: string, cwd: string): string[] {
+  // Use :(glob) pathspec prefix so git interprets ** as recursive match
+  const pathspec = `:(glob)${pattern}`;
   // tracked files matching the pattern
-  const tracked = execSync(`git ls-files -- ${JSON.stringify(pattern)}`, {
+  const tracked = execSync(`git ls-files -- ${JSON.stringify(pathspec)}`, {
     cwd,
     encoding: "utf-8",
   });
   // untracked files that aren't ignored
   const untracked = execSync(
-    `git ls-files --others --exclude-standard -- ${JSON.stringify(pattern)}`,
+    `git ls-files --others --exclude-standard -- ${JSON.stringify(pathspec)}`,
     { cwd, encoding: "utf-8" },
   );
 
