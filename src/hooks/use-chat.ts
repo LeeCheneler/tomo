@@ -26,6 +26,7 @@ import {
   appendMessage,
   createSession,
   loadSession,
+  removeLastMessage,
   type Session,
 } from "../session";
 import { getSkill } from "../skills";
@@ -48,6 +49,7 @@ export interface ChatState {
   contextWindow: number;
   pendingMessage: string | null;
   toolActive: boolean;
+  inputHistory: string[];
   submit: (text: string, clipboardImages?: ImageAttachment[]) => void;
   cancel: () => void;
   cancelPending: () => void;
@@ -127,6 +129,7 @@ export function useChat(
   const streamingRef = useRef(false);
   const pendingMessageRef = useRef<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const inputHistoryRef = useRef<string[]>([]);
 
   // Detect context window from provider when model or provider changes.
   // Config override takes precedence — only fetch if no override is set.
@@ -170,6 +173,7 @@ export function useChat(
 
     pendingMessageRef.current = null;
     setPendingMessage(null);
+    inputHistoryRef.current = [];
     abortRef.current?.abort();
     setMessages([]);
     setStreaming(false);
@@ -181,6 +185,13 @@ export function useChat(
   };
 
   const submit = async (text: string, clipboardImages?: ImageAttachment[]) => {
+    // Record in input history for up/down recall. Deduplicate consecutive
+    // entries so re-submitting a queued message doesn't create a duplicate.
+    const history = inputHistoryRef.current;
+    if (text.trim() && history[history.length - 1] !== text) {
+      history.push(text);
+    }
+
     if (streamingRef.current) {
       pendingMessageRef.current = text;
       setPendingMessage(text);
@@ -505,8 +516,8 @@ export function useChat(
       }
     }
 
-    // On abort, preserve partial content and sync accumulated messages.
     if (aborted && content) {
+      // Partial response — preserve it.
       const partialMsg: DisplayMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -514,6 +525,12 @@ export function useChat(
       };
       currentMessages = [...currentMessages, partialMsg];
       appendMessage(sessionRef.current, partialMsg);
+    }
+    if (aborted && !content) {
+      // No response at all — remove the orphaned user message from
+      // LLM context and session so it doesn't pollute the next turn.
+      currentMessages = currentMessages.filter((m) => m.id !== userMsg.id);
+      removeLastMessage(sessionRef.current);
     }
     if (aborted) {
       setMessages(currentMessages);
@@ -564,6 +581,7 @@ export function useChat(
     contextWindow,
     pendingMessage,
     toolActive,
+    inputHistory: inputHistoryRef.current,
     submit,
     cancel,
     cancelPending,

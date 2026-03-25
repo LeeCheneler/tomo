@@ -70,6 +70,7 @@ vi.mock("../session", () => ({
     messages: [],
   }),
   appendMessage: vi.fn(),
+  removeLastMessage: vi.fn(),
   loadSession: vi.fn(),
 }));
 
@@ -442,6 +443,127 @@ describe("useChat", () => {
 
       expect(chat.pendingMessage).toBeNull();
       expect(chat.streaming).toBe(true);
+    });
+  });
+
+  describe("cancelled message handling", () => {
+    it("removes user message from LLM context when cancelled with no response", async () => {
+      // Use a stream that blocks before yielding any content
+      vi.mocked(streamChatCompletion).mockImplementationOnce(
+        ({ signal }: { signal?: AbortSignal }) => {
+          return Promise.resolve({
+            content: (async function* () {
+              await new Promise<never>((_, reject) => {
+                if (signal?.aborted) {
+                  reject(new DOMException("aborted", "AbortError"));
+                  return;
+                }
+                signal?.addEventListener("abort", () =>
+                  reject(new DOMException("aborted", "AbortError")),
+                );
+              });
+            })(),
+            getUsage: () => null,
+            getToolCalls: () => [],
+          });
+        },
+      );
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("message to cancel");
+      await flush();
+
+      expect(chat.messages.some((m) => m.content === "message to cancel")).toBe(
+        true,
+      );
+
+      chat.cancel();
+      await flush();
+      await flush();
+
+      expect(chat.messages.some((m) => m.content === "message to cancel")).toBe(
+        false,
+      );
+    });
+
+    it("cancelled message remains in input history for recall", async () => {
+      vi.mocked(streamChatCompletion).mockImplementationOnce(
+        ({ signal }: { signal?: AbortSignal }) => {
+          return Promise.resolve({
+            content: (async function* () {
+              await new Promise<never>((_, reject) => {
+                if (signal?.aborted) {
+                  reject(new DOMException("aborted", "AbortError"));
+                  return;
+                }
+                signal?.addEventListener("abort", () =>
+                  reject(new DOMException("aborted", "AbortError")),
+                );
+              });
+            })(),
+            getUsage: () => null,
+            getToolCalls: () => [],
+          });
+        },
+      );
+
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("recall me later");
+      await flush();
+
+      chat.cancel();
+      await flush();
+      await flush();
+
+      // Gone from LLM messages
+      expect(chat.messages.some((m) => m.content === "recall me later")).toBe(
+        false,
+      );
+      // Still in input history
+      expect(chat.inputHistory).toContain("recall me later");
+    });
+  });
+
+  describe("input history", () => {
+    it("records submitted messages in input history", async () => {
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("hello");
+      await flush();
+
+      expect(chat.inputHistory).toContain("hello");
+    });
+
+    it("records queued messages in input history", async () => {
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("first");
+      await flush();
+
+      // Submit while streaming — gets queued
+      chat.submit("queued");
+      await flush();
+
+      expect(chat.inputHistory).toContain("queued");
+    });
+
+    it("deduplicates consecutive identical entries", async () => {
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("same");
+      await flush();
+      // Queued "same" again — should not duplicate
+      chat.submit("same");
+      await flush();
+
+      expect(chat.inputHistory.filter((m) => m === "same")).toHaveLength(1);
     });
   });
 

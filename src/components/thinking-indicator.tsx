@@ -52,6 +52,7 @@ export function ThinkingIndicator() {
     <Box>
       <Text color="cyan">{spinnerFrame} </Text>
       <Text>{styledChars.join("")}</Text>
+      <Text dimColor>{"  esc cancel"}</Text>
     </Box>
   );
 }
