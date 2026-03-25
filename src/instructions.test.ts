@@ -1,7 +1,8 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getSystemInfo, loadInstructions } from "./instructions";
+import { getGitContext, getSystemInfo, loadInstructions } from "./instructions";
+import * as git from "./git";
 
 const tmpDir = resolve(import.meta.dirname, "../.test-instructions-tmp");
 const globalTomoDir = resolve(tmpDir, "global/.tomo");
@@ -166,5 +167,78 @@ describe("loadInstructions", () => {
     writeFileSync(resolve(localTomoDir, "claude.md"), "local only");
 
     expect(loadInstructions()).toContain("local only");
+  });
+});
+
+describe("getGitContext", () => {
+  it("returns null when not in a git repo", () => {
+    vi.spyOn(git, "isGitRepo").mockReturnValue(false);
+    expect(getGitContext()).toBeNull();
+  });
+
+  it("returns git context when in a git repo", () => {
+    vi.spyOn(git, "isGitRepo").mockReturnValue(true);
+    vi.spyOn(git, "getGitBranch").mockReturnValue("feat/my-branch");
+    vi.spyOn(git, "getDefaultBranch").mockReturnValue("main");
+    vi.spyOn(git, "getGitStatusSummary").mockReturnValue("clean");
+    vi.spyOn(git, "getGitLog").mockReturnValue("abc1234 initial commit");
+    vi.spyOn(git, "isGitHubRemote").mockReturnValue(false);
+
+    const result = getGitContext();
+    expect(result).toContain("Branch: feat/my-branch");
+    expect(result).toContain("Default branch: main");
+    expect(result).toContain("Working tree: clean");
+    expect(result).toContain("abc1234 initial commit");
+  });
+
+  it("includes GitHub hint with gh available", () => {
+    vi.spyOn(git, "isGitRepo").mockReturnValue(true);
+    vi.spyOn(git, "getGitBranch").mockReturnValue("main");
+    vi.spyOn(git, "getDefaultBranch").mockReturnValue("main");
+    vi.spyOn(git, "getGitStatusSummary").mockReturnValue("clean");
+    vi.spyOn(git, "getGitLog").mockReturnValue("");
+    vi.spyOn(git, "isGitHubRemote").mockReturnValue(true);
+    vi.spyOn(git, "isGhCliAvailable").mockReturnValue(true);
+
+    const result = getGitContext();
+    expect(result).toContain("gh CLI is available");
+  });
+
+  it("includes GitHub hint without gh available", () => {
+    vi.spyOn(git, "isGitRepo").mockReturnValue(true);
+    vi.spyOn(git, "getGitBranch").mockReturnValue("main");
+    vi.spyOn(git, "getDefaultBranch").mockReturnValue("main");
+    vi.spyOn(git, "getGitStatusSummary").mockReturnValue("clean");
+    vi.spyOn(git, "getGitLog").mockReturnValue("");
+    vi.spyOn(git, "isGitHubRemote").mockReturnValue(true);
+    vi.spyOn(git, "isGhCliAvailable").mockReturnValue(false);
+
+    const result = getGitContext();
+    expect(result).toContain("gh CLI is not installed");
+  });
+
+  it("shows dirty status summary", () => {
+    vi.spyOn(git, "isGitRepo").mockReturnValue(true);
+    vi.spyOn(git, "getGitBranch").mockReturnValue("main");
+    vi.spyOn(git, "getDefaultBranch").mockReturnValue("main");
+    vi.spyOn(git, "getGitStatusSummary").mockReturnValue("3 changed files");
+    vi.spyOn(git, "getGitLog").mockReturnValue("");
+    vi.spyOn(git, "isGitHubRemote").mockReturnValue(false);
+
+    const result = getGitContext();
+    expect(result).toContain("Working tree: 3 changed files");
+  });
+
+  it("includes git context in loadInstructions when in a repo", () => {
+    vi.spyOn(git, "isGitRepo").mockReturnValue(true);
+    vi.spyOn(git, "getGitBranch").mockReturnValue("develop");
+    vi.spyOn(git, "getDefaultBranch").mockReturnValue("main");
+    vi.spyOn(git, "getGitStatusSummary").mockReturnValue("clean");
+    vi.spyOn(git, "getGitLog").mockReturnValue("abc1234 some commit");
+    vi.spyOn(git, "isGitHubRemote").mockReturnValue(false);
+
+    const result = loadInstructions();
+    expect(result).toContain("System:");
+    expect(result).toContain("Branch: develop");
   });
 });
