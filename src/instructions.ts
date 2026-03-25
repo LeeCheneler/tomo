@@ -3,6 +3,15 @@ import { arch, homedir, platform, release, userInfo } from "node:os";
 import { resolve } from "node:path";
 import { env } from "./env";
 import { getAllSkills } from "./skills";
+import {
+  getDefaultBranch,
+  getGitBranch,
+  getGitLog,
+  getGitStatusSummary,
+  isGhCliAvailable,
+  isGitHubRemote,
+  isGitRepo,
+} from "./git";
 
 const FILENAMES = ["claude.md", "agents.md"];
 
@@ -78,6 +87,31 @@ export function getSystemInfo(): string {
   return `System: ${os} (${osRelease}), arch: ${arch()}, shell: ${shell}, user: ${username}, cwd: ${cwd}`;
 }
 
+/** Builds git context for the system prompt when in a git repo. */
+export function getGitContext(): string | null {
+  const cwd = process.cwd();
+  if (!isGitRepo(cwd)) return null;
+
+  const lines: string[] = [];
+  lines.push(`Branch: ${getGitBranch(cwd)}`);
+  lines.push(`Default branch: ${getDefaultBranch(cwd)}`);
+  lines.push(`Working tree: ${getGitStatusSummary(cwd)}`);
+
+  const log = getGitLog(cwd);
+  if (log) {
+    lines.push(`\nRecent commits:\n${log}`);
+  }
+
+  if (isGitHubRemote(cwd)) {
+    const hint = isGhCliAvailable()
+      ? "Remote is GitHub. gh CLI is available for PRs, issues, etc."
+      : "Remote is GitHub. gh CLI is not installed.";
+    lines.push(hint);
+  }
+
+  return `Git:\n${lines.join("\n")}`;
+}
+
 /**
  * Loads and combines instruction files from root and local locations.
  * If a local file is found, only its matching filename is searched at root.
@@ -86,6 +120,8 @@ export function getSystemInfo(): string {
  */
 export function loadInstructions(): string | null {
   const systemInfo = getSystemInfo();
+  const gitContext = getGitContext();
+  const header = gitContext ? `${systemInfo}\n\n${gitContext}` : systemInfo;
   const home = homedir();
   const cwd = process.cwd();
 
@@ -96,12 +132,12 @@ export function loadInstructions(): string | null {
 
   if (local) {
     const root = findSpecificAcrossDirs(rootDirs, local.filename);
-    if (root) return `${systemInfo}\n\n${root}\n\n---\n\n${local.content}`;
-    return `${systemInfo}\n\n${local.content}`;
+    if (root) return `${header}\n\n${root}\n\n---\n\n${local.content}`;
+    return `${header}\n\n${local.content}`;
   }
 
   const root = findAcrossDirs(rootDirs);
-  const base = root ? `${systemInfo}\n\n${root.content}` : systemInfo;
+  const base = root ? `${header}\n\n${root.content}` : header;
 
   return appendSkillsNotice(base);
 }

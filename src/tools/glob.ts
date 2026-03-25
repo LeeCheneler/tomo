@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { z } from "zod";
 import { FileAccessConfirm } from "../components/file-access-confirm";
 import { isPathWithinCwd } from "../permissions";
-import { isGitRepo } from "./git";
+import { isGitRepo } from "../git";
 import { registerTool } from "./registry";
 import { type ToolContext, parseToolArgs } from "./types";
 
