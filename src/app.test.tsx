@@ -24,6 +24,7 @@ const mockChatState: ChatState = {
   toolActive: false,
   submit: vi.fn(),
   cancel: vi.fn(),
+  cancelPending: vi.fn(),
   clearMessages: vi.fn(),
 };
 

@@ -50,6 +50,7 @@ export interface ChatState {
   toolActive: boolean;
   submit: (text: string, clipboardImages?: ImageAttachment[]) => void;
   cancel: () => void;
+  cancelPending: () => void;
   clearMessages: () => void;
 }
 
@@ -545,6 +546,12 @@ export function useChat(
     abortRef.current?.abort();
   };
 
+  /** Clears the pending message without aborting the active stream. */
+  const cancelPending = () => {
+    pendingMessageRef.current = null;
+    setPendingMessage(null);
+  };
+
   return {
     messages,
     streaming,
@@ -559,6 +566,7 @@ export function useChat(
     toolActive,
     submit,
     cancel,
+    cancelPending,
     clearMessages,
   };
 }

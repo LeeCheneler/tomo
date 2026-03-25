@@ -217,6 +217,8 @@ export function App({ onRestart }: AppProps) {
               100
             : null
         }
+        pendingMessage={chat.pendingMessage}
+        onCancelPending={chat.cancelPending}
       />
     </Box>
   );
