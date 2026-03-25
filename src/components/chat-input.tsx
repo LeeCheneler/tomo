@@ -20,6 +20,8 @@ interface ChatInputProps {
   onEscape?: () => void;
   onTab?: () => void;
   contextPercent?: number | null;
+  pendingMessage?: string | null;
+  onCancelPending?: () => void;
 }
 
 const commandProvider: AutocompleteProvider = {
@@ -67,6 +69,8 @@ export function ChatInput({
   onEscape,
   onTab,
   contextPercent,
+  pendingMessage,
+  onCancelPending,
 }: ChatInputProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -155,6 +159,20 @@ export function ChatInput({
         }
         // Ignore all other keys in image nav mode
         return;
+      }
+
+      // Pending message shortcuts — only when input is empty
+      if (pendingMessage && !value) {
+        if (input === "q") {
+          onCancelPending?.();
+          return;
+        }
+        if (key.upArrow) {
+          onCancelPending?.();
+          setValue(pendingMessage);
+          setCursor(pendingMessage.length);
+          return;
+        }
       }
 
       if (key.escape) {

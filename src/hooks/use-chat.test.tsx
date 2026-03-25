@@ -423,6 +423,26 @@ describe("useChat", () => {
       expect(chat.pendingMessage).toBeNull();
       expect(chat.messages.filter((m) => m.role === "user")).toHaveLength(1);
     });
+
+    it("cancelPending clears pending without aborting the stream", async () => {
+      render(<TestApp />);
+      await flush();
+
+      chat.submit("first");
+      await flush();
+
+      chat.submit("queued");
+      await flush();
+
+      expect(chat.pendingMessage).toBe("queued");
+      expect(chat.streaming).toBe(true);
+
+      chat.cancelPending();
+      await flush();
+
+      expect(chat.pendingMessage).toBeNull();
+      expect(chat.streaming).toBe(true);
+    });
   });
 
   describe("tool execution loop", () => {

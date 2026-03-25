@@ -187,7 +187,7 @@ export function App({ onRestart }: AppProps) {
       ) : null}
 
       {chat.pendingMessage ? (
-        <Box marginBottom={1}>
+        <Box flexDirection="column" marginBottom={1}>
           <Text>
             <Text color="yellow" bold>
               {"Queued: "}
@@ -196,6 +196,7 @@ export function App({ onRestart }: AppProps) {
               {chat.pendingMessage}
             </Text>
           </Text>
+          <Text dimColor>{"q cancel  ↑ edit"}</Text>
         </Box>
       ) : null}
 
@@ -217,6 +218,8 @@ export function App({ onRestart }: AppProps) {
               100
             : null
         }
+        pendingMessage={chat.pendingMessage}
+        onCancelPending={chat.cancelPending}
       />
     </Box>
   );
