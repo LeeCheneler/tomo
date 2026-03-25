@@ -617,4 +617,124 @@ describe("ChatInput", () => {
 
     vi.restoreAllMocks();
   });
+
+  describe("input history", () => {
+    it("up arrow recalls last history entry", async () => {
+      const { lastFrame, stdin } = render(
+        <ChatInput onSubmit={vi.fn()} inputHistory={["first message"]} />,
+      );
+      stdin.write("\x1B[A");
+      await flush();
+      expect(lastFrame()).toContain("first message");
+    });
+
+    it("up arrow cycles through history oldest-first", async () => {
+      const onSubmit = vi.fn();
+      const { stdin } = render(
+        <ChatInput onSubmit={onSubmit} inputHistory={["one", "two"]} />,
+      );
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenLastCalledWith("one");
+    });
+
+    it("down arrow navigates forward through history", async () => {
+      const onSubmit = vi.fn();
+      const { stdin } = render(
+        <ChatInput onSubmit={onSubmit} inputHistory={["one", "two"]} />,
+      );
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenLastCalledWith("two");
+    });
+
+    it("down arrow past end of history clears the input", async () => {
+      const onSubmit = vi.fn();
+      const { stdin } = render(
+        <ChatInput onSubmit={onSubmit} inputHistory={["hello"]} />,
+      );
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("does nothing with empty history", async () => {
+      const onSubmit = vi.fn();
+      const { stdin } = render(
+        <ChatInput onSubmit={onSubmit} inputHistory={[]} />,
+      );
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("pending message shortcuts", () => {
+    it("up arrow with pending message loads it into input", async () => {
+      const onCancelPending = vi.fn();
+      const { lastFrame, stdin } = render(
+        <ChatInput
+          onSubmit={vi.fn()}
+          pendingMessage="edit me"
+          onCancelPending={onCancelPending}
+        />,
+      );
+      stdin.write("\x1B[A");
+      await flush();
+      expect(onCancelPending).toHaveBeenCalled();
+      expect(lastFrame()).toContain("edit me");
+    });
+
+    it("up arrow after pending recall goes to previous history entry", async () => {
+      const onSubmit = vi.fn();
+      const onCancelPending = vi.fn();
+      const { stdin, rerender } = render(
+        <ChatInput
+          onSubmit={onSubmit}
+          inputHistory={["first", "second"]}
+          pendingMessage="second"
+          onCancelPending={onCancelPending}
+        />,
+      );
+
+      // Up arrow loads pending "second" into input
+      stdin.write("\x1B[A");
+      await flush();
+      expect(onCancelPending).toHaveBeenCalled();
+
+      // Clear pending prop to simulate cancelPending effect
+      rerender(
+        <ChatInput
+          onSubmit={onSubmit}
+          inputHistory={["first", "second"]}
+          pendingMessage={null}
+          onCancelPending={onCancelPending}
+        />,
+      );
+      await flush();
+
+      // Next up arrow should go straight to "first"
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenLastCalledWith("first");
+    });
+  });
 });

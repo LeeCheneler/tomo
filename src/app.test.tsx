@@ -22,6 +22,7 @@ const mockChatState: ChatState = {
   contextWindow: 8192,
   pendingMessage: null,
   toolActive: false,
+  inputHistory: [],
   submit: vi.fn(),
   cancel: vi.fn(),
   cancelPending: vi.fn(),

@@ -22,6 +22,7 @@ interface ChatInputProps {
   contextPercent?: number | null;
   pendingMessage?: string | null;
   onCancelPending?: () => void;
+  inputHistory?: string[];
 }
 
 const commandProvider: AutocompleteProvider = {
@@ -71,12 +72,14 @@ export function ChatInput({
   contextPercent,
   pendingMessage,
   onCancelPending,
+  inputHistory = [],
 }: ChatInputProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [columns, setColumns] = useState(stdout.columns || 80);
   const [value, setValue] = useState("");
   const [cursor, setCursor] = useState(0);
+  const historyIndexRef = useRef(-1);
   const [exitWarning, setExitWarning] = useState(false);
   const [clipboardImages, setClipboardImages] = useState<ImageAttachment[]>([]);
   const [imageNavActive, setImageNavActive] = useState(false);
@@ -161,18 +164,15 @@ export function ChatInput({
         return;
       }
 
-      // Pending message shortcuts — only when input is empty
-      if (pendingMessage && !value) {
-        if (input === "q") {
-          onCancelPending?.();
-          return;
-        }
-        if (key.upArrow) {
-          onCancelPending?.();
-          setValue(pendingMessage);
-          setCursor(pendingMessage.length);
-          return;
-        }
+      // Pending message shortcut — up arrow loads queued message into input
+      if (pendingMessage && !value && key.upArrow) {
+        onCancelPending?.();
+        setValue(pendingMessage);
+        setCursor(pendingMessage.length);
+        // Set history index so the next up arrow skips past this entry.
+        const lastIdx = inputHistory.lastIndexOf(pendingMessage);
+        historyIndexRef.current = lastIdx >= 0 ? lastIdx : inputHistory.length;
+        return;
       }
 
       if (key.escape) {
@@ -214,7 +214,7 @@ export function ChatInput({
         return;
       }
 
-      // Vertical cursor movement — autocomplete navigation or multi-line movement
+      // Vertical cursor movement — autocomplete, multi-line, or input history
       if (key.upArrow) {
         if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
           autocomplete.moveUp();
@@ -227,6 +227,17 @@ export function ChatInput({
             lineStart === 0 ? 0 : value.lastIndexOf("\n", lineStart - 1) + 1;
           const prevLineLength = lineStart - prevLineStart;
           setCursor(prevLineStart + Math.min(col, prevLineLength));
+          return;
+        }
+        // On first line — recall from input history
+        if (inputHistory.length > 0) {
+          const nextIdx =
+            historyIndexRef.current === -1
+              ? inputHistory.length - 1
+              : Math.max(0, historyIndexRef.current - 1);
+          historyIndexRef.current = nextIdx;
+          setValue(inputHistory[nextIdx]);
+          setCursor(inputHistory[nextIdx].length);
         }
         return;
       }
@@ -248,7 +259,20 @@ export function ChatInput({
           setCursor(nextLineStart + Math.min(col, nextLineLength));
           return;
         }
-        // On last line — enter image navigation if images exist
+        // On last line — navigate history forward or enter image nav
+        if (historyIndexRef.current >= 0) {
+          const nextIdx = historyIndexRef.current + 1;
+          if (nextIdx >= inputHistory.length) {
+            historyIndexRef.current = -1;
+            setValue("");
+            setCursor(0);
+          } else {
+            historyIndexRef.current = nextIdx;
+            setValue(inputHistory[nextIdx]);
+            setCursor(inputHistory[nextIdx].length);
+          }
+          return;
+        }
         if (totalImages > 0) {
           setImageNavActive(true);
           setSelectedImageIdx(0);
@@ -285,6 +309,7 @@ export function ChatInput({
           setValue((v) => `${v.slice(0, cursor)}\n${v.slice(cursor)}`);
           setCursor((c) => c + 1);
         } else if (isAutocomplete && autocomplete.submitValue) {
+          historyIndexRef.current = -1;
           if (clipboardImages.length > 0) {
             onSubmit(autocomplete.submitValue, clipboardImages);
           } else {
@@ -294,6 +319,7 @@ export function ChatInput({
           setCursor(0);
           setClipboardImages([]);
         } else if (value.trim() || clipboardImages.length > 0) {
+          historyIndexRef.current = -1;
           if (clipboardImages.length > 0) {
             onSubmit(value, clipboardImages);
           } else {

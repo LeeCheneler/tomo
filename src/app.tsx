@@ -196,7 +196,7 @@ export function App({ onRestart }: AppProps) {
               {chat.pendingMessage}
             </Text>
           </Text>
-          <Text dimColor>{"q cancel  ↑ edit"}</Text>
+          <Text dimColor>{"↑ edit"}</Text>
         </Box>
       ) : null}
 
@@ -220,6 +220,7 @@ export function App({ onRestart }: AppProps) {
         }
         pendingMessage={chat.pendingMessage}
         onCancelPending={chat.cancelPending}
+        inputHistory={chat.inputHistory}
       />
     </Box>
   );

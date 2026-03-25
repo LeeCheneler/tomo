@@ -128,6 +128,16 @@ export function appendMessage(session: Session, message: DisplayMessage): void {
   _lastSavedSessionId = session.id;
 }
 
+/** Removes the last message from a session's JSONL file. */
+export function removeLastMessage(session: Session): void {
+  const path = sessionPath(session.id);
+  if (!existsSync(path)) return;
+  const content = readFileSync(path, "utf-8");
+  const lines = content.trimEnd().split("\n");
+  if (lines.length <= 1) return;
+  writeFileSync(path, `${lines.slice(0, -1).join("\n")}\n`, "utf-8");
+}
+
 /** Loads a session by ID. Returns null if not found. */
 export function loadSession(id: string): Session | null {
   const path = sessionPath(id);
