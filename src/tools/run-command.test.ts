@@ -31,6 +31,15 @@ describe("run_command tool", () => {
       renderInteractive: vi.fn(),
       reportProgress: vi.fn(),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     await expect(
@@ -45,6 +54,15 @@ describe("run_command tool", () => {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
       reportProgress: vi.fn(),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     const result = await tool?.execute(
@@ -64,6 +82,15 @@ describe("run_command tool", () => {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
       reportProgress: vi.fn(),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     await tool?.execute(JSON.stringify({ command: "echo hello" }), context);
@@ -84,6 +111,15 @@ describe("run_command tool", () => {
       renderInteractive: vi.fn().mockResolvedValue("denied"),
       reportProgress: vi.fn(),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     const result = await tool?.execute(
@@ -100,6 +136,15 @@ describe("run_command tool", () => {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
       reportProgress: vi.fn(),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     const result = await tool?.execute(
@@ -118,6 +163,15 @@ describe("run_command tool", () => {
       renderInteractive: vi.fn().mockResolvedValue("approved"),
       reportProgress: vi.fn(),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     const result = await tool?.execute(

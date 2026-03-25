@@ -354,6 +354,8 @@ export function useChat(
 
     const permissions = resolvePermissions(freshConfig.permissions);
 
+    const apiKey = resolveApiKey(activeProvider.type, activeProvider.apiKey);
+
     const toolContext: ToolContext = {
       renderInteractive: (factory) =>
         new Promise<string>((resolve, reject) => {
@@ -371,9 +373,16 @@ export function useChat(
         setStreamingContent(progressContent);
       },
       permissions,
+      signal: controller.signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: activeProvider.baseUrl,
+        model: activeModel,
+        apiKey,
+        maxTokens,
+        contextWindow,
+      },
     };
-
-    const apiKey = resolveApiKey(activeProvider.type, activeProvider.apiKey);
 
     try {
       const result = await runCompletionLoop({

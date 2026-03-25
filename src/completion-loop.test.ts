@@ -18,10 +18,21 @@ function mockCompletion(
   };
 }
 
+const defaultProviderConfig = {
+  baseUrl: "http://localhost",
+  model: "test-model",
+  apiKey: undefined,
+  maxTokens: 1024,
+  contextWindow: 8192,
+};
+
 const noopToolContext: ToolContext = {
   renderInteractive: () => Promise.reject(new Error("not implemented")),
   reportProgress: () => {},
   permissions: {},
+  signal: new AbortController().signal,
+  depth: 0,
+  providerConfig: defaultProviderConfig,
 };
 
 function baseOptions(
