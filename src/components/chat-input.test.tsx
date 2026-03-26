@@ -325,7 +325,7 @@ describe("ChatInput", () => {
     expect(onSubmit).toHaveBeenCalledWith("abcde\nfgX");
   });
 
-  it("up arrow does nothing on first line", async () => {
+  it("up arrow moves to start of line on first line", async () => {
     const onSubmit = vi.fn();
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
     stdin.write("abc");
@@ -336,13 +336,15 @@ describe("ChatInput", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    expect(onSubmit).toHaveBeenCalledWith("abcX");
+    expect(onSubmit).toHaveBeenCalledWith("Xabc");
   });
 
-  it("down arrow does nothing on last line", async () => {
+  it("down arrow moves to end of line on last line", async () => {
     const onSubmit = vi.fn();
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
     stdin.write("abc");
+    await flush();
+    stdin.write("\x01");
     await flush();
     stdin.write("\x1B[B");
     await flush();
@@ -633,8 +635,13 @@ describe("ChatInput", () => {
       const { stdin } = render(
         <ChatInput onSubmit={onSubmit} inputHistory={["one", "two"]} />,
       );
+      // First up: recalls "two" (cursor at end)
       stdin.write("\x1B[A");
       await flush();
+      // Second up: moves cursor to start of "two"
+      stdin.write("\x1B[A");
+      await flush();
+      // Third up: recalls "one"
       stdin.write("\x1B[A");
       await flush();
       stdin.write("\r");
@@ -729,7 +736,10 @@ describe("ChatInput", () => {
       );
       await flush();
 
-      // Next up arrow should go straight to "first"
+      // Next up arrow moves to start of "second"
+      stdin.write("\x1B[A");
+      await flush();
+      // Another up arrow recalls "first"
       stdin.write("\x1B[A");
       await flush();
       stdin.write("\r");

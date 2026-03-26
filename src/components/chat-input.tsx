@@ -229,7 +229,11 @@ export function ChatInput({
           setCursor(prevLineStart + Math.min(col, prevLineLength));
           return;
         }
-        // On first line — recall from input history
+        // On first line — go to start of line first, then recall history
+        if (cursor > 0) {
+          setCursor(0);
+          return;
+        }
         if (inputHistory.length > 0) {
           const nextIdx =
             historyIndexRef.current === -1
@@ -259,7 +263,11 @@ export function ChatInput({
           setCursor(nextLineStart + Math.min(col, nextLineLength));
           return;
         }
-        // On last line — navigate history forward or enter image nav
+        // On last line — go to end of line first, then history/image nav
+        if (cursor < value.length) {
+          setCursor(value.length);
+          return;
+        }
         if (historyIndexRef.current >= 0) {
           const nextIdx = historyIndexRef.current + 1;
           if (nextIdx >= inputHistory.length) {
