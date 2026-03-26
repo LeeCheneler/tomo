@@ -5,7 +5,6 @@ import { CommandConfirm } from "./command-confirm";
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
 function renderConfirm(overrides?: {
-  isDestructive?: boolean;
   onApprove?: () => void;
   onApproveAlways?: () => void;
   onDeny?: () => void;
@@ -16,7 +15,6 @@ function renderConfirm(overrides?: {
   const result = render(
     <CommandConfirm
       command="git status"
-      isDestructive={overrides?.isDestructive}
       onApprove={onApprove}
       onApproveAlways={onApproveAlways}
       onDeny={onDeny}
@@ -34,16 +32,6 @@ describe("CommandConfirm", () => {
     expect(output).toContain("Approve (y)");
     expect(output).toContain("Approve Always (a)");
     expect(output).toContain("Deny (n)");
-  });
-
-  it("does not show destructive warning by default", () => {
-    const { lastFrame } = renderConfirm();
-    expect(lastFrame()).not.toContain("Destructive");
-  });
-
-  it("shows destructive warning when isDestructive is true", () => {
-    const { lastFrame } = renderConfirm({ isDestructive: true });
-    expect(lastFrame()).toContain("Destructive command detected");
   });
 
   it("calls onApprove on Enter when cursor is on Approve", async () => {

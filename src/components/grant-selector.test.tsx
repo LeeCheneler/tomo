@@ -25,8 +25,6 @@ describe("GrantSelector", () => {
     expect(output).toContain("read_file");
     expect(output).toContain("write_file");
     expect(output).toContain("edit_file");
-    expect(output).toContain("run_command");
-    expect(output).toContain("run commands without prompting");
   });
 
   it("shows enabled permissions as [x] and disabled as [ ]", () => {
@@ -96,35 +94,6 @@ describe("GrantSelector", () => {
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ edit_file: true }),
-    );
-  });
-
-  it("toggles run_command", async () => {
-    const onSave = vi.fn();
-    const { stdin } = render(
-      <GrantSelector
-        currentPermissions={defaults}
-        onSave={onSave}
-        onCancel={vi.fn()}
-      />,
-    );
-
-    // Move to run_command (index 3)
-    stdin.write("\x1B[B");
-    await flush();
-    stdin.write("\x1B[B");
-    await flush();
-    stdin.write("\x1B[B");
-    await flush();
-    // Toggle on
-    stdin.write(" ");
-    await flush();
-    // Save
-    stdin.write("\x1B");
-    await flush();
-
-    expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ run_command: true }),
     );
   });
 

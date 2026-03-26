@@ -4,7 +4,6 @@ import { Box, Text, useInput } from "ink";
 
 interface CommandConfirmProps {
   command: string;
-  isDestructive?: boolean;
   onApprove: () => void;
   onApproveAlways: () => void;
   onDeny: () => void;
@@ -13,7 +12,6 @@ interface CommandConfirmProps {
 /** Confirmation prompt for a CLI command. Three options with arrow keys, Enter, or shortcut keys. */
 export function CommandConfirm({
   command,
-  isDestructive,
   onApprove,
   onApproveAlways,
   onDeny,
@@ -55,11 +53,6 @@ export function CommandConfirm({
 
   return (
     <Box flexDirection="column">
-      {isDestructive && (
-        <Text bold color="red">
-          {"  ⚠ Destructive command detected"}
-        </Text>
-      )}
       <Text bold color="yellow">
         {"  Run this command?"}
       </Text>

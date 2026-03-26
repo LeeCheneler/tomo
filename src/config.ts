@@ -25,7 +25,6 @@ const permissionsSchema = z
     read_file: z.boolean().optional(),
     write_file: z.boolean().optional(),
     edit_file: z.boolean().optional(),
-    run_command: z.boolean().optional(),
   })
   .optional();
 

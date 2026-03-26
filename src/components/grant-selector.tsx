@@ -10,7 +10,6 @@ const ROWS: PermissionRow[] = [
   { key: "read_file", label: "read files in current directory" },
   { key: "write_file", label: "write files in current directory" },
   { key: "edit_file", label: "edit files in current directory" },
-  { key: "run_command", label: "run commands without prompting" },
 ];
 
 interface GrantSelectorProps {

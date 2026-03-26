@@ -1,11 +1,7 @@
 import { spawn } from "node:child_process";
 import { createElement } from "react";
 import { z } from "zod";
-import {
-  isCompoundCommand,
-  isDestructiveCommand,
-  matchesCommandPattern,
-} from "../command-safety";
+import { isCompoundCommand, matchesCommandPattern } from "../command-safety";
 import { CommandConfirm } from "../components/command-confirm";
 import { addAllowedCommand } from "../config";
 import { registerTool } from "./registry";
@@ -83,12 +79,10 @@ async function runAndReport(
 async function promptAndRun(
   command: string,
   context: ToolContext,
-  isDestructive: boolean,
 ): Promise<string> {
   const result = await context.renderInteractive((onResult, _onCancel) =>
     createElement(CommandConfirm, {
       command,
-      isDestructive,
       onApprove: () => onResult("approved"),
       onApproveAlways: () => onResult("approved_always"),
       onDeny: () => onResult("denied"),
@@ -123,16 +117,13 @@ registerTool({
   async execute(args: string, context: ToolContext): Promise<string> {
     const { command } = parseToolArgs(argsSchema, args);
 
-    // 1. Exact match in allowed_commands — always auto-approve
+    // 1. Exact match in allowed_commands — auto-approve
     if (context.allowedCommands.includes(command)) {
       return runAndReport(command, context);
     }
 
-    const compound = isCompoundCommand(command);
-    const destructive = isDestructiveCommand(command);
-
-    // 2. If not compound, check patterns (skip if destructive)
-    if (!compound && !destructive) {
+    // 2. Pattern match (non-compound only) — auto-approve
+    if (!isCompoundCommand(command)) {
       const patternMatch = context.commandPatterns.some(
         (p) => p.enabled && matchesCommandPattern(command, p.pattern),
       );
@@ -141,18 +132,8 @@ registerTool({
       }
     }
 
-    // 3. Destructive — always prompt with warning
-    if (destructive) {
-      return promptAndRun(command, context, true);
-    }
-
-    // 4. Global run_command permission — auto-approve
-    if (context.permissions.run_command) {
-      return runAndReport(command, context);
-    }
-
-    // 5. Prompt without warning
-    return promptAndRun(command, context, false);
+    // 3. Prompt for everything else
+    return promptAndRun(command, context);
   },
 });
 

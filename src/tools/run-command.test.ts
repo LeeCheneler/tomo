@@ -122,52 +122,7 @@ describe("approval flow", () => {
     expect(context.renderInteractive).toHaveBeenCalled();
   });
 
-  it("prompts with destructive warning for destructive commands", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      renderInteractive: vi.fn().mockResolvedValue("approved"),
-      commandPatterns: [{ pattern: "rm *", enabled: true }],
-    });
-
-    await tool?.execute(
-      JSON.stringify({ command: "rm -rf /tmp/test" }),
-      context,
-    );
-
-    expect(context.renderInteractive).toHaveBeenCalled();
-  });
-
-  it("destructive commands prompt even with run_command permission", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      permissions: { run_command: true },
-      renderInteractive: vi.fn().mockResolvedValue("approved"),
-    });
-
-    await tool?.execute(
-      JSON.stringify({ command: "rm -rf /tmp/test" }),
-      context,
-    );
-
-    expect(context.renderInteractive).toHaveBeenCalled();
-  });
-
-  it("auto-approves with global run_command permission for non-destructive commands", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      permissions: { run_command: true },
-    });
-
-    const result = await tool?.execute(
-      JSON.stringify({ command: "echo hello" }),
-      context,
-    );
-
-    expect(context.renderInteractive).not.toHaveBeenCalled();
-    expect(result).toContain("echo hello");
-  });
-
-  it("prompts when no patterns match and no permission granted", async () => {
+  it("prompts when no patterns match", async () => {
     const tool = getTool("run_command");
     const context = makeContext();
 
@@ -205,21 +160,6 @@ describe("approval flow", () => {
     expect(addAllowedCommand).toHaveBeenCalledWith("echo hello");
     expect(result).toContain("echo hello");
     expect(result).toContain("Exit code: 0");
-  });
-
-  it("allowed_commands bypasses destructive check", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      allowedCommands: ["rm -rf /tmp/test"],
-    });
-
-    const result = await tool?.execute(
-      JSON.stringify({ command: "rm -rf /tmp/test" }),
-      context,
-    );
-
-    expect(context.renderInteractive).not.toHaveBeenCalled();
-    expect(result).toContain("rm -rf /tmp/test");
   });
 });
 
