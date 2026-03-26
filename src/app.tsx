@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import chalk from "chalk";
 import { Box, Static, Text } from "ink";
 import "./commands";
+import { AgentIndicators } from "./components/agent-indicators";
 import { AssistantMessage } from "./components/assistant-message";
 import { ChatInput } from "./components/chat-input";
 import { Header } from "./components/header";
@@ -199,6 +200,8 @@ export function App({ onRestart }: AppProps) {
           <Text dimColor>{"↑ edit"}</Text>
         </Box>
       ) : null}
+
+      <AgentIndicators />
 
       {chat.streaming && !chat.streamingContent && !chat.activeCommand ? (
         <ThinkingIndicator />

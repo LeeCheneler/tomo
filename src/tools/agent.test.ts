@@ -11,14 +11,35 @@ vi.mock("../instructions", () => ({
   loadInstructions: () => "System info here",
 }));
 
+vi.mock("../config", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../config")>();
+  return {
+    ...original,
+    loadConfig: vi.fn().mockReturnValue({
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+    }),
+  };
+});
+
 // Import tools index to trigger all tool registrations.
 await import("./index");
 
 const { runCompletionLoop } = await import("../completion-loop");
+const { loadConfig } = await import("../config");
 const mockLoop = vi.mocked(runCompletionLoop);
+const mockLoadConfig = vi.mocked(loadConfig);
 
 afterEach(() => {
   mockLoop.mockReset();
+  mockLoadConfig.mockReturnValue({
+    activeProvider: "",
+    activeModel: "",
+    maxTokens: 8192,
+    providers: [],
+  });
 });
 
 const defaultProviderConfig = {
@@ -152,7 +173,6 @@ describe("agent tool", () => {
     const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
     const toolNames = opts.tools?.map((t) => t.function.name) ?? [];
 
-    // Should include read-only tools but not write tools
     expect(toolNames).toContain("read_file");
     expect(toolNames).toContain("glob");
     expect(toolNames).toContain("grep");
@@ -169,7 +189,6 @@ describe("agent tool", () => {
     });
 
     const tool = getAgentTool();
-    // depth 0 spawns sub-agent at depth 1 = MAX_AGENT_DEPTH
     await tool.execute(
       JSON.stringify({ prompt: "test" }),
       makeContext({ depth: 0 }),
@@ -178,27 +197,8 @@ describe("agent tool", () => {
     const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
     const toolNames = opts.tools?.map((t) => t.function.name) ?? [];
 
-    // depth 0 + 1 = 1 which is MAX_AGENT_DEPTH, so agent should be excluded
+    // depth 0 + 1 = 1 which is default maxDepth, so agent should be excluded
     expect(toolNames).not.toContain("agent");
-  });
-
-  it("passes abort signal through to the completion loop", async () => {
-    const controller = new AbortController();
-
-    mockLoop.mockResolvedValueOnce({
-      content: "done",
-      messages: [],
-      aborted: false,
-    });
-
-    const tool = getAgentTool();
-    await tool.execute(
-      JSON.stringify({ prompt: "test" }),
-      makeContext({ signal: controller.signal }),
-    );
-
-    const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    expect(opts.signal).toBe(controller.signal);
   });
 
   it("returns error string on non-abort errors", async () => {
@@ -213,12 +213,19 @@ describe("agent tool", () => {
     expect(result).toBe("Sub-agent error: connection failed");
   });
 
-  it("re-throws abort errors", async () => {
-    mockLoop.mockRejectedValueOnce(new DOMException("aborted", "AbortError"));
+  it("re-throws abort errors from parent signal", async () => {
+    const controller = new AbortController();
+    mockLoop.mockImplementationOnce(async () => {
+      controller.abort();
+      throw new DOMException("aborted", "AbortError");
+    });
 
     const tool = getAgentTool();
     await expect(
-      tool.execute(JSON.stringify({ prompt: "test" }), makeContext()),
+      tool.execute(
+        JSON.stringify({ prompt: "test" }),
+        makeContext({ signal: controller.signal }),
+      ),
     ).rejects.toThrow("aborted");
   });
 
@@ -236,7 +243,156 @@ describe("agent tool", () => {
     );
 
     const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    // The toolContext passed to the loop should have depth 1
     expect(opts.toolContext.depth).toBe(1);
+  });
+
+  it("returns timeout message when agent exceeds timeout", async () => {
+    vi.useFakeTimers();
+    mockLoadConfig.mockReturnValue({
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      agents: { maxDepth: 1, maxConcurrent: 3, timeoutSeconds: 1, tools: [] },
+    });
+
+    mockLoop.mockImplementationOnce(async ({ signal }) => {
+      await new Promise<never>((_, reject) => {
+        signal.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError")),
+        );
+      });
+      return { content: "", messages: [], aborted: true };
+    });
+
+    const tool = getAgentTool();
+    const resultPromise = tool.execute(
+      JSON.stringify({ prompt: "slow task" }),
+      makeContext(),
+    );
+
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const result = await resultPromise;
+    expect(result).toContain("timed out");
+
+    vi.useRealTimers();
+  });
+
+  it("respects concurrency limit", async () => {
+    mockLoadConfig.mockReturnValue({
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 1,
+        timeoutSeconds: 120,
+        tools: [],
+      },
+    });
+
+    let running = 0;
+    let maxRunning = 0;
+
+    mockLoop.mockImplementation(async () => {
+      running++;
+      maxRunning = Math.max(maxRunning, running);
+      await new Promise((r) => setTimeout(r, 10));
+      running--;
+      return { content: "done", messages: [], aborted: false };
+    });
+
+    const tool = getAgentTool();
+    const ctx = makeContext();
+
+    // Spawn 3 agents with concurrency limit of 1
+    await Promise.all([
+      tool.execute(JSON.stringify({ prompt: "a" }), ctx),
+      tool.execute(JSON.stringify({ prompt: "b" }), ctx),
+      tool.execute(JSON.stringify({ prompt: "c" }), ctx),
+    ]);
+
+    // Only 1 should have been running at a time
+    expect(maxRunning).toBe(1);
+  });
+
+  it("per-call timeout is capped to global maximum", async () => {
+    vi.useFakeTimers();
+    mockLoadConfig.mockReturnValue({
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 3,
+        timeoutSeconds: 2,
+        tools: [],
+      },
+    });
+
+    mockLoop.mockImplementationOnce(async ({ signal }) => {
+      await new Promise<never>((_, reject) => {
+        signal.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError")),
+        );
+      });
+      return { content: "", messages: [], aborted: true };
+    });
+
+    const tool = getAgentTool();
+    // Request 60s but global max is 2s — should be capped to 2s
+    const resultPromise = tool.execute(
+      JSON.stringify({ prompt: "test", timeout: 60 }),
+      makeContext(),
+    );
+
+    await vi.advanceTimersByTimeAsync(2500);
+
+    const result = await resultPromise;
+    expect(result).toContain("timed out after 2s");
+
+    vi.useRealTimers();
+  });
+
+  it("uses per-call timeout when under global maximum", async () => {
+    vi.useFakeTimers();
+    mockLoadConfig.mockReturnValue({
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 3,
+        timeoutSeconds: 60,
+        tools: [],
+      },
+    });
+
+    mockLoop.mockImplementationOnce(async ({ signal }) => {
+      await new Promise<never>((_, reject) => {
+        signal.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError")),
+        );
+      });
+      return { content: "", messages: [], aborted: true };
+    });
+
+    const tool = getAgentTool();
+    // Request 1s, global max is 60s — should use 1s
+    const resultPromise = tool.execute(
+      JSON.stringify({ prompt: "test", timeout: 1 }),
+      makeContext(),
+    );
+
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const result = await resultPromise;
+    expect(result).toContain("timed out after 1s");
+
+    vi.useRealTimers();
   });
 });
