@@ -82,12 +82,14 @@ export function GrantSelector({
       {ROWS.map((row, i) => {
         const isCurrent = i === cursor;
         const enabled = permissions[row.key] ?? false;
+        const maxKey = Math.max(...ROWS.map((r) => r.key.length));
+        const paddedKey = row.key.padEnd(maxKey);
 
         if (!row.toggleable) {
           return (
             <Text key={row.key} dimColor>
               {"  "}
-              {isCurrent ? "❯" : " "} {"   "} {row.key} — {row.label}
+              {isCurrent ? "❯" : " "} {"   "} {paddedKey} {row.label}
             </Text>
           );
         }
@@ -95,7 +97,7 @@ export function GrantSelector({
         return (
           <Text key={row.key} color={isCurrent ? "cyan" : undefined}>
             {"  "}
-            {isCurrent ? "❯" : " "} {enabled ? "[✔]" : "[ ]"} {row.key} —{" "}
+            {isCurrent ? "❯" : " "} {enabled ? "[✔]" : "[ ]"} {paddedKey}{" "}
             {row.label}
           </Text>
         );
