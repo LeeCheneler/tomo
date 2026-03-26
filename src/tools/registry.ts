@@ -19,6 +19,11 @@ export function getAllTools(): Tool[] {
   return [...tools.values()];
 }
 
+/** Returns the display name for a tool, falling back to the raw name. */
+export function getToolDisplayName(name: string): string {
+  return tools.get(name)?.displayName ?? name;
+}
+
 /**
  * Resolves which tools are enabled. Config overrides take priority,
  * then the tool's own `enabled` default, then true.

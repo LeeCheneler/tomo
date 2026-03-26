@@ -1,10 +1,14 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { parse } from "yaml";
 import {
   type Config,
+  addAllowedCommand,
   addProvider,
   getActiveProvider,
+  getAllowedCommands,
   loadConfig,
   removeProvider,
   updateActiveModel,
@@ -315,5 +319,78 @@ activeModel: original-model
     // only wrote to global. loadConfig merges local on top.
     const config = loadConfig();
     expect(config.activeModel).toBe("original-model");
+  });
+});
+
+describe("getAllowedCommands", () => {
+  it("returns empty array when no allowed commands in config", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+    };
+    expect(getAllowedCommands(config)).toEqual([]);
+  });
+
+  it("returns allowed commands from config", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      allowed_commands: ["npm test", "git status"],
+    };
+    expect(getAllowedCommands(config)).toEqual(["npm test", "git status"]);
+  });
+});
+
+describe("addAllowedCommand", () => {
+  it("adds a command to local config", () => {
+    loadConfig(); // create default global
+    addAllowedCommand("npm test");
+    const raw = parse(readFileSync(localPath, "utf-8"));
+    expect(raw.allowed_commands).toEqual(["npm test"]);
+  });
+
+  it("deduplicates commands", () => {
+    loadConfig();
+    addAllowedCommand("npm test");
+    addAllowedCommand("npm test");
+    const raw = parse(readFileSync(localPath, "utf-8"));
+    expect(raw.allowed_commands).toEqual(["npm test"]);
+  });
+
+  it("appends to existing allowed commands", () => {
+    loadConfig();
+    writeYaml(
+      localPath,
+      `
+allowed_commands:
+  - git status
+`,
+    );
+    addAllowedCommand("npm test");
+    const raw = parse(readFileSync(localPath, "utf-8"));
+    expect(raw.allowed_commands).toEqual(["git status", "npm test"]);
+  });
+});
+
+describe("loadConfig with allowed_commands", () => {
+  it("loads allowed_commands from config", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+allowed_commands:
+  - npm test
+  - git status
+`,
+    );
+    const config = loadConfig();
+    expect(config.allowed_commands).toEqual(["npm test", "git status"]);
   });
 });

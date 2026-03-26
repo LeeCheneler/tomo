@@ -37,7 +37,6 @@ describe("resolvePermissions", () => {
       read_file: false,
       write_file: true,
       edit_file: true,
-      run_command: false,
     });
   });
 });

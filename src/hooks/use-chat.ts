@@ -6,6 +6,7 @@ import type { DisplayMessage } from "../components/message-list";
 import { runCompletionLoop } from "../completion-loop";
 import {
   type Config,
+  getAllowedCommands,
   getMaxTokens,
   getProviderByName,
   loadConfig,
@@ -382,6 +383,7 @@ export function useChat(
         maxTokens,
         contextWindow,
       },
+      allowedCommands: getAllowedCommands(freshConfig),
     };
 
     try {

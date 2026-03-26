@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
 import { createElement } from "react";
 import { z } from "zod";
+import { isCommandAllowed, isCompoundCommand } from "../command-safety";
 import { CommandConfirm } from "../components/command-confirm";
+import { addAllowedCommand } from "../config";
 import { registerTool } from "./registry";
 import { type ToolContext, parseToolArgs } from "./types";
 
@@ -57,10 +59,52 @@ function spawnCommand(
   });
 }
 
+async function runAndReport(
+  command: string,
+  context: ToolContext,
+): Promise<string> {
+  const result = await spawnCommand(command, DEFAULT_TIMEOUT_MS, (output) => {
+    context.reportProgress(`$ ${command}\n${output}`);
+  });
+
+  context.reportProgress("");
+
+  if (result.timedOut) {
+    return `$ ${command}\nCommand timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`;
+  }
+
+  return formatResult(command, result.exitCode, result.stdout, result.stderr);
+}
+
+async function promptAndRun(
+  command: string,
+  context: ToolContext,
+): Promise<string> {
+  const result = await context.renderInteractive((onResult, _onCancel) =>
+    createElement(CommandConfirm, {
+      command,
+      onApprove: () => onResult("approved"),
+      onApproveAlways: () => onResult("approved_always"),
+      onDeny: () => onResult("denied"),
+    }),
+  );
+
+  if (result === "denied") {
+    return "The user denied this command.";
+  }
+
+  if (result === "approved_always") {
+    addAllowedCommand(command);
+  }
+
+  return runAndReport(command, context);
+}
+
 registerTool({
   name: "run_command",
+  displayName: "Run Command",
   description:
-    "Run a CLI command. Prompts for approval by default unless the run_command permission is granted.",
+    "Run a CLI command. Commands may be auto-approved via patterns or allow lists, or may prompt for approval.",
   parameters: {
     type: "object",
     properties: {
@@ -74,32 +118,20 @@ registerTool({
   async execute(args: string, context: ToolContext): Promise<string> {
     const { command } = parseToolArgs(argsSchema, args);
 
-    if (!context.permissions.run_command) {
-      const approved = await context.renderInteractive((onResult, _onCancel) =>
-        createElement(CommandConfirm, {
-          command,
-          onApprove: () => onResult("approved"),
-          onDeny: () => onResult("denied"),
-        }),
-      );
-
-      if (approved !== "approved") {
-        return "The user denied this command.";
-      }
+    // 1. Exact match — auto-approve
+    // 2. Compound — skip prefix matching, prompt
+    // 3. Prefix match (word:*) — auto-approve
+    const compound = isCompoundCommand(command);
+    if (
+      isCommandAllowed(command, context.allowedCommands, {
+        skipPrefix: compound,
+      })
+    ) {
+      return runAndReport(command, context);
     }
 
-    const result = await spawnCommand(command, DEFAULT_TIMEOUT_MS, (output) => {
-      context.reportProgress(`$ ${command}\n${output}`);
-    });
-
-    // Clear streaming content now that we have the final result
-    context.reportProgress("");
-
-    if (result.timedOut) {
-      return `$ ${command}\nCommand timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`;
-    }
-
-    return formatResult(command, result.exitCode, result.stdout, result.stderr);
+    // 4. Prompt for everything else
+    return promptAndRun(command, context);
   },
 });
 

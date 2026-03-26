@@ -17,6 +17,7 @@ const argsSchema = z.object({
 
 registerTool({
   name: "glob",
+  displayName: "Glob",
   description:
     "Find files matching a glob pattern. Returns matching file paths, one per line. By default, gitignored files are excluded.",
   parameters: {

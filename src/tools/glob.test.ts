@@ -21,6 +21,8 @@ const mockContext = {
     maxTokens: 1024,
     contextWindow: 8192,
   },
+
+  allowedCommands: [],
 };
 
 /** Initialise a git repo inside tmpDir with a .gitignore and committed + ignored files. */

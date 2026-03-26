@@ -4,125 +4,106 @@ import { CommandConfirm } from "./command-confirm";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
-describe("CommandConfirm", () => {
-  it("renders the command and both options", () => {
-    const { lastFrame } = render(
-      <CommandConfirm
-        command="git status"
-        onApprove={vi.fn()}
-        onDeny={vi.fn()}
-      />,
-    );
+function renderConfirm(overrides?: {
+  onApprove?: () => void;
+  onApproveAlways?: () => void;
+  onDeny?: () => void;
+}) {
+  const onApprove = overrides?.onApprove ?? vi.fn();
+  const onApproveAlways = overrides?.onApproveAlways ?? vi.fn();
+  const onDeny = overrides?.onDeny ?? vi.fn();
+  const result = render(
+    <CommandConfirm
+      command="git status"
+      onApprove={onApprove}
+      onApproveAlways={onApproveAlways}
+      onDeny={onDeny}
+    />,
+  );
+  return { ...result, onApprove, onApproveAlways, onDeny };
+}
 
+describe("CommandConfirm", () => {
+  it("renders the command and all three options", () => {
+    const { lastFrame } = renderConfirm();
     const output = lastFrame();
     expect(output).toContain("Run this command?");
     expect(output).toContain("git status");
     expect(output).toContain("Approve (y)");
+    expect(output).toContain("Approve Always (a)");
     expect(output).toContain("Deny (n)");
   });
 
   it("calls onApprove on Enter when cursor is on Approve", async () => {
-    const onApprove = vi.fn();
-    const { stdin } = render(
-      <CommandConfirm
-        command="git status"
-        onApprove={onApprove}
-        onDeny={vi.fn()}
-      />,
-    );
-
+    const { stdin, onApprove } = renderConfirm();
     stdin.write("\r");
     await flush();
-
     expect(onApprove).toHaveBeenCalled();
   });
 
-  it("calls onDeny on Enter when cursor is on Deny", async () => {
-    const onDeny = vi.fn();
-    const { stdin } = render(
-      <CommandConfirm
-        command="git status"
-        onApprove={vi.fn()}
-        onDeny={onDeny}
-      />,
-    );
-
-    stdin.write("\x1B[B"); // down arrow
+  it("calls onApproveAlways on Enter when cursor is on Approve Always", async () => {
+    const { stdin, onApproveAlways } = renderConfirm();
+    stdin.write("\x1B[B"); // down to Approve Always
     await flush();
     stdin.write("\r");
     await flush();
+    expect(onApproveAlways).toHaveBeenCalled();
+  });
 
+  it("calls onDeny on Enter when cursor is on Deny", async () => {
+    const { stdin, onDeny } = renderConfirm();
+    stdin.write("\x1B[B"); // down to Approve Always
+    await flush();
+    stdin.write("\x1B[B"); // down to Deny
+    await flush();
+    stdin.write("\r");
+    await flush();
     expect(onDeny).toHaveBeenCalled();
   });
 
   it("calls onApprove on y shortcut", async () => {
-    const onApprove = vi.fn();
-    const { stdin } = render(
-      <CommandConfirm
-        command="git status"
-        onApprove={onApprove}
-        onDeny={vi.fn()}
-      />,
-    );
-
+    const { stdin, onApprove } = renderConfirm();
     stdin.write("y");
     await flush();
-
     expect(onApprove).toHaveBeenCalled();
   });
 
-  it("calls onDeny on n shortcut", async () => {
-    const onDeny = vi.fn();
-    const { stdin } = render(
-      <CommandConfirm
-        command="git status"
-        onApprove={vi.fn()}
-        onDeny={onDeny}
-      />,
-    );
+  it("calls onApproveAlways on a shortcut", async () => {
+    const { stdin, onApproveAlways } = renderConfirm();
+    stdin.write("a");
+    await flush();
+    expect(onApproveAlways).toHaveBeenCalled();
+  });
 
+  it("calls onDeny on n shortcut", async () => {
+    const { stdin, onDeny } = renderConfirm();
     stdin.write("n");
     await flush();
-
     expect(onDeny).toHaveBeenCalled();
   });
 
   it("calls onDeny on Escape", async () => {
-    const onDeny = vi.fn();
-    const { stdin } = render(
-      <CommandConfirm
-        command="git status"
-        onApprove={vi.fn()}
-        onDeny={onDeny}
-      />,
-    );
-
+    const { stdin, onDeny } = renderConfirm();
     stdin.write("\x1B");
     await flush();
-
     expect(onDeny).toHaveBeenCalled();
   });
 
-  it("toggles cursor with arrow keys", async () => {
-    const onDeny = vi.fn();
-    const { stdin } = render(
-      <CommandConfirm
-        command="git status"
-        onApprove={vi.fn()}
-        onDeny={onDeny}
-      />,
-    );
-
-    // Down to Deny, up back to Approve, down to Deny again
+  it("cursor wraps around with arrow keys", async () => {
+    const { stdin, onDeny } = renderConfirm();
+    // Down 3 times wraps back to Approve, then down twice to Deny
     stdin.write("\x1B[B");
     await flush();
-    stdin.write("\x1B[A");
-    await flush();
     stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\x1B[B"); // wraps to 0
+    await flush();
+    stdin.write("\x1B[B"); // 1
+    await flush();
+    stdin.write("\x1B[B"); // 2 = Deny
     await flush();
     stdin.write("\r");
     await flush();
-
     expect(onDeny).toHaveBeenCalled();
   });
 });

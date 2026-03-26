@@ -25,6 +25,7 @@ function performWrite(filePath: string, content: string): string {
 
 registerTool({
   name: "write_file",
+  displayName: "Write File",
   description:
     "Write content to a file. Creates parent directories if needed. The user will be prompted to approve or deny before writing.",
   parameters: {

@@ -65,6 +65,7 @@ function readFile(
 
 registerTool({
   name: "read_file",
+  displayName: "Read File",
   description: "Read the contents of a file. Returns the file content as text.",
   parameters: {
     type: "object",

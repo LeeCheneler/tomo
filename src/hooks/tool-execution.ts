@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import type { DisplayMessage } from "../components/message-list";
 import type { ToolCall } from "../provider/client";
-import { type ToolContext, getTool } from "../tools";
+import { type ToolContext, getTool, getToolDisplayName } from "../tools";
 
 export class ToolDismissedError extends Error {
   constructor() {
@@ -62,7 +62,10 @@ async function executeSingleToolCall(
     }
   }
 
-  const header = formatToolHeader(tc.function.name, tc.function.arguments);
+  const header = formatToolHeader(
+    getToolDisplayName(tc.function.name),
+    tc.function.arguments,
+  );
   return {
     id: crypto.randomUUID(),
     role: "tool",

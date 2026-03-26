@@ -49,6 +49,7 @@ const configSchema = z.object({
   permissions: permissionsSchema,
   tools: toolsSchema,
   agents: agentsSchema,
+  allowed_commands: z.array(z.string()).optional(),
 });
 
 export type ProviderConfig = z.infer<typeof providerSchema>;
@@ -222,6 +223,37 @@ export function getMaxTokens(
   model: string,
 ): number {
   return provider.models?.[model]?.maxTokens ?? config.maxTokens;
+}
+
+/** Returns allowed commands from config, falling back to empty. */
+export function getAllowedCommands(config: Config): string[] {
+  return config.allowed_commands ?? [];
+}
+
+/** Adds a command to the allowed_commands list in local config. Deduplicates. */
+export function addAllowedCommand(command: string): void {
+  const path = localConfigPath();
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+
+  const raw = loadYaml(path) ?? {};
+  const existing = (raw.allowed_commands as string[]) ?? [];
+  if (!existing.includes(command)) {
+    existing.push(command);
+  }
+  raw.allowed_commands = existing;
+  writeFileSync(path, stringify(raw), "utf-8");
+}
+
+/** Updates allowed commands in the local project config. */
+export function updateLocalAllowedCommands(commands: string[]): void {
+  const path = localConfigPath();
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+
+  const raw = loadYaml(path) ?? {};
+  raw.allowed_commands = commands;
+  writeFileSync(path, stringify(raw), "utf-8");
 }
 
 /** Returns the provider config matching the activeProvider name. Throws if not found. */

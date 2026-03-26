@@ -80,6 +80,7 @@ vi.mock("../config", () => ({
   loadConfig: () => ({}),
   updateActiveModel: vi.fn(),
   updateActiveProvider: vi.fn(),
+  getAllowedCommands: () => [],
 }));
 
 vi.mock("../commands", () => ({
@@ -97,6 +98,7 @@ vi.mock("../context/truncate", () => ({
 
 vi.mock("../tools", () => ({
   getTool: vi.fn(),
+  getToolDisplayName: (name: string) => name,
   getToolDefinitions: vi.fn().mockReturnValue([]),
   resolveToolAvailability: vi.fn().mockReturnValue({}),
 }));

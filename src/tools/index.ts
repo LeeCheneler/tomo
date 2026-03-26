@@ -14,6 +14,7 @@ import "./write-file";
 export {
   registerTool,
   getTool,
+  getToolDisplayName,
   getAllTools,
   getToolDefinitions,
   resolveToolAvailability,

@@ -61,6 +61,7 @@ function buildDescription(): string {
 
 registerTool({
   name: "agent",
+  displayName: "Agent",
   description: buildDescription(),
   parameters: {
     type: "object",
@@ -99,6 +100,7 @@ registerTool({
       signal: context.signal,
       depth: context.depth + 1,
       providerConfig,
+      allowedCommands: context.allowedCommands,
     };
 
     // Per-call timeout capped to the global maximum.
