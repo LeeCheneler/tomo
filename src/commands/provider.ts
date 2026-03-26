@@ -4,8 +4,8 @@ import { addProvider, removeProvider, type ProviderConfig } from "../config";
 import { register } from "./registry";
 import type { Command } from "./types";
 
-const configure: Command = {
-  name: "configure",
+const provider: Command = {
+  name: "provider",
   description: "Manage providers (add/remove)",
   execute: (_args, callbacks) => {
     return {
@@ -41,4 +41,4 @@ const configure: Command = {
   },
 };
 
-register(configure);
+register(provider);

@@ -27,7 +27,6 @@ function makeContext(overrides?: Partial<ToolContext>): ToolContext {
       maxTokens: 1024,
       contextWindow: 8192,
     },
-    commandPatterns: [],
     allowedCommands: [],
     ...overrides,
   };
@@ -66,7 +65,7 @@ describe("run_command tool", () => {
 });
 
 describe("approval flow", () => {
-  it("auto-approves commands in allowedCommands", async () => {
+  it("auto-approves exact match in allowedCommands", async () => {
     const tool = getTool("run_command");
     const context = makeContext({
       allowedCommands: ["echo hello"],
@@ -82,10 +81,10 @@ describe("approval flow", () => {
     expect(result).toContain("Exit code: 0");
   });
 
-  it("auto-approves commands matching an enabled pattern", async () => {
+  it("auto-approves prefix match (word:*)", async () => {
     const tool = getTool("run_command");
     const context = makeContext({
-      commandPatterns: [{ pattern: "echo *", enabled: true }],
+      allowedCommands: ["echo:*"],
     });
 
     const result = await tool?.execute(
@@ -97,21 +96,10 @@ describe("approval flow", () => {
     expect(result).toContain("echo hello");
   });
 
-  it("does not auto-approve with disabled pattern", async () => {
+  it("skips prefix match for compound commands", async () => {
     const tool = getTool("run_command");
     const context = makeContext({
-      commandPatterns: [{ pattern: "echo *", enabled: false }],
-    });
-
-    await tool?.execute(JSON.stringify({ command: "echo hello" }), context);
-
-    expect(context.renderInteractive).toHaveBeenCalled();
-  });
-
-  it("skips patterns for compound commands", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      commandPatterns: [{ pattern: "echo *", enabled: true }],
+      allowedCommands: ["echo:*"],
     });
 
     await tool?.execute(
@@ -122,7 +110,22 @@ describe("approval flow", () => {
     expect(context.renderInteractive).toHaveBeenCalled();
   });
 
-  it("prompts when no patterns match", async () => {
+  it("exact match still works for compound commands", async () => {
+    const tool = getTool("run_command");
+    const context = makeContext({
+      allowedCommands: ["echo a && echo b"],
+    });
+
+    const result = await tool?.execute(
+      JSON.stringify({ command: "echo a && echo b" }),
+      context,
+    );
+
+    expect(context.renderInteractive).not.toHaveBeenCalled();
+    expect(result).toContain("echo a && echo b");
+  });
+
+  it("prompts when no match", async () => {
     const tool = getTool("run_command");
     const context = makeContext();
 

@@ -84,11 +84,11 @@ export function App({ onRestart }: AppProps) {
     onRestart,
   );
 
-  // Auto-launch /configure when no providers are configured.
+  // Auto-launch /provider when no providers are configured.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only run once on mount
   useEffect(() => {
     if (needsSetup) {
-      chat.submit("/configure");
+      chat.submit("/provider");
     }
   }, []);
 

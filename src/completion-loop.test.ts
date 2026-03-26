@@ -33,7 +33,7 @@ const noopToolContext: ToolContext = {
   signal: new AbortController().signal,
   depth: 0,
   providerConfig: defaultProviderConfig,
-  commandPatterns: [],
+
   allowedCommands: [],
 };
 

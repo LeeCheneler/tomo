@@ -17,6 +17,7 @@ const argsSchema = z.object({
 
 registerTool({
   name: "grep",
+  displayName: "Grep",
   description:
     "Search file contents by pattern. Returns matching lines with file paths and line numbers. By default, gitignored files are excluded.",
   parameters: {

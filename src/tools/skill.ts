@@ -18,6 +18,7 @@ function buildDescription(): string {
 
 registerTool({
   name: "skill",
+  displayName: "Skill",
   description: buildDescription(),
   parameters: {
     type: "object",

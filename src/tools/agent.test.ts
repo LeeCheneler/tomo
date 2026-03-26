@@ -58,7 +58,7 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     signal: new AbortController().signal,
     depth: 0,
     providerConfig: defaultProviderConfig,
-    commandPatterns: [],
+
     allowedCommands: [],
     ...overrides,
   };

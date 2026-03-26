@@ -8,6 +8,7 @@ import {
 
 vi.mock("../tools", () => ({
   getTool: vi.fn(),
+  getToolDisplayName: (name: string) => name,
 }));
 
 const mockContext = {
@@ -23,7 +24,7 @@ const mockContext = {
     maxTokens: 1024,
     contextWindow: 8192,
   },
-  commandPatterns: [],
+
   allowedCommands: [],
 };
 

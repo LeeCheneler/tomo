@@ -9,7 +9,6 @@ import {
   addProvider,
   getActiveProvider,
   getAllowedCommands,
-  getCommandPatterns,
   loadConfig,
   removeProvider,
   updateActiveModel,
@@ -323,30 +322,6 @@ activeModel: original-model
   });
 });
 
-describe("getCommandPatterns", () => {
-  it("returns empty array when no patterns in config", () => {
-    const config: Config = {
-      activeProvider: "",
-      activeModel: "",
-      maxTokens: 8192,
-      providers: [],
-    };
-    expect(getCommandPatterns(config)).toEqual([]);
-  });
-
-  it("returns config patterns when present", () => {
-    const config: Config = {
-      activeProvider: "",
-      activeModel: "",
-      maxTokens: 8192,
-      providers: [],
-      command_patterns: [{ pattern: "cargo *", enabled: true }],
-    };
-    const patterns = getCommandPatterns(config);
-    expect(patterns).toEqual([{ pattern: "cargo *", enabled: true }]);
-  });
-});
-
 describe("getAllowedCommands", () => {
   it("returns empty array when no allowed commands in config", () => {
     const config: Config = {
@@ -401,29 +376,7 @@ allowed_commands:
   });
 });
 
-describe("loadConfig with command_patterns and allowed_commands", () => {
-  it("loads command_patterns from config", () => {
-    writeYaml(
-      globalPath,
-      `
-activeProvider: ""
-activeModel: ""
-maxTokens: 8192
-providers: []
-command_patterns:
-  - pattern: "cargo *"
-    enabled: true
-  - pattern: "make *"
-    enabled: false
-`,
-    );
-    const config = loadConfig();
-    expect(config.command_patterns).toEqual([
-      { pattern: "cargo *", enabled: true },
-      { pattern: "make *", enabled: false },
-    ]);
-  });
-
+describe("loadConfig with allowed_commands", () => {
   it("loads allowed_commands from config", () => {
     writeYaml(
       globalPath,

@@ -10,6 +10,7 @@ const argsSchema = z.object({
 
 registerTool({
   name: "web_search",
+  displayName: "Web Search",
   description:
     "Search the web for current information. Returns titles, URLs, and snippets from search results.",
   parameters: {

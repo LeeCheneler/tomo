@@ -69,7 +69,7 @@ Tomo can read, write, and search files, run commands, and more. Tools are enable
 
 ## Permissions
 
-Write operations (`write_file`, `edit_file`) prompt for confirmation by default. `read_file` is auto-allowed. Use `/grant` to change this, or set in config:
+Write operations (`write_file`, `edit_file`) prompt for confirmation by default. `read_file` is auto-allowed. Use `/settings` to change this, or set in config:
 
 ```yaml
 permissions:
@@ -78,16 +78,12 @@ permissions:
   edit_file: true
 ```
 
-`run_command` prompts by default. Commands can be auto-approved via exact allow lists or glob patterns in config:
+`run_command` prompts by default. Commands can be auto-approved via allowed commands in config. Use exact commands or `prefix:*` for all commands starting with a given word:
 
 ```yaml
-command_patterns:
-  - pattern: "git *"
-    enabled: true
-  - pattern: "npm *"
-    enabled: true
-
 allowed_commands:
+  - "git:*"
+  - "npm:*"
   - "npm test"
 ```
 

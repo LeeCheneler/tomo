@@ -1,6 +1,5 @@
 import type { ReactElement } from "react";
 import type { z } from "zod";
-import type { CommandPattern } from "../config";
 import type { ToolDefinition } from "../provider/client";
 
 /** Provider details needed by tools that spawn completion loops (e.g. agent). */
@@ -31,15 +30,15 @@ export interface ToolContext {
   depth: number;
   /** Provider config for spawning sub-agent completion loops. */
   providerConfig: ProviderInfo;
-  /** Enabled command patterns for auto-approving commands. */
-  commandPatterns: CommandPattern[];
-  /** Exact commands that are always auto-approved. */
+  /** Commands that are auto-approved. Exact strings or "prefix:*" entries. */
   allowedCommands: string[];
 }
 
 /** A model-initiated tool with a name, description, parameters, and execute handler. */
 export interface Tool {
   name: string;
+  /** Human-readable display name for the TUI (e.g. "Read File" instead of "read_file"). */
+  displayName?: string;
   description: string;
   parameters: Record<string, unknown>;
   /** Whether the tool requires user interaction (confirmation, input). Defaults to true. */

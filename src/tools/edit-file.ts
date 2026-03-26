@@ -25,6 +25,7 @@ function performEdit(filePath: string, content: string): string {
 
 registerTool({
   name: "edit_file",
+  displayName: "Edit File",
   description:
     "Make an incremental edit to an existing file by replacing a specific string. The old_string must be unique within the file. The user will be prompted to approve or deny before writing.",
   parameters: {

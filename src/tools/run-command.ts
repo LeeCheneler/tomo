@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createElement } from "react";
 import { z } from "zod";
-import { isCompoundCommand, matchesCommandPattern } from "../command-safety";
+import { isCommandAllowed, isCompoundCommand } from "../command-safety";
 import { CommandConfirm } from "../components/command-confirm";
 import { addAllowedCommand } from "../config";
 import { registerTool } from "./registry";
@@ -102,6 +102,7 @@ async function promptAndRun(
 
 registerTool({
   name: "run_command",
+  displayName: "Run Command",
   description:
     "Run a CLI command. Commands may be auto-approved via patterns or allow lists, or may prompt for approval.",
   parameters: {
@@ -117,22 +118,19 @@ registerTool({
   async execute(args: string, context: ToolContext): Promise<string> {
     const { command } = parseToolArgs(argsSchema, args);
 
-    // 1. Exact match in allowed_commands — auto-approve
-    if (context.allowedCommands.includes(command)) {
+    // 1. Exact match — auto-approve
+    // 2. Compound — skip prefix matching, prompt
+    // 3. Prefix match (word:*) — auto-approve
+    const compound = isCompoundCommand(command);
+    if (
+      isCommandAllowed(command, context.allowedCommands, {
+        skipPrefix: compound,
+      })
+    ) {
       return runAndReport(command, context);
     }
 
-    // 2. Pattern match (non-compound only) — auto-approve
-    if (!isCompoundCommand(command)) {
-      const patternMatch = context.commandPatterns.some(
-        (p) => p.enabled && matchesCommandPattern(command, p.pattern),
-      );
-      if (patternMatch) {
-        return runAndReport(command, context);
-      }
-    }
-
-    // 3. Prompt for everything else
+    // 4. Prompt for everything else
     return promptAndRun(command, context);
   },
 });

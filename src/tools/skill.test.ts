@@ -38,7 +38,7 @@ const mockContext = {
     maxTokens: 1024,
     contextWindow: 8192,
   },
-  commandPatterns: [],
+
   allowedCommands: [],
 };
 

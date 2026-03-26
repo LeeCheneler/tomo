@@ -28,13 +28,6 @@ const permissionsSchema = z
   })
   .optional();
 
-const commandPatternSchema = z.object({
-  pattern: z.string().min(1),
-  enabled: z.boolean(),
-});
-
-export type CommandPattern = z.infer<typeof commandPatternSchema>;
-
 const toolsSchema = z.record(z.string(), z.boolean()).optional();
 
 const agentsSchema = z
@@ -56,7 +49,6 @@ const configSchema = z.object({
   permissions: permissionsSchema,
   tools: toolsSchema,
   agents: agentsSchema,
-  command_patterns: z.array(commandPatternSchema).optional(),
   allowed_commands: z.array(z.string()).optional(),
 });
 
@@ -233,26 +225,6 @@ export function getMaxTokens(
   return provider.models?.[model]?.maxTokens ?? config.maxTokens;
 }
 
-const DEFAULT_COMMAND_PATTERNS: CommandPattern[] = [
-  { pattern: "git *", enabled: true },
-  { pattern: "npm *", enabled: true },
-  { pattern: "yarn *", enabled: true },
-  { pattern: "pnpm *", enabled: true },
-  { pattern: "node *", enabled: true },
-  { pattern: "npx *", enabled: true },
-  { pattern: "ls *", enabled: true },
-];
-
-/** Returns command patterns from config. Empty until explicitly configured. */
-export function getCommandPatterns(config: Config): CommandPattern[] {
-  return config.command_patterns ?? [];
-}
-
-/** Default patterns offered when bootstrapping via /grant. Not active until written to config. */
-export function getDefaultCommandPatterns(): CommandPattern[] {
-  return [...DEFAULT_COMMAND_PATTERNS];
-}
-
 /** Returns allowed commands from config, falling back to empty. */
 export function getAllowedCommands(config: Config): string[] {
   return config.allowed_commands ?? [];
@@ -270,6 +242,17 @@ export function addAllowedCommand(command: string): void {
     existing.push(command);
   }
   raw.allowed_commands = existing;
+  writeFileSync(path, stringify(raw), "utf-8");
+}
+
+/** Updates allowed commands in the local project config. */
+export function updateLocalAllowedCommands(commands: string[]): void {
+  const path = localConfigPath();
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+
+  const raw = loadYaml(path) ?? {};
+  raw.allowed_commands = commands;
   writeFileSync(path, stringify(raw), "utf-8");
 }
 
