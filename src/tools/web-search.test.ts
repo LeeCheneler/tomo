@@ -8,6 +8,15 @@ const mockContext = {
   renderInteractive: vi.fn().mockResolvedValue("approved"),
   reportProgress: vi.fn(),
   permissions: {},
+  signal: new AbortController().signal,
+  depth: 0,
+  providerConfig: {
+    baseUrl: "http://localhost",
+    model: "test-model",
+    apiKey: undefined,
+    maxTokens: 1024,
+    contextWindow: 8192,
+  },
 };
 
 const originalEnv = process.env.TAVILY_API_KEY;

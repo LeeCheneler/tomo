@@ -1,4 +1,5 @@
 // Register built-in tools
+import "./agent";
 import "./ask";
 import "./edit-file";
 import "./glob";

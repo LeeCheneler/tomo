@@ -12,6 +12,15 @@ const mockContext = {
   renderInteractive: vi.fn().mockResolvedValue("approved"),
   reportProgress: vi.fn(),
   permissions: { read_file: true },
+  signal: new AbortController().signal,
+  depth: 0,
+  providerConfig: {
+    baseUrl: "http://localhost",
+    model: "test-model",
+    apiKey: undefined,
+    maxTokens: 1024,
+    contextWindow: 8192,
+  },
 };
 
 /** Initialise a git repo inside tmpDir with committed files. */

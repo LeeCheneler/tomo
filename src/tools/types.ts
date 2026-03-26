@@ -2,6 +2,15 @@ import type { ReactElement } from "react";
 import type { z } from "zod";
 import type { ToolDefinition } from "../provider/client";
 
+/** Provider details needed by tools that spawn completion loops (e.g. agent). */
+export interface ProviderInfo {
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+  maxTokens: number;
+  contextWindow: number;
+}
+
 /** Context provided to a tool's execute function. */
 export interface ToolContext {
   /** Render an interactive component and await the user's response. */
@@ -15,6 +24,12 @@ export interface ToolContext {
   reportProgress: (content: string) => void;
   /** Resolved tool permissions from config. */
   permissions: Record<string, boolean>;
+  /** Abort signal from the parent conversation. */
+  signal: AbortSignal;
+  /** Current agent nesting depth. 0 = main conversation. */
+  depth: number;
+  /** Provider config for spawning sub-agent completion loops. */
+  providerConfig: ProviderInfo;
 }
 
 /** A model-initiated tool with a name, description, parameters, and execute handler. */

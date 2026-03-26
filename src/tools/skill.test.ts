@@ -29,6 +29,15 @@ const mockContext = {
   renderInteractive: vi.fn(),
   reportProgress: vi.fn(),
   permissions: {},
+  signal: new AbortController().signal,
+  depth: 0,
+  providerConfig: {
+    baseUrl: "http://localhost",
+    model: "test-model",
+    apiKey: undefined,
+    maxTokens: 1024,
+    contextWindow: 8192,
+  },
 };
 
 describe("skill tool", () => {

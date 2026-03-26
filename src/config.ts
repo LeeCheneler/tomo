@@ -30,6 +30,17 @@ const permissionsSchema = z
 
 const toolsSchema = z.record(z.string(), z.boolean()).optional();
 
+const agentsSchema = z
+  .object({
+    maxDepth: z.number().int().positive().default(1),
+    maxConcurrent: z.number().int().positive().default(3),
+    timeoutSeconds: z.number().int().positive().default(300),
+    tools: z
+      .array(z.string())
+      .default(["read_file", "glob", "grep", "web_search", "skill"]),
+  })
+  .optional();
+
 const configSchema = z.object({
   activeProvider: z.string().default(""),
   activeModel: z.string().default(""),
@@ -37,10 +48,31 @@ const configSchema = z.object({
   providers: z.array(providerSchema),
   permissions: permissionsSchema,
   tools: toolsSchema,
+  agents: agentsSchema,
 });
 
 export type ProviderConfig = z.infer<typeof providerSchema>;
 export type Config = z.infer<typeof configSchema>;
+
+export interface AgentsConfig {
+  maxDepth: number;
+  maxConcurrent: number;
+  timeoutSeconds: number;
+  tools: string[];
+}
+
+const DEFAULT_AGENTS_CONFIG: AgentsConfig = {
+  maxDepth: 1,
+  maxConcurrent: 3,
+  timeoutSeconds: 300,
+  tools: ["read_file", "glob", "grep", "web_search", "skill"],
+};
+
+/** Resolves agent config with defaults for any missing fields. */
+export function getAgentsConfig(config: Config): AgentsConfig {
+  if (!config.agents) return DEFAULT_AGENTS_CONFIG;
+  return { ...DEFAULT_AGENTS_CONFIG, ...config.agents };
+}
 
 const DEFAULT_CONFIG: Config = {
   activeProvider: "",

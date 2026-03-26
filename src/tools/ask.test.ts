@@ -36,6 +36,15 @@ describe("ask tool", () => {
       renderInteractive: vi.fn(),
       reportProgress: vi.fn(),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     await expect(
@@ -50,6 +59,15 @@ describe("ask tool", () => {
       reportProgress: vi.fn(),
       renderInteractive: vi.fn().mockResolvedValue("A"),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     await tool?.execute(JSON.stringify({ options: ["A", "B"] }), context);
@@ -64,6 +82,15 @@ describe("ask tool", () => {
       reportProgress: vi.fn(),
       renderInteractive: vi.fn().mockResolvedValue("option A"),
       permissions: {},
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "http://localhost",
+        model: "test-model",
+        apiKey: undefined,
+        maxTokens: 1024,
+        contextWindow: 8192,
+      },
     };
 
     const result = await tool?.execute(

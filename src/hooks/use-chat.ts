@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 import { getCommand, parse } from "../commands";
 import type { DisplayMessage } from "../components/message-list";
+import { runCompletionLoop } from "../completion-loop";
 import {
   type Config,
   getMaxTokens,
@@ -12,7 +13,6 @@ import {
   updateActiveModel,
   updateActiveProvider,
 } from "../config";
-import { truncateMessages } from "../context/truncate";
 import type { ImageAttachment } from "../images";
 import { resolvePermissions } from "../permissions";
 import type { ChatMessage, ContentPart, TokenUsage } from "../provider/client";
@@ -20,7 +20,6 @@ import {
   fetchContextWindow,
   getDefaultContextWindow,
   resolveApiKey,
-  streamChatCompletion,
 } from "../provider/client";
 import {
   appendMessage,
@@ -35,7 +34,7 @@ import {
   resolveToolAvailability,
   type ToolContext,
 } from "../tools";
-import { executeToolCalls, ToolDismissedError } from "./tool-execution";
+import { ToolDismissedError } from "./tool-execution";
 
 export interface ChatState {
   messages: DisplayMessage[];
@@ -355,6 +354,8 @@ export function useChat(
 
     const permissions = resolvePermissions(freshConfig.permissions);
 
+    const apiKey = resolveApiKey(activeProvider.type, activeProvider.apiKey);
+
     const toolContext: ToolContext = {
       renderInteractive: (factory) =>
         new Promise<string>((resolve, reject) => {
@@ -372,168 +373,55 @@ export function useChat(
         setStreamingContent(progressContent);
       },
       permissions,
+      signal: controller.signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: activeProvider.baseUrl,
+        model: activeModel,
+        apiKey,
+        maxTokens,
+        contextWindow,
+      },
     };
 
-    let aborted = false;
-    // Declared outside the loop so partial content survives abort.
-    let content = "";
-    let emptyResponseRetries = 0;
-    const MAX_EMPTY_RETRIES = 3;
-    // Ephemeral nudge message — sent to the provider on empty responses
-    // but never persisted to history or shown to the user.
-    let nudgeMessage: ChatMessage | null = null;
-
     try {
-      // Tool loop: stream a completion, check for tool calls, execute
-      // them, and re-call the provider until the model responds with
-      // content only (no more tool calls).
-      while (true) {
-        content = "";
+      const result = await runCompletionLoop({
+        baseUrl: activeProvider.baseUrl,
+        model: activeModel,
+        apiKey,
+        systemMessage,
+        initialMessages: toChatMessages(currentMessages, null),
+        tools: toolDefs.length > 0 ? toolDefs : undefined,
+        toolContext,
+        maxTokens,
+        contextWindow,
+        lastPromptTokens: tokenUsage?.promptTokens ?? null,
+        signal: controller.signal,
+        onContent: setStreamingContent,
+        onMessage: (msg) => {
+          const displayMsg = {
+            id: crypto.randomUUID(),
+            ...msg,
+          } as DisplayMessage;
+          currentMessages = [...currentMessages, displayMsg];
+          setMessages(currentMessages);
+          appendMessage(sessionRef.current, displayMsg);
+        },
+        onToolActive: setToolActive,
+        onUsage: setTokenUsage,
+      });
 
-        const chatMessages = truncateMessages(
-          toChatMessages(currentMessages, systemMessage),
-          contextWindow,
-          maxTokens,
-          tokenUsage?.promptTokens ?? null,
-        );
-
-        // Append ephemeral nudge if the model returned an empty response.
-        if (nudgeMessage) {
-          chatMessages.push(nudgeMessage);
-          nudgeMessage = null;
-        }
-
-        const apiKey = resolveApiKey(
-          activeProvider.type,
-          activeProvider.apiKey,
-        );
-        const completion = await streamChatCompletion({
-          baseUrl: activeProvider.baseUrl,
-          model: activeModel,
-          messages: chatMessages,
-          maxTokens,
-          signal: controller.signal,
-          ...(toolDefs.length > 0 && { tools: toolDefs }),
-          ...(apiKey && { apiKey }),
-        });
-
-        for await (const token of completion.content) {
-          content += token;
-          setStreamingContent(content);
-        }
-
-        const usage = completion.getUsage();
-        if (usage) {
-          setTokenUsage(usage);
-        }
-
-        const toolCalls = completion.getToolCalls();
-
-        if (toolCalls.length === 0) {
-          // Empty response — nudge the model to continue instead of
-          // silently ending the turn. This helps smaller models that
-          // stall after receiving tool results.
-          if (!content.trim() && emptyResponseRetries < MAX_EMPTY_RETRIES) {
-            emptyResponseRetries++;
-            nudgeMessage = {
-              role: "user",
-              content:
-                "Your previous response was empty. Continue working on the task. If you need to use a tool, call it now. If you are done, summarize what was accomplished.",
-            };
-            continue;
-          }
-
-          // No tool calls — add assistant content message and finish.
-          if (content) {
-            const assistantMsg: DisplayMessage = {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content,
-            };
-            currentMessages = [...currentMessages, assistantMsg];
-            setMessages(currentMessages);
-            appendMessage(sessionRef.current, assistantMsg);
-          }
-          break;
-        }
-
-        // Model produced a real response — reset retry counter.
-        emptyResponseRetries = 0;
-
-        // Assistant responded with tool calls — persist the assistant
-        // message (with tool_calls), execute each tool, and append
-        // tool result messages before re-calling the provider.
-        const assistantMsg: DisplayMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: content || "",
-          tool_calls: toolCalls,
-        };
-        currentMessages = [...currentMessages, assistantMsg];
-        appendMessage(sessionRef.current, assistantMsg);
-
-        let toolResultMessages: DisplayMessage[];
-        setToolActive(true);
-        try {
-          toolResultMessages = await executeToolCalls(
-            toolCalls,
-            controller.signal,
-            toolContext,
-          );
-        } catch (err) {
-          setToolActive(false);
-          if (err instanceof ToolDismissedError) {
-            // User dismissed a tool interaction — add a system note and
-            // stop the turn without calling the provider again.
-            const dismissedMsg: DisplayMessage = {
-              id: crypto.randomUUID(),
-              role: "system",
-              content: "Question dismissed",
-            };
-            currentMessages = [...currentMessages, dismissedMsg];
-            setMessages(currentMessages);
-            break;
-          }
-          throw err;
-        }
-        setToolActive(false);
-
-        for (const msg of toolResultMessages) {
-          currentMessages = [...currentMessages, msg];
-          appendMessage(sessionRef.current, msg);
-        }
-
+      if (result.aborted && !result.content) {
+        // No response at all — remove the orphaned user message from
+        // LLM context and session so it doesn't pollute the next turn.
+        currentMessages = currentMessages.filter((m) => m.id !== userMsg.id);
+        removeLastMessage(sessionRef.current);
+      }
+      if (result.aborted) {
         setMessages(currentMessages);
-        setStreamingContent("");
       }
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        aborted = true;
-        // User cancelled — keep what we have. Persist partial content
-        // if the stream had yielded anything.
-      } else {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    }
-
-    if (aborted && content) {
-      // Partial response — preserve it.
-      const partialMsg: DisplayMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content,
-      };
-      currentMessages = [...currentMessages, partialMsg];
-      appendMessage(sessionRef.current, partialMsg);
-    }
-    if (aborted && !content) {
-      // No response at all — remove the orphaned user message from
-      // LLM context and session so it doesn't pollute the next turn.
-      currentMessages = currentMessages.filter((m) => m.id !== userMsg.id);
-      removeLastMessage(sessionRef.current);
-    }
-    if (aborted) {
-      setMessages(currentMessages);
+      setError(err instanceof Error ? err.message : String(err));
     }
 
     streamingRef.current = false;
