@@ -691,6 +691,28 @@ describe("ChatInput", () => {
       expect(onSubmit).not.toHaveBeenCalled();
     });
 
+    it("up arrow at oldest history entry is a no-op", async () => {
+      const onSubmit = vi.fn();
+      const { lastFrame, stdin } = render(
+        <ChatInput onSubmit={onSubmit} inputHistory={["only entry"]} />,
+      );
+      // First up: recalls "only entry"
+      stdin.write("\x1B[A");
+      await flush();
+      // Second up: moves cursor to start
+      stdin.write("\x1B[A");
+      await flush();
+      // Third up: already at oldest — should be a no-op (cursor stays at 0)
+      stdin.write("\x1B[A");
+      await flush();
+      // Type at cursor position to verify it's still at start
+      stdin.write("X");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenCalledWith("Xonly entry");
+    });
+
     it("preserves draft when scrolling through history", async () => {
       const onSubmit = vi.fn();
       const { lastFrame, stdin } = render(

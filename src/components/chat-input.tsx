@@ -236,6 +236,8 @@ export function ChatInput({
           return;
         }
         if (inputHistory.length > 0) {
+          // Already at oldest entry — do nothing
+          if (historyIndexRef.current === 0) return;
           // Save current input as draft when first entering history
           if (historyIndexRef.current === -1) {
             draftRef.current = value;
@@ -243,7 +245,7 @@ export function ChatInput({
           const nextIdx =
             historyIndexRef.current === -1
               ? inputHistory.length - 1
-              : Math.max(0, historyIndexRef.current - 1);
+              : historyIndexRef.current - 1;
           historyIndexRef.current = nextIdx;
           setValue(inputHistory[nextIdx]);
           setCursor(inputHistory[nextIdx].length);
