@@ -690,6 +690,38 @@ describe("ChatInput", () => {
       await flush();
       expect(onSubmit).not.toHaveBeenCalled();
     });
+
+    it("preserves draft when scrolling through history", async () => {
+      const onSubmit = vi.fn();
+      const { lastFrame, stdin } = render(
+        <ChatInput onSubmit={onSubmit} inputHistory={["old message"]} />,
+      );
+
+      // Type a new message (not yet submitted)
+      stdin.write("my draft");
+      await flush();
+
+      // Up arrow: first goes to start of line
+      stdin.write("\x1B[A");
+      await flush();
+      // Up arrow again: recalls "old message"
+      stdin.write("\x1B[A");
+      await flush();
+      expect(lastFrame()).toContain("old message");
+
+      // Down arrow: goes to end of "old message"
+      stdin.write("\x1B[B");
+      await flush();
+      // Down arrow again: restores draft
+      stdin.write("\x1B[B");
+      await flush();
+      expect(lastFrame()).toContain("my draft");
+
+      // Submit to verify it's the draft
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenCalledWith("my draft");
+    });
   });
 
   describe("pending message shortcuts", () => {

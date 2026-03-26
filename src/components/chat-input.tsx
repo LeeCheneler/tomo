@@ -80,6 +80,7 @@ export function ChatInput({
   const [value, setValue] = useState("");
   const [cursor, setCursor] = useState(0);
   const historyIndexRef = useRef(-1);
+  const draftRef = useRef<string | null>(null);
   const [exitWarning, setExitWarning] = useState(false);
   const [clipboardImages, setClipboardImages] = useState<ImageAttachment[]>([]);
   const [imageNavActive, setImageNavActive] = useState(false);
@@ -235,6 +236,10 @@ export function ChatInput({
           return;
         }
         if (inputHistory.length > 0) {
+          // Save current input as draft when first entering history
+          if (historyIndexRef.current === -1) {
+            draftRef.current = value;
+          }
           const nextIdx =
             historyIndexRef.current === -1
               ? inputHistory.length - 1
@@ -271,9 +276,12 @@ export function ChatInput({
         if (historyIndexRef.current >= 0) {
           const nextIdx = historyIndexRef.current + 1;
           if (nextIdx >= inputHistory.length) {
+            // Restore saved draft or clear input
             historyIndexRef.current = -1;
-            setValue("");
-            setCursor(0);
+            const draft = draftRef.current ?? "";
+            draftRef.current = null;
+            setValue(draft);
+            setCursor(draft.length);
           } else {
             historyIndexRef.current = nextIdx;
             setValue(inputHistory[nextIdx]);
@@ -318,6 +326,7 @@ export function ChatInput({
           setCursor((c) => c + 1);
         } else if (isAutocomplete && autocomplete.submitValue) {
           historyIndexRef.current = -1;
+          draftRef.current = null;
           if (clipboardImages.length > 0) {
             onSubmit(autocomplete.submitValue, clipboardImages);
           } else {
@@ -328,6 +337,7 @@ export function ChatInput({
           setClipboardImages([]);
         } else if (value.trim() || clipboardImages.length > 0) {
           historyIndexRef.current = -1;
+          draftRef.current = null;
           if (clipboardImages.length > 0) {
             onSubmit(value, clipboardImages);
           } else {
