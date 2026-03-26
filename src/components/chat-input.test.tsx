@@ -693,7 +693,7 @@ describe("ChatInput", () => {
 
     it("up arrow at oldest history entry is a no-op", async () => {
       const onSubmit = vi.fn();
-      const { lastFrame, stdin } = render(
+      const { stdin } = render(
         <ChatInput onSubmit={onSubmit} inputHistory={["only entry"]} />,
       );
       // First up: recalls "only entry"
