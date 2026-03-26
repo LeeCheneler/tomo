@@ -60,9 +60,12 @@ Tomo can read, write, and search files, run commands, and more. Tools are enable
 | `run_command` | Run a shell command (always prompts)                  | Enabled  |
 | `ask`         | Ask the user a question                               | Enabled  |
 | `skill`       | Load specialized task instructions                    | Enabled  |
+| `agent`       | Spawn sub-agents for parallel research/exploration    | Enabled  |
 | `web_search`  | Search the web via Tavily API                         | Disabled |
 
 `web_search` requires a [Tavily](https://tavily.com) API key. Set `TAVILY_API_KEY` in your environment and enable the tool with `/tools`.
+
+`agent` spawns headless sub-agents that can read files, search code, and explore the codebase in parallel. The model decides when to spawn agents and how many. Active agents show color-coded progress indicators with tool call counts.
 
 ## Permissions
 
@@ -103,6 +106,25 @@ providers:
 ```
 
 Use `/configure` to add or remove providers interactively.
+
+### Agents
+
+Sub-agent behaviour is configurable via an optional `agents` section:
+
+```yaml
+agents:
+  maxDepth: 1         # maximum nesting depth (default: 1)
+  maxConcurrent: 3    # max agents running at once (default: 3)
+  timeoutSeconds: 300 # per-agent timeout (default: 300)
+  tools:              # tools available to agents (default below)
+    - read_file
+    - glob
+    - grep
+    - web_search
+    - skill
+```
+
+All fields are optional — sensible defaults apply if the section is omitted entirely.
 
 ## Instruction Files
 

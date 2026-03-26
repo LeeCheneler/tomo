@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, it } from "vitest";
 import { addAgent, incrementToolCalls, removeAgent } from "./agent-tracker";
 
 // Clean up agents between tests by removing any that were added.
