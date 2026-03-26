@@ -99,6 +99,8 @@ registerTool({
       signal: context.signal,
       depth: context.depth + 1,
       providerConfig,
+      commandPatterns: context.commandPatterns,
+      allowedCommands: context.allowedCommands,
     };
 
     // Per-call timeout capped to the global maximum.

@@ -45,6 +45,8 @@ describe("ask tool", () => {
         maxTokens: 1024,
         contextWindow: 8192,
       },
+      commandPatterns: [],
+      allowedCommands: [],
     };
 
     await expect(
@@ -68,6 +70,8 @@ describe("ask tool", () => {
         maxTokens: 1024,
         contextWindow: 8192,
       },
+      commandPatterns: [],
+      allowedCommands: [],
     };
 
     await tool?.execute(JSON.stringify({ options: ["A", "B"] }), context);
@@ -91,6 +95,8 @@ describe("ask tool", () => {
         maxTokens: 1024,
         contextWindow: 8192,
       },
+      commandPatterns: [],
+      allowedCommands: [],
     };
 
     const result = await tool?.execute(

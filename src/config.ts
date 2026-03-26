@@ -25,8 +25,16 @@ const permissionsSchema = z
     read_file: z.boolean().optional(),
     write_file: z.boolean().optional(),
     edit_file: z.boolean().optional(),
+    run_command: z.boolean().optional(),
   })
   .optional();
+
+const commandPatternSchema = z.object({
+  pattern: z.string().min(1),
+  enabled: z.boolean(),
+});
+
+export type CommandPattern = z.infer<typeof commandPatternSchema>;
 
 const toolsSchema = z.record(z.string(), z.boolean()).optional();
 
@@ -49,6 +57,8 @@ const configSchema = z.object({
   permissions: permissionsSchema,
   tools: toolsSchema,
   agents: agentsSchema,
+  command_patterns: z.array(commandPatternSchema).optional(),
+  allowed_commands: z.array(z.string()).optional(),
 });
 
 export type ProviderConfig = z.infer<typeof providerSchema>;
@@ -222,6 +232,46 @@ export function getMaxTokens(
   model: string,
 ): number {
   return provider.models?.[model]?.maxTokens ?? config.maxTokens;
+}
+
+const DEFAULT_COMMAND_PATTERNS: CommandPattern[] = [
+  { pattern: "git *", enabled: true },
+  { pattern: "npm *", enabled: true },
+  { pattern: "yarn *", enabled: true },
+  { pattern: "pnpm *", enabled: true },
+  { pattern: "node *", enabled: true },
+  { pattern: "npx *", enabled: true },
+  { pattern: "ls *", enabled: true },
+];
+
+/** Returns command patterns from config. Empty until explicitly configured. */
+export function getCommandPatterns(config: Config): CommandPattern[] {
+  return config.command_patterns ?? [];
+}
+
+/** Default patterns offered when bootstrapping via /grant. Not active until written to config. */
+export function getDefaultCommandPatterns(): CommandPattern[] {
+  return [...DEFAULT_COMMAND_PATTERNS];
+}
+
+/** Returns allowed commands from config, falling back to empty. */
+export function getAllowedCommands(config: Config): string[] {
+  return config.allowed_commands ?? [];
+}
+
+/** Adds a command to the allowed_commands list in local config. Deduplicates. */
+export function addAllowedCommand(command: string): void {
+  const path = localConfigPath();
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+
+  const raw = loadYaml(path) ?? {};
+  const existing = (raw.allowed_commands as string[]) ?? [];
+  if (!existing.includes(command)) {
+    existing.push(command);
+  }
+  raw.allowed_commands = existing;
+  writeFileSync(path, stringify(raw), "utf-8");
 }
 
 /** Returns the provider config matching the activeProvider name. Throws if not found. */

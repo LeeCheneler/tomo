@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import type { z } from "zod";
+import type { CommandPattern } from "../config";
 import type { ToolDefinition } from "../provider/client";
 
 /** Provider details needed by tools that spawn completion loops (e.g. agent). */
@@ -30,6 +31,10 @@ export interface ToolContext {
   depth: number;
   /** Provider config for spawning sub-agent completion loops. */
   providerConfig: ProviderInfo;
+  /** Enabled command patterns for auto-approving commands. */
+  commandPatterns: CommandPattern[];
+  /** Exact commands that are always auto-approved. */
+  allowedCommands: string[];
 }
 
 /** A model-initiated tool with a name, description, parameters, and execute handler. */

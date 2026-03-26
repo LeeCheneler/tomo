@@ -80,6 +80,8 @@ vi.mock("../config", () => ({
   loadConfig: () => ({}),
   updateActiveModel: vi.fn(),
   updateActiveProvider: vi.fn(),
+  getCommandPatterns: () => [],
+  getAllowedCommands: () => [],
 }));
 
 vi.mock("../commands", () => ({

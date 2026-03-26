@@ -17,6 +17,8 @@ const mockContext = {
     maxTokens: 1024,
     contextWindow: 8192,
   },
+  commandPatterns: [],
+  allowedCommands: [],
 };
 
 const originalEnv = process.env.TAVILY_API_KEY;
