@@ -20,6 +20,9 @@ describe("/help", () => {
     for (const cmd of commands) {
       expect(output).toContain(cmd.name);
     }
-    expect(output).toContain("Available commands:");
+    expect(output).toContain("Commands:");
+    expect(output).toContain("Skills:");
+    expect(output).toContain("Images:");
+    expect(output).toContain("Tips:");
   });
 });

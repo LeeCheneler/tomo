@@ -26,7 +26,7 @@ describe("GrantSelector", () => {
     expect(output).toContain("write_file");
     expect(output).toContain("edit_file");
     expect(output).toContain("run_command");
-    expect(output).toContain("always prompts");
+    expect(output).toContain("run commands without prompting");
   });
 
   it("shows enabled permissions as [x] and disabled as [ ]", () => {
@@ -99,7 +99,7 @@ describe("GrantSelector", () => {
     );
   });
 
-  it("does not toggle run_command", async () => {
+  it("toggles run_command", async () => {
     const onSave = vi.fn();
     const { stdin } = render(
       <GrantSelector
@@ -116,15 +116,16 @@ describe("GrantSelector", () => {
     await flush();
     stdin.write("\x1B[B");
     await flush();
-    // Try to toggle
+    // Toggle on
     stdin.write(" ");
     await flush();
     // Save
     stdin.write("\x1B");
     await flush();
 
-    const saved = onSave.mock.calls[0][0];
-    expect(saved.run_command).toBeUndefined();
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ run_command: true }),
+    );
   });
 
   it("calls onCancel on q", async () => {
