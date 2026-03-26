@@ -80,6 +80,7 @@ export function ChatInput({
   const [value, setValue] = useState("");
   const [cursor, setCursor] = useState(0);
   const historyIndexRef = useRef(-1);
+  const draftRef = useRef<string | null>(null);
   const [exitWarning, setExitWarning] = useState(false);
   const [clipboardImages, setClipboardImages] = useState<ImageAttachment[]>([]);
   const [imageNavActive, setImageNavActive] = useState(false);
@@ -229,12 +230,22 @@ export function ChatInput({
           setCursor(prevLineStart + Math.min(col, prevLineLength));
           return;
         }
-        // On first line — recall from input history
+        // On first line — go to start of line first, then recall history
+        if (cursor > 0) {
+          setCursor(0);
+          return;
+        }
         if (inputHistory.length > 0) {
+          // Already at oldest entry — do nothing
+          if (historyIndexRef.current === 0) return;
+          // Save current input as draft when first entering history
+          if (historyIndexRef.current === -1) {
+            draftRef.current = value;
+          }
           const nextIdx =
             historyIndexRef.current === -1
               ? inputHistory.length - 1
-              : Math.max(0, historyIndexRef.current - 1);
+              : historyIndexRef.current - 1;
           historyIndexRef.current = nextIdx;
           setValue(inputHistory[nextIdx]);
           setCursor(inputHistory[nextIdx].length);
@@ -259,13 +270,20 @@ export function ChatInput({
           setCursor(nextLineStart + Math.min(col, nextLineLength));
           return;
         }
-        // On last line — navigate history forward or enter image nav
+        // On last line — go to end of line first, then history/image nav
+        if (cursor < value.length) {
+          setCursor(value.length);
+          return;
+        }
         if (historyIndexRef.current >= 0) {
           const nextIdx = historyIndexRef.current + 1;
           if (nextIdx >= inputHistory.length) {
+            // Restore saved draft or clear input
             historyIndexRef.current = -1;
-            setValue("");
-            setCursor(0);
+            const draft = draftRef.current ?? "";
+            draftRef.current = null;
+            setValue(draft);
+            setCursor(draft.length);
           } else {
             historyIndexRef.current = nextIdx;
             setValue(inputHistory[nextIdx]);
@@ -310,6 +328,7 @@ export function ChatInput({
           setCursor((c) => c + 1);
         } else if (isAutocomplete && autocomplete.submitValue) {
           historyIndexRef.current = -1;
+          draftRef.current = null;
           if (clipboardImages.length > 0) {
             onSubmit(autocomplete.submitValue, clipboardImages);
           } else {
@@ -320,6 +339,7 @@ export function ChatInput({
           setClipboardImages([]);
         } else if (value.trim() || clipboardImages.length > 0) {
           historyIndexRef.current = -1;
+          draftRef.current = null;
           if (clipboardImages.length > 0) {
             onSubmit(value, clipboardImages);
           } else {

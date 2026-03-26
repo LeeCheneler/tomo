@@ -325,7 +325,7 @@ describe("ChatInput", () => {
     expect(onSubmit).toHaveBeenCalledWith("abcde\nfgX");
   });
 
-  it("up arrow does nothing on first line", async () => {
+  it("up arrow moves to start of line on first line", async () => {
     const onSubmit = vi.fn();
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
     stdin.write("abc");
@@ -336,13 +336,15 @@ describe("ChatInput", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    expect(onSubmit).toHaveBeenCalledWith("abcX");
+    expect(onSubmit).toHaveBeenCalledWith("Xabc");
   });
 
-  it("down arrow does nothing on last line", async () => {
+  it("down arrow moves to end of line on last line", async () => {
     const onSubmit = vi.fn();
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
     stdin.write("abc");
+    await flush();
+    stdin.write("\x01");
     await flush();
     stdin.write("\x1B[B");
     await flush();
@@ -633,8 +635,13 @@ describe("ChatInput", () => {
       const { stdin } = render(
         <ChatInput onSubmit={onSubmit} inputHistory={["one", "two"]} />,
       );
+      // First up: recalls "two" (cursor at end)
       stdin.write("\x1B[A");
       await flush();
+      // Second up: moves cursor to start of "two"
+      stdin.write("\x1B[A");
+      await flush();
+      // Third up: recalls "one"
       stdin.write("\x1B[A");
       await flush();
       stdin.write("\r");
@@ -683,6 +690,60 @@ describe("ChatInput", () => {
       await flush();
       expect(onSubmit).not.toHaveBeenCalled();
     });
+
+    it("up arrow at oldest history entry is a no-op", async () => {
+      const onSubmit = vi.fn();
+      const { stdin } = render(
+        <ChatInput onSubmit={onSubmit} inputHistory={["only entry"]} />,
+      );
+      // First up: recalls "only entry"
+      stdin.write("\x1B[A");
+      await flush();
+      // Second up: moves cursor to start
+      stdin.write("\x1B[A");
+      await flush();
+      // Third up: already at oldest — should be a no-op (cursor stays at 0)
+      stdin.write("\x1B[A");
+      await flush();
+      // Type at cursor position to verify it's still at start
+      stdin.write("X");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenCalledWith("Xonly entry");
+    });
+
+    it("preserves draft when scrolling through history", async () => {
+      const onSubmit = vi.fn();
+      const { lastFrame, stdin } = render(
+        <ChatInput onSubmit={onSubmit} inputHistory={["old message"]} />,
+      );
+
+      // Type a new message (not yet submitted)
+      stdin.write("my draft");
+      await flush();
+
+      // Up arrow: first goes to start of line
+      stdin.write("\x1B[A");
+      await flush();
+      // Up arrow again: recalls "old message"
+      stdin.write("\x1B[A");
+      await flush();
+      expect(lastFrame()).toContain("old message");
+
+      // Down arrow: goes to end of "old message"
+      stdin.write("\x1B[B");
+      await flush();
+      // Down arrow again: restores draft
+      stdin.write("\x1B[B");
+      await flush();
+      expect(lastFrame()).toContain("my draft");
+
+      // Submit to verify it's the draft
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenCalledWith("my draft");
+    });
   });
 
   describe("pending message shortcuts", () => {
@@ -729,7 +790,10 @@ describe("ChatInput", () => {
       );
       await flush();
 
-      // Next up arrow should go straight to "first"
+      // Next up arrow moves to start of "second"
+      stdin.write("\x1B[A");
+      await flush();
+      // Another up arrow recalls "first"
       stdin.write("\x1B[A");
       await flush();
       stdin.write("\r");
