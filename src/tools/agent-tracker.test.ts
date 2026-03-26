@@ -16,19 +16,12 @@ function add(id: string, prompt = "test") {
 }
 
 describe("agent-tracker", () => {
-  it("addAgent registers an agent", () => {
-    const listener = vi.fn();
-
-    // Subscribe via a manual listener to verify state without React
+  it("addAgent and removeAgent manage agents without throwing", () => {
     add("a1", "explore auth");
-
-    // useActiveAgents is a React hook — test the underlying state via add/remove
-    // We verify by adding then removing and checking listener was called
-    expect(listener).not.toHaveBeenCalled(); // listener not wired yet
-
-    // Verify by re-adding and checking removal works
+    // Removing and re-adding with same ID should work
     removeAgent("a1");
     trackedIds.pop();
+    add("a1", "re-added");
   });
 
   it("removeAgent removes an agent", () => {
