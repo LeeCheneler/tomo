@@ -57,7 +57,7 @@ Tomo can read, write, and search files, run commands, and more. Tools are enable
 | `edit_file`   | Apply string replacements to a file                   | Enabled  |
 | `glob`        | Find files by glob pattern (respects `.gitignore`)    | Enabled  |
 | `grep`        | Search file contents by regex (respects `.gitignore`) | Enabled  |
-| `run_command` | Run a shell command (always prompts)                  | Enabled  |
+| `run_command` | Run a shell command (prompts by default)              | Enabled  |
 | `ask`         | Ask the user a question                               | Enabled  |
 | `skill`       | Load specialized task instructions                    | Enabled  |
 | `agent`       | Spawn sub-agents for parallel research/exploration    | Enabled  |
@@ -69,13 +69,14 @@ Tomo can read, write, and search files, run commands, and more. Tools are enable
 
 ## Permissions
 
-Write operations (`write_file`, `edit_file`) prompt for confirmation by default. `read_file` is auto-allowed. Use `/grant` to change this, or set in config:
+Write operations (`write_file`, `edit_file`) and `run_command` prompt for confirmation by default. `read_file` is auto-allowed. Use `/grant` to change this, or set in config:
 
 ```yaml
 permissions:
   read_file: true
   write_file: true
   edit_file: true
+  run_command: false
 ```
 
 File operations outside the current working directory always prompt regardless of permissions.

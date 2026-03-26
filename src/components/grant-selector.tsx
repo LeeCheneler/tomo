@@ -4,26 +4,13 @@ import { Box, Text, useInput } from "ink";
 interface PermissionRow {
   key: string;
   label: string;
-  toggleable: boolean;
 }
 
 const ROWS: PermissionRow[] = [
-  {
-    key: "read_file",
-    label: "read files in current directory",
-    toggleable: true,
-  },
-  {
-    key: "write_file",
-    label: "write files in current directory",
-    toggleable: true,
-  },
-  {
-    key: "edit_file",
-    label: "edit files in current directory",
-    toggleable: true,
-  },
-  { key: "run_command", label: "always prompts", toggleable: false },
+  { key: "read_file", label: "read files in current directory" },
+  { key: "write_file", label: "write files in current directory" },
+  { key: "edit_file", label: "edit files in current directory" },
+  { key: "run_command", label: "run commands without prompting" },
 ];
 
 interface GrantSelectorProps {
@@ -64,12 +51,10 @@ export function GrantSelector({
 
     if (input === " " || key.return) {
       const row = ROWS[cursor];
-      if (row.toggleable) {
-        setPermissions((prev) => ({
-          ...prev,
-          [row.key]: !prev[row.key],
-        }));
-      }
+      setPermissions((prev) => ({
+        ...prev,
+        [row.key]: !prev[row.key],
+      }));
     }
   });
 
@@ -85,19 +70,11 @@ export function GrantSelector({
         const maxKey = Math.max(...ROWS.map((r) => r.key.length));
         const paddedKey = row.key.padEnd(maxKey);
 
-        if (!row.toggleable) {
-          return (
-            <Text key={row.key} dimColor>
-              {"  "}
-              {isCurrent ? "❯" : " "} {"   "} {paddedKey} {row.label}
-            </Text>
-          );
-        }
-
         return (
           <Text key={row.key} color={isCurrent ? "cyan" : undefined}>
             {"  "}
-            {isCurrent ? "❯" : " "} {enabled ? "[✔]" : "[ ]"} {paddedKey}{" "}
+            {isCurrent ? "❯" : " "} {enabled ? "[✔]" : "[ ]"} {paddedKey}
+            {"  "}
             {row.label}
           </Text>
         );

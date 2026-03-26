@@ -60,7 +60,7 @@ function spawnCommand(
 registerTool({
   name: "run_command",
   description:
-    "Run a CLI command. The user will be prompted to approve or deny before execution.",
+    "Run a CLI command. Prompts for approval by default unless the run_command permission is granted.",
   parameters: {
     type: "object",
     properties: {
@@ -74,16 +74,18 @@ registerTool({
   async execute(args: string, context: ToolContext): Promise<string> {
     const { command } = parseToolArgs(argsSchema, args);
 
-    const approved = await context.renderInteractive((onResult, _onCancel) =>
-      createElement(CommandConfirm, {
-        command,
-        onApprove: () => onResult("approved"),
-        onDeny: () => onResult("denied"),
-      }),
-    );
+    if (!context.permissions.run_command) {
+      const approved = await context.renderInteractive((onResult, _onCancel) =>
+        createElement(CommandConfirm, {
+          command,
+          onApprove: () => onResult("approved"),
+          onDeny: () => onResult("denied"),
+        }),
+      );
 
-    if (approved !== "approved") {
-      return "The user denied this command.";
+      if (approved !== "approved") {
+        return "The user denied this command.";
+      }
     }
 
     const result = await spawnCommand(command, DEFAULT_TIMEOUT_MS, (output) => {
