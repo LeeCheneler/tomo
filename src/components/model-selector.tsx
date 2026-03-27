@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ModelInfo } from "../provider/client";
 import { fetchModels, resolveApiKey } from "../provider/client";
+import { useListNavigation } from "../hooks/use-list-navigation";
 
 interface ProviderEntry {
   name: string;
@@ -75,10 +76,8 @@ export function ModelSelector({
     .filter((i) => i >= 0);
 
   const MAX_VISIBLE = 5;
-  const [cursor, setCursor] = useState(0);
   const [initialised, setInitialised] = useState(false);
   const [filter, setFilter] = useState("");
-  const windowStartRef = useRef(0);
 
   // Filter selectable indices by search term
   const filteredIndices = filter
@@ -90,6 +89,9 @@ export function ModelSelector({
         );
       })
     : selectableIndices;
+
+  const { cursor, setCursor, windowStart, handleUp, handleDown } =
+    useListNavigation(filteredIndices.length, { maxVisible: MAX_VISIBLE });
 
   // Set cursor to active model once results arrive
   // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger on load completion
@@ -103,15 +105,7 @@ export function ModelSelector({
           row.model === activeModel
         );
       });
-      const pos = initial >= 0 ? initial : 0;
-      setCursor(pos);
-      windowStartRef.current = Math.max(
-        0,
-        Math.min(
-          pos - Math.floor(MAX_VISIBLE / 2),
-          filteredIndices.length - MAX_VISIBLE,
-        ),
-      );
+      setCursor(initial >= 0 ? initial : 0);
       setInitialised(true);
     }
   }, [loading, initialised, filteredIndices.length]);
@@ -121,7 +115,6 @@ export function ModelSelector({
       if (filter) {
         setFilter("");
         setCursor(0);
-        windowStartRef.current = 0;
         return;
       }
       onCancel();
@@ -139,20 +132,18 @@ export function ModelSelector({
     }
 
     if (key.upArrow) {
-      setCursor((c) => (c > 0 ? c - 1 : filteredIndices.length - 1));
+      handleUp();
       return;
     }
     if (key.downArrow) {
-      setCursor((c) => (c < filteredIndices.length - 1 ? c + 1 : 0));
+      handleDown();
       return;
     }
 
     if (key.backspace || key.delete) {
       setFilter((f) => {
-        const next = f.slice(0, -1);
         setCursor(0);
-        windowStartRef.current = 0;
-        return next;
+        return f.slice(0, -1);
       });
       return;
     }
@@ -160,22 +151,10 @@ export function ModelSelector({
     if (input && !key.ctrl && !key.meta) {
       setFilter((f) => {
         setCursor(0);
-        windowStartRef.current = 0;
         return f + input;
       });
     }
   });
-
-  // Keep the scroll window around the cursor
-  if (cursor < windowStartRef.current) {
-    windowStartRef.current = cursor;
-  } else if (cursor >= windowStartRef.current + MAX_VISIBLE) {
-    windowStartRef.current = cursor - MAX_VISIBLE + 1;
-  }
-  windowStartRef.current = Math.min(
-    windowStartRef.current,
-    Math.max(0, filteredIndices.length - MAX_VISIBLE),
-  );
 
   if (loading) {
     return <Text dimColor>{"  Fetching models..."}</Text>;
@@ -187,8 +166,8 @@ export function ModelSelector({
 
   // Visible window of filtered model rows
   const visibleSelectables = filteredIndices.slice(
-    windowStartRef.current,
-    windowStartRef.current + MAX_VISIBLE,
+    windowStart,
+    windowStart + MAX_VISIBLE,
   );
   const remaining = filteredIndices.length - MAX_VISIBLE;
 

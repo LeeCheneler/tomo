@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { fetchModels, type ModelInfo } from "../provider/client";
+import { useListNavigation } from "../hooks/use-list-navigation";
 
 interface ProviderEntry {
   name: string;
@@ -52,7 +53,6 @@ export function ConfigureSelector({
   onCancel,
 }: ConfigureSelectorProps) {
   const [step, setStep] = useState<Step>("menu");
-  const [cursor, setCursor] = useState(0);
   const [newProvider, setNewProvider] = useState<NewProvider>({
     type: "",
     baseUrl: "",
@@ -63,7 +63,6 @@ export function ConfigureSelector({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [modelFilter, setModelFilter] = useState("");
-  const modelWindowRef = useRef(0);
 
   const MAX_VISIBLE = 5;
   const menuOptions = ["Add provider", "Remove provider"];
@@ -76,11 +75,31 @@ export function ConfigureSelector({
       )
     : models;
 
-  // Reset cursor and scroll window when step changes
+  // Compute item count based on current step
+  const itemCount = (() => {
+    switch (step) {
+      case "menu":
+        return menuOptions.length;
+      case "selectType":
+        return PROVIDER_TYPES.length;
+      case "selectModel":
+        return filteredModels.length;
+      case "removeProvider":
+        return removableProviders.length;
+      default:
+        return 0;
+    }
+  })();
+
+  const { cursor, setCursor, windowStart, handleUp, handleDown } =
+    useListNavigation(itemCount, {
+      maxVisible: step === "selectModel" ? MAX_VISIBLE : undefined,
+    });
+
+  // Reset cursor and filter when step changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset cursor on step change
   useEffect(() => {
     setCursor(0);
-    modelWindowRef.current = 0;
     setModelFilter("");
   }, [step]);
 
@@ -91,7 +110,6 @@ export function ConfigureSelector({
       } else if (step === "selectModel" && modelFilter) {
         setModelFilter("");
         setCursor(0);
-        modelWindowRef.current = 0;
       } else {
         setStep("menu");
         setNewProvider({ type: "", baseUrl: "" });
@@ -105,9 +123,9 @@ export function ConfigureSelector({
     switch (step) {
       case "menu": {
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : menuOptions.length - 1));
+          handleUp();
         } else if (key.downArrow) {
-          setCursor((c) => (c < menuOptions.length - 1 ? c + 1 : 0));
+          handleDown();
         } else if (key.return) {
           if (cursor === 0) {
             setStep("selectType");
@@ -121,9 +139,9 @@ export function ConfigureSelector({
 
       case "selectType": {
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : PROVIDER_TYPES.length - 1));
+          handleUp();
         } else if (key.downArrow) {
-          setCursor((c) => (c < PROVIDER_TYPES.length - 1 ? c + 1 : 0));
+          handleDown();
         } else if (key.return) {
           const type = PROVIDER_TYPES[cursor];
           setNewProvider({ type, baseUrl: "" });
@@ -172,9 +190,9 @@ export function ConfigureSelector({
 
       case "selectModel": {
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : filteredModels.length - 1));
+          handleUp();
         } else if (key.downArrow) {
-          setCursor((c) => (c < filteredModels.length - 1 ? c + 1 : 0));
+          handleDown();
         } else if (key.return && filteredModels.length > 0) {
           const model = filteredModels[cursor];
           if (!model) return;
@@ -185,13 +203,11 @@ export function ConfigureSelector({
         } else if (key.backspace || key.delete) {
           setModelFilter((f) => {
             setCursor(0);
-            modelWindowRef.current = 0;
             return f.slice(0, -1);
           });
         } else if (input && !key.ctrl && !key.meta) {
           setModelFilter((f) => {
             setCursor(0);
-            modelWindowRef.current = 0;
             return f + input;
           });
         }
@@ -229,9 +245,9 @@ export function ConfigureSelector({
 
       case "removeProvider": {
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : removableProviders.length - 1));
+          handleUp();
         } else if (key.downArrow) {
-          setCursor((c) => (c < removableProviders.length - 1 ? c + 1 : 0));
+          handleDown();
         } else if (key.return && removableProviders.length > 0) {
           const provider = removableProviders[cursor];
           if (!provider) return;
@@ -359,19 +375,9 @@ export function ConfigureSelector({
       return <Text dimColor>{"  Fetching models..."}</Text>;
 
     case "selectModel": {
-      // Keep scroll window around cursor
-      if (cursor < modelWindowRef.current) {
-        modelWindowRef.current = cursor;
-      } else if (cursor >= modelWindowRef.current + MAX_VISIBLE) {
-        modelWindowRef.current = cursor - MAX_VISIBLE + 1;
-      }
-      modelWindowRef.current = Math.min(
-        modelWindowRef.current,
-        Math.max(0, filteredModels.length - MAX_VISIBLE),
-      );
       const visibleModels = filteredModels.slice(
-        modelWindowRef.current,
-        modelWindowRef.current + MAX_VISIBLE,
+        windowStart,
+        windowStart + MAX_VISIBLE,
       );
       const remaining = filteredModels.length - MAX_VISIBLE;
       return (
@@ -397,7 +403,7 @@ export function ConfigureSelector({
             <Text dimColor>{"    No models match your search."}</Text>
           )}
           {visibleModels.map((model, i) => {
-            const actualIdx = modelWindowRef.current + i;
+            const actualIdx = windowStart + i;
             const isCursor = actualIdx === cursor;
             const prefix = isCursor ? "❯" : " ";
             return (

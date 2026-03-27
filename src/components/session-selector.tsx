@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { Session } from "../session";
 import { listSessions } from "../session";
+import { useListNavigation } from "../hooks/use-list-navigation";
 
 const WINDOW_SIZE = 5;
 const MAX_PREVIEW_LENGTH = 50;
@@ -50,8 +51,10 @@ interface SessionSelectorProps {
 /** Interactive session picker with arrow key navigation and a sliding window. */
 export function SessionSelector({ onSelect, onCancel }: SessionSelectorProps) {
   const [sessions] = useState<Session[]>(() => listSessions(50));
-  const [cursor, setCursor] = useState(0);
-  const [windowStart, setWindowStart] = useState(0);
+  const { cursor, windowStart, handleUp, handleDown } = useListNavigation(
+    sessions.length,
+    { maxVisible: WINDOW_SIZE, wrap: false },
+  );
 
   useInput((_, key) => {
     if (key.escape) {
@@ -64,17 +67,8 @@ export function SessionSelector({ onSelect, onCancel }: SessionSelectorProps) {
       return;
     }
 
-    if (key.upArrow && cursor > 0) {
-      const next = cursor - 1;
-      setCursor(next);
-      if (next < windowStart) setWindowStart(next);
-    }
-
-    if (key.downArrow && cursor < sessions.length - 1) {
-      const next = cursor + 1;
-      setCursor(next);
-      if (next >= windowStart + WINDOW_SIZE) setWindowStart(windowStart + 1);
-    }
+    if (key.upArrow) handleUp();
+    if (key.downArrow) handleDown();
   });
 
   if (sessions.length === 0) {
