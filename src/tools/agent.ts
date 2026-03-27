@@ -5,6 +5,7 @@ import { loadInstructions } from "../instructions";
 import type { ChatMessage } from "../provider/client";
 import { addAgent, incrementToolCalls, removeAgent } from "./agent-tracker";
 import { getTool, registerTool } from "./registry";
+import { getErrorMessage } from "../errors";
 import { type ToolContext, parseToolArgs, toToolDefinition } from "./types";
 
 const argsSchema = z.object({
@@ -147,7 +148,7 @@ registerTool({
         }
         throw err;
       }
-      return `Sub-agent error: ${err instanceof Error ? err.message : String(err)}`;
+      return `Sub-agent error: ${getErrorMessage(err)}`;
     } finally {
       clearTimeout(timeoutId);
       removeAgent(agentId);

@@ -6,6 +6,7 @@ import { FileAccessConfirm } from "../components/file-access-confirm";
 import { isPathWithinCwd } from "../permissions";
 import { isGitRepo } from "../git";
 import { registerTool } from "./registry";
+import { getErrorMessage } from "../errors";
 import { type ToolContext, parseToolArgs } from "./types";
 
 const argsSchema = z.object({
@@ -120,6 +121,6 @@ function runGrep(
     ) {
       return "No matches found.";
     }
-    return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    return `Error: ${getErrorMessage(err)}`;
   }
 }

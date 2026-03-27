@@ -5,6 +5,7 @@ import { z } from "zod";
 import { FileAccessConfirm } from "../components/file-access-confirm";
 import { isPathWithinCwd } from "../permissions";
 import { registerTool } from "./registry";
+import { getErrorMessage } from "../errors";
 import { type ToolContext, parseToolArgs } from "./types";
 
 const argsSchema = z.object({
@@ -59,7 +60,7 @@ function readFile(
     );
     return `${filePath} (${totalLines} lines)\n${numbered.join("\n")}`;
   } catch (err) {
-    return `Error reading file: ${err instanceof Error ? err.message : String(err)}`;
+    return `Error reading file: ${getErrorMessage(err)}`;
   }
 }
 

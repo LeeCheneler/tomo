@@ -6,6 +6,7 @@ import { WriteFileConfirm } from "../components/write-file-confirm";
 import { isPathWithinCwd } from "../permissions";
 import { formatDiff } from "./format-diff";
 import { registerTool } from "./registry";
+import { getErrorMessage } from "../errors";
 import { type ToolContext, parseToolArgs } from "./types";
 
 const argsSchema = z.object({
@@ -19,7 +20,7 @@ function performEdit(filePath: string, content: string): string {
     writeFileSync(filePath, content, "utf-8");
     return `Successfully edited ${filePath}`;
   } catch (err) {
-    return `Error writing file: ${err instanceof Error ? err.message : String(err)}`;
+    return `Error writing file: ${getErrorMessage(err)}`;
   }
 }
 
@@ -65,7 +66,7 @@ registerTool({
     try {
       content = readFileSync(filePath, "utf-8");
     } catch (err) {
-      return `Error reading file: ${err instanceof Error ? err.message : String(err)}`;
+      return `Error reading file: ${getErrorMessage(err)}`;
     }
 
     // Count occurrences

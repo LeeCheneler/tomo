@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ModelInfo } from "../provider/client";
+import { getErrorMessage } from "../errors";
 import { fetchModels, resolveApiKey } from "../provider/client";
 import { useListNavigation } from "../hooks/use-list-navigation";
 
@@ -51,7 +52,7 @@ export function ModelSelector({
           return {
             provider: p.name,
             models: [],
-            error: err instanceof Error ? err.message : String(err),
+            error: getErrorMessage(err),
           };
         }
       }),

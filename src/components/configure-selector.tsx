@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { getErrorMessage } from "../errors";
 import { fetchModels, type ModelInfo } from "../provider/client";
 import { useListNavigation } from "../hooks/use-list-navigation";
 
@@ -275,7 +276,7 @@ export function ConfigureSelector({
       })
       .catch((err) => {
         if (cancelled) return;
-        setFetchError(err instanceof Error ? err.message : String(err));
+        setFetchError(getErrorMessage(err));
       });
 
     return () => {

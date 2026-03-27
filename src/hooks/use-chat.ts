@@ -14,6 +14,7 @@ import {
   updateActiveModel,
   updateActiveProvider,
 } from "../config";
+import { getErrorMessage } from "../errors";
 import type { ImageAttachment } from "../images";
 import { resolvePermissions } from "../permissions";
 import type { ChatMessage, ContentPart, TokenUsage } from "../provider/client";
@@ -423,7 +424,7 @@ export function useChat(
         setMessages(currentMessages);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getErrorMessage(err));
     }
 
     streamingRef.current = false;
