@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import type { DisplayMessage } from "../components/message-list";
 import type { ToolCall } from "../provider/client";
+import { getErrorMessage } from "../errors";
 import { type ToolContext, getTool, getToolDisplayName } from "../tools";
 
 export class ToolDismissedError extends Error {
@@ -58,7 +59,7 @@ async function executeSingleToolCall(
       result = await tool.execute(tc.function.arguments, toolContext);
     } catch (err) {
       if (err instanceof ToolDismissedError) throw err;
-      result = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      result = `Error: ${getErrorMessage(err)}`;
     }
   }
 
