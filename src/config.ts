@@ -144,67 +144,62 @@ export function loadConfig(): Config {
   return result.data;
 }
 
-/** Updates fields in the global config file on disk. */
-function updateGlobalConfig(updates: Record<string, unknown>): void {
-  const path = globalConfigPath();
-  const raw = loadYaml(path);
-  if (!raw) return;
-  Object.assign(raw, updates);
+/** Load a YAML config file, apply an updater, and write it back. Creates the file and directories if absent. */
+function updateConfigFile(
+  path: string,
+  updater: (raw: Record<string, unknown>) => void,
+): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const raw = loadYaml(path) ?? {};
+  updater(raw);
   writeFileSync(path, stringify(raw), "utf-8");
 }
 
 /** Updates activeModel in the global config. */
 export function updateActiveModel(model: string): void {
-  updateGlobalConfig({ activeModel: model });
+  updateConfigFile(globalConfigPath(), (raw) => {
+    raw.activeModel = model;
+  });
 }
 
 /** Updates activeProvider in the global config. */
 export function updateActiveProvider(provider: string): void {
-  updateGlobalConfig({ activeProvider: provider });
+  updateConfigFile(globalConfigPath(), (raw) => {
+    raw.activeProvider = provider;
+  });
 }
 
-/** Updates permissions in the local project config (.tomo/config.yaml). Creates the file if absent. */
+/** Updates permissions in the local project config (.tomo/config.yaml). */
 export function updateLocalPermissions(
   permissions: Record<string, boolean>,
 ): void {
-  const path = localConfigPath();
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
-
-  const raw = loadYaml(path) ?? {};
-  raw.permissions = permissions;
-  writeFileSync(path, stringify(raw), "utf-8");
+  updateConfigFile(localConfigPath(), (raw) => {
+    raw.permissions = permissions;
+  });
 }
 
-/** Updates tool availability in the local project config (.tomo/config.yaml). Creates the file if absent. */
+/** Updates tool availability in the local project config (.tomo/config.yaml). */
 export function updateLocalToolConfig(tools: Record<string, boolean>): void {
-  const path = localConfigPath();
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
-
-  const raw = loadYaml(path) ?? {};
-  raw.tools = tools;
-  writeFileSync(path, stringify(raw), "utf-8");
+  updateConfigFile(localConfigPath(), (raw) => {
+    raw.tools = tools;
+  });
 }
 
 /** Adds a provider to the global config file. */
 export function addProvider(provider: ProviderConfig): void {
-  const path = globalConfigPath();
-  const raw = loadYaml(path) ?? {};
-  const providers = (raw.providers as ProviderConfig[]) ?? [];
-  providers.push(provider);
-  raw.providers = providers;
-  writeFileSync(path, stringify(raw), "utf-8");
+  updateConfigFile(globalConfigPath(), (raw) => {
+    const providers = (raw.providers as ProviderConfig[]) ?? [];
+    providers.push(provider);
+    raw.providers = providers;
+  });
 }
 
 /** Removes a provider by name from the global config file. */
 export function removeProvider(name: string): void {
-  const path = globalConfigPath();
-  const raw = loadYaml(path);
-  if (!raw) return;
-  const providers = (raw.providers as ProviderConfig[]) ?? [];
-  raw.providers = providers.filter((p) => p.name !== name);
-  writeFileSync(path, stringify(raw), "utf-8");
+  updateConfigFile(globalConfigPath(), (raw) => {
+    const providers = (raw.providers as ProviderConfig[]) ?? [];
+    raw.providers = providers.filter((p) => p.name !== name);
+  });
 }
 
 /** Returns a provider config by name, or undefined if not found. */
@@ -231,28 +226,20 @@ export function getAllowedCommands(config: Config): string[] {
 
 /** Adds a command to the allowed_commands list in local config. Deduplicates. */
 export function addAllowedCommand(command: string): void {
-  const path = localConfigPath();
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
-
-  const raw = loadYaml(path) ?? {};
-  const existing = (raw.allowed_commands as string[]) ?? [];
-  if (!existing.includes(command)) {
-    existing.push(command);
-  }
-  raw.allowed_commands = existing;
-  writeFileSync(path, stringify(raw), "utf-8");
+  updateConfigFile(localConfigPath(), (raw) => {
+    const existing = (raw.allowed_commands as string[]) ?? [];
+    if (!existing.includes(command)) {
+      existing.push(command);
+    }
+    raw.allowed_commands = existing;
+  });
 }
 
 /** Updates allowed commands in the local project config. */
 export function updateLocalAllowedCommands(commands: string[]): void {
-  const path = localConfigPath();
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
-
-  const raw = loadYaml(path) ?? {};
-  raw.allowed_commands = commands;
-  writeFileSync(path, stringify(raw), "utf-8");
+  updateConfigFile(localConfigPath(), (raw) => {
+    raw.allowed_commands = commands;
+  });
 }
 
 /** Returns the provider config matching the activeProvider name. Throws if not found. */
