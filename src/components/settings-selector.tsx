@@ -18,12 +18,7 @@ const PERMISSION_ROWS: PermissionRow[] = [
   {
     key: "write_file",
     displayName: "Write File",
-    description: "Write files in current directory",
-  },
-  {
-    key: "edit_file",
-    displayName: "Edit File",
-    description: "Edit files in current directory",
+    description: "Write and edit files in current directory",
   },
 ];
 

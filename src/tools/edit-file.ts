@@ -3,10 +3,10 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { z } from "zod";
 import { WriteFileConfirm } from "../components/write-file-confirm";
-import { isPathWithinCwd } from "../permissions";
+import { getErrorMessage } from "../errors";
+import { withFilePermission } from "../permissions";
 import { formatDiff } from "./format-diff";
 import { registerTool } from "./registry";
-import { getErrorMessage } from "../errors";
 import { type ToolContext, parseToolArgs } from "./types";
 
 const argsSchema = z.object({
@@ -82,27 +82,24 @@ registerTool({
 
     const newContent = content.replace(oldString, newString);
 
-    // Skip confirmation if permission granted and path is within cwd
-    if (context.permissions.edit_file && isPathWithinCwd(filePath)) {
-      return performEdit(filePath, newContent);
-    }
-
-    const diffPreview = formatDiff(content, newContent);
-
-    const approved = await context.renderInteractive((onResult, _onCancel) =>
-      createElement(WriteFileConfirm, {
-        filePath,
-        isNewFile: false,
-        diffPreview,
-        onApprove: () => onResult("approved"),
-        onDeny: () => onResult("denied"),
-      }),
-    );
-
-    if (approved !== "approved") {
-      return "The user denied this edit.";
-    }
-
-    return performEdit(filePath, newContent);
+    return withFilePermission({
+      context,
+      permission: "write_file",
+      filePath,
+      execute: () => performEdit(filePath, newContent),
+      renderConfirm: () => {
+        const diffPreview = formatDiff(content, newContent);
+        return context.renderInteractive((onResult) =>
+          createElement(WriteFileConfirm, {
+            filePath,
+            isNewFile: false,
+            diffPreview,
+            onApprove: () => onResult("approved"),
+            onDeny: () => onResult("denied"),
+          }),
+        );
+      },
+      denyMessage: "The user denied this edit.",
+    });
   },
 });

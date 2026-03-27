@@ -15,7 +15,6 @@ const defaultToolAvailability: Record<string, boolean> = {
 const defaultPermissions = {
   read_file: true,
   write_file: false,
-  edit_file: false,
 };
 
 const defaultAllowedCommands = ["git:*", "npm:*"];
@@ -126,7 +125,6 @@ describe("SettingsSelector", () => {
       const output = lastFrame();
       expect(output).toContain("Read File");
       expect(output).toContain("Write File");
-      expect(output).toContain("Edit File");
     });
 
     it("toggles permission", async () => {

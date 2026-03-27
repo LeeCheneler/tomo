@@ -4,10 +4,10 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { z } from "zod";
 import { FileAccessConfirm } from "../components/file-access-confirm";
-import { isPathWithinCwd } from "../permissions";
-import { isGitRepo } from "../git";
-import { registerTool } from "./registry";
 import { getErrorMessage } from "../errors";
+import { isGitRepo } from "../git";
+import { withFilePermission } from "../permissions";
+import { registerTool } from "./registry";
 import { type ToolContext, parseToolArgs } from "./types";
 
 const argsSchema = z.object({
@@ -46,29 +46,24 @@ registerTool({
   async execute(args: string, context: ToolContext): Promise<string> {
     const parsed = parseToolArgs(argsSchema, args);
     const { pattern, gitignore } = parsed;
-
     const searchDir = parsed.path ? resolve(parsed.path) : process.cwd();
 
-    // Permission granted and path in cwd — search immediately
-    if (context.permissions.read_file && isPathWithinCwd(searchDir)) {
-      return runGlob(pattern, searchDir, gitignore);
-    }
-
-    // Permission not granted or outside cwd — ask for approval
-    const approved = await context.renderInteractive((onResult) =>
-      createElement(FileAccessConfirm, {
-        filePath: searchDir,
-        action: `Search for files matching "${pattern}"?`,
-        onApprove: () => onResult("approved"),
-        onDeny: () => onResult("denied"),
-      }),
-    );
-
-    if (approved !== "approved") {
-      return "The user denied this search.";
-    }
-
-    return runGlob(pattern, searchDir, gitignore);
+    return withFilePermission({
+      context,
+      permission: "read_file",
+      filePath: searchDir,
+      execute: () => runGlob(pattern, searchDir, gitignore),
+      renderConfirm: () =>
+        context.renderInteractive((onResult) =>
+          createElement(FileAccessConfirm, {
+            filePath: searchDir,
+            action: `Search for files matching "${pattern}"?`,
+            onApprove: () => onResult("approved"),
+            onDeny: () => onResult("denied"),
+          }),
+        ),
+      denyMessage: "The user denied this search.",
+    });
   },
 });
 

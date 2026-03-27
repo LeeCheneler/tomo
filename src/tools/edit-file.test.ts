@@ -186,13 +186,13 @@ describe("edit_file tool", () => {
     expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
   });
 
-  it("skips confirmation when edit_file permission granted and path in cwd", async () => {
+  it("skips confirmation when write_file permission granted and path in cwd", async () => {
     const filePath = resolve(process.cwd(), ".test-edit-perm.txt");
     writeFileSync(filePath, "hello\n");
     const tool = getTool("edit_file");
     const ctx = {
       ...mockContext,
-      permissions: { edit_file: true },
+      permissions: { write_file: true },
     };
 
     const result = await tool?.execute(
@@ -210,13 +210,13 @@ describe("edit_file tool", () => {
     rmSync(filePath, { force: true });
   });
 
-  it("still prompts when edit_file permission granted but path outside cwd", async () => {
+  it("still prompts when write_file permission granted but path outside cwd", async () => {
     const filePath = "/tmp/.test-edit-perm-outside.txt";
     writeFileSync(filePath, "hello\n");
     const tool = getTool("edit_file");
     const ctx = {
       ...mockContext,
-      permissions: { edit_file: true },
+      permissions: { write_file: true },
     };
 
     await tool?.execute(
@@ -232,7 +232,7 @@ describe("edit_file tool", () => {
     rmSync(filePath, { force: true });
   });
 
-  it("prompts when edit_file permission not granted even for cwd paths", async () => {
+  it("prompts when write_file permission not granted even for cwd paths", async () => {
     const filePath = resolve(tmpDir, "test.txt");
     writeFileSync(filePath, "hello\n");
     const tool = getTool("edit_file");
