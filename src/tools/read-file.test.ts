@@ -2,32 +2,18 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTool } from "./registry";
+import { makeMockContext } from "./test-helpers";
 
 // Import to trigger registration
 import "./read-file";
 
 const tmpDir = resolve(import.meta.dirname, "../../.test-read-file-tmp");
-const mockContext = {
-  renderInteractive: vi.fn().mockResolvedValue("approved"),
-  reportProgress: vi.fn(),
-  permissions: { read_file: true },
-  signal: new AbortController().signal,
-  depth: 0,
-  providerConfig: {
-    baseUrl: "http://localhost",
-    model: "test-model",
-    apiKey: undefined,
-    maxTokens: 1024,
-    contextWindow: 8192,
-  },
-
-  allowedCommands: [],
-};
+let mockContext = makeMockContext();
 
 beforeEach(() => {
   mkdirSync(tmpDir, { recursive: true });
   vi.clearAllMocks();
-  mockContext.renderInteractive.mockResolvedValue("approved");
+  mockContext = makeMockContext();
 });
 
 afterEach(() => {

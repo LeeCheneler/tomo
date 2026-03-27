@@ -1,25 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTool } from "./registry";
+import { makeMockContext } from "./test-helpers";
 
 // Import to trigger registration
 import "./web-search";
 
-const mockContext = {
-  renderInteractive: vi.fn().mockResolvedValue("approved"),
-  reportProgress: vi.fn(),
-  permissions: {},
-  signal: new AbortController().signal,
-  depth: 0,
-  providerConfig: {
-    baseUrl: "http://localhost",
-    model: "test-model",
-    apiKey: undefined,
-    maxTokens: 1024,
-    contextWindow: 8192,
-  },
-
-  allowedCommands: [],
-};
+const mockContext = makeMockContext({ permissions: {} });
 
 const originalEnv = process.env.TAVILY_API_KEY;
 
