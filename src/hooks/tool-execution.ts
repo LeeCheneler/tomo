@@ -1,8 +1,9 @@
 import chalk from "chalk";
 import type { DisplayMessage } from "../components/message-list";
-import type { ToolCall } from "../provider/client";
 import { getErrorMessage } from "../errors";
-import { type ToolContext, getTool, getToolDisplayName } from "../tools";
+import type { McpManager } from "../mcp/manager";
+import type { ToolCall } from "../provider/client";
+import { getTool, getToolDisplayName, type ToolContext } from "../tools";
 
 export class ToolDismissedError extends Error {
   constructor() {
@@ -49,17 +50,28 @@ export function formatToolHeader(name: string, args: string): string {
 async function executeSingleToolCall(
   tc: ToolCall,
   toolContext: ToolContext,
+  mcpManager?: McpManager,
 ): Promise<DisplayMessage> {
-  const tool = getTool(tc.function.name);
   let result: string;
-  if (!tool) {
-    result = `Error: unknown tool "${tc.function.name}"`;
-  } else {
+
+  if (mcpManager?.isMcpTool(tc.function.name)) {
     try {
-      result = await tool.execute(tc.function.arguments, toolContext);
+      const args = JSON.parse(tc.function.arguments || "{}");
+      result = await mcpManager.callTool(tc.function.name, args);
     } catch (err) {
-      if (err instanceof ToolDismissedError) throw err;
       result = `Error: ${getErrorMessage(err)}`;
+    }
+  } else {
+    const tool = getTool(tc.function.name);
+    if (!tool) {
+      result = `Error: unknown tool "${tc.function.name}"`;
+    } else {
+      try {
+        result = await tool.execute(tc.function.arguments, toolContext);
+      } catch (err) {
+        if (err instanceof ToolDismissedError) throw err;
+        result = `Error: ${getErrorMessage(err)}`;
+      }
     }
   }
 
@@ -80,17 +92,23 @@ export async function executeToolCalls(
   toolCalls: ToolCall[],
   signal: AbortSignal,
   toolContext: ToolContext,
+  mcpManager?: McpManager,
 ): Promise<DisplayMessage[]> {
   // Separate into non-interactive (can run in parallel) and interactive (must be sequential).
+  // MCP tools are always treated as non-interactive since they don't render UI.
   const nonInteractive: ToolCall[] = [];
   const interactive: ToolCall[] = [];
 
   for (const tc of toolCalls) {
-    const tool = getTool(tc.function.name);
-    if (tool && tool.interactive === false) {
+    if (mcpManager?.isMcpTool(tc.function.name)) {
       nonInteractive.push(tc);
     } else {
-      interactive.push(tc);
+      const tool = getTool(tc.function.name);
+      if (tool && tool.interactive === false) {
+        nonInteractive.push(tc);
+      } else {
+        interactive.push(tc);
+      }
     }
   }
 
@@ -98,7 +116,9 @@ export async function executeToolCalls(
   const parallelResults =
     nonInteractive.length > 0
       ? await Promise.all(
-          nonInteractive.map((tc) => executeSingleToolCall(tc, toolContext)),
+          nonInteractive.map((tc) =>
+            executeSingleToolCall(tc, toolContext, mcpManager),
+          ),
         )
       : [];
 
@@ -108,7 +128,9 @@ export async function executeToolCalls(
     if (signal.aborted) {
       throw new DOMException("aborted", "AbortError");
     }
-    sequentialResults.push(await executeSingleToolCall(tc, toolContext));
+    sequentialResults.push(
+      await executeSingleToolCall(tc, toolContext, mcpManager),
+    );
   }
 
   // Return results in the original tool call order.

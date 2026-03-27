@@ -2,12 +2,13 @@ import chalk from "chalk";
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 import { getCommand, parse } from "../commands";
-import type { DisplayMessage } from "../components/message-list";
 import { runCompletionLoop } from "../completion-loop";
+import type { DisplayMessage } from "../components/message-list";
 import {
   type Config,
   getAllowedCommands,
   getMaxTokens,
+  getMcpServers,
   getProviderByName,
   loadConfig,
   type ProviderConfig,
@@ -16,6 +17,7 @@ import {
 } from "../config";
 import { getErrorMessage } from "../errors";
 import type { ImageAttachment } from "../images";
+import { McpManager } from "../mcp/manager";
 import { resolvePermissions } from "../permissions";
 import type { ChatMessage, ContentPart, TokenUsage } from "../provider/client";
 import {
@@ -200,8 +202,17 @@ export function useChat(
   const sessionRef = useRef<Session>(initialSession);
   const streamingRef = useRef(false);
   const pendingMessageRef = useRef<string | null>(null);
+  const mcpManagerRef = useRef<McpManager | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const inputHistoryRef = useRef<string[]>([]);
+
+  // Shut down MCP servers on unmount.
+  useEffect(() => {
+    return () => {
+      mcpManagerRef.current?.shutdown();
+      mcpManagerRef.current = null;
+    };
+  }, []);
 
   // Detect context window from provider when model or provider changes.
   // Config override takes precedence — only fetch if no override is set.
@@ -247,6 +258,8 @@ export function useChat(
     setPendingMessage(null);
     inputHistoryRef.current = [];
     abortRef.current?.abort();
+    mcpManagerRef.current?.shutdown();
+    mcpManagerRef.current = null;
     setMessages([]);
     setStreaming(false);
     setStreamingContent("");
@@ -397,7 +410,24 @@ export function useChat(
     const freshConfig = loadConfig();
     const maxTokens = getMaxTokens(config, activeProvider, activeModel);
     const toolAvailability = resolveToolAvailability(freshConfig.tools);
-    const toolDefs = getToolDefinitions(toolAvailability);
+    const builtInToolDefs = getToolDefinitions(toolAvailability);
+
+    // Start MCP servers if configured and not already running.
+    const mcpServers = getMcpServers(freshConfig);
+    if (Object.keys(mcpServers).length > 0 && !mcpManagerRef.current) {
+      const manager = new McpManager();
+      try {
+        await manager.startAll(mcpServers);
+        mcpManagerRef.current = manager;
+      } catch {
+        // MCP server startup failed — continue without MCP tools.
+      }
+    }
+
+    const mcpToolDefs = mcpManagerRef.current
+      ? await mcpManagerRef.current.getToolDefinitions().catch(() => [])
+      : [];
+    const toolDefs = [...builtInToolDefs, ...mcpToolDefs];
 
     const permissions = resolvePermissions(freshConfig.permissions);
 
@@ -431,6 +461,7 @@ export function useChat(
         contextWindow,
         lastPromptTokens: tokenUsage?.promptTokens ?? null,
         signal: controller.signal,
+        mcpManager: mcpManagerRef.current ?? undefined,
         onContent: setStreamingContent,
         onMessage: (msg) => {
           const displayMsg = {

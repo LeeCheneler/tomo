@@ -1,12 +1,13 @@
+import type { DisplayMessage } from "./components/message-list";
+import { truncateMessages } from "./context/truncate";
+import { executeToolCalls, ToolDismissedError } from "./hooks/tool-execution";
+import type { McpManager } from "./mcp/manager";
 import type {
   ChatMessage,
   TokenUsage,
   ToolDefinition,
 } from "./provider/client";
 import { streamChatCompletion } from "./provider/client";
-import { truncateMessages } from "./context/truncate";
-import { executeToolCalls, ToolDismissedError } from "./hooks/tool-execution";
-import type { DisplayMessage } from "./components/message-list";
 import type { ToolContext } from "./tools";
 
 export interface CompletionLoopOptions {
@@ -29,6 +30,8 @@ export interface CompletionLoopOptions {
   onToolActive?: (active: boolean) => void;
   /** Called when token usage is reported by the provider. */
   onUsage?: (usage: TokenUsage) => void;
+  /** MCP manager for routing MCP tool calls. */
+  mcpManager?: McpManager;
 }
 
 export interface CompletionLoopResult {
@@ -66,6 +69,7 @@ export async function runCompletionLoop(
     onMessage,
     onToolActive,
     onUsage,
+    mcpManager,
   } = options;
 
   let currentMessages = [...initialMessages];
@@ -160,6 +164,7 @@ export async function runCompletionLoop(
           toolCalls,
           signal,
           toolContext,
+          mcpManager,
         );
       } catch (err) {
         onToolActive?.(false);

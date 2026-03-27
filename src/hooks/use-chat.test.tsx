@@ -1,10 +1,10 @@
-import { render } from "ink-testing-library";
 import { Text } from "ink";
+import { render } from "ink-testing-library";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { parse, getCommand } from "../commands";
-import { appendMessage } from "../session";
-import { streamChatCompletion } from "../provider/client";
+import { getCommand, parse } from "../commands";
 import type { ToolCall } from "../provider/client";
+import { streamChatCompletion } from "../provider/client";
+import { appendMessage } from "../session";
 import { getSkill } from "../skills";
 import { getTool, getToolDefinitions } from "../tools";
 import { type ChatState, useChat } from "./use-chat";
@@ -81,6 +81,7 @@ vi.mock("../config", () => ({
   updateActiveModel: vi.fn(),
   updateActiveProvider: vi.fn(),
   getAllowedCommands: () => [],
+  getMcpServers: () => ({}),
 }));
 
 vi.mock("../commands", () => ({
