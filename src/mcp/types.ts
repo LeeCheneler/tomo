@@ -52,6 +52,15 @@ export interface McpToolCallResult {
   isError?: boolean;
 }
 
+/** Common interface for MCP transports (stdio, HTTP/SSE, etc.). */
+export interface McpTransport {
+  start(): void;
+  request(message: JsonRpcRequest): Promise<JsonRpcResponse>;
+  notify(notification: JsonRpcNotification): void;
+  onNotification(handler: (notification: JsonRpcNotification) => void): void;
+  close(): void;
+}
+
 /** MCP initialize result. */
 export interface McpInitializeResult {
   protocolVersion: string;

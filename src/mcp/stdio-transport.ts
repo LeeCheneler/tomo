@@ -3,6 +3,7 @@ import type {
   JsonRpcNotification,
   JsonRpcRequest,
   JsonRpcResponse,
+  McpTransport,
 } from "./types.js";
 
 type Message = JsonRpcResponse | JsonRpcNotification;
@@ -11,7 +12,7 @@ type Message = JsonRpcResponse | JsonRpcNotification;
  * Stdio transport for MCP servers. Spawns a child process and communicates
  * via newline-delimited JSON over stdin/stdout.
  */
-export class StdioTransport {
+export class StdioTransport implements McpTransport {
   private process: ChildProcess | null = null;
   private buffer = "";
   private responseHandlers = new Map<

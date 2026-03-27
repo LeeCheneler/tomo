@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { McpClient } from "./client.js";
-import type { StdioTransport } from "./stdio-transport.js";
-import type { JsonRpcResponse } from "./types.js";
+import type { JsonRpcResponse, McpTransport } from "./types.js";
 
 function createMockTransport() {
   return {
@@ -10,7 +9,7 @@ function createMockTransport() {
     notify: vi.fn(),
     onNotification: vi.fn(),
     close: vi.fn(),
-  } as unknown as StdioTransport & {
+  } as unknown as McpTransport & {
     start: ReturnType<typeof vi.fn>;
     request: ReturnType<typeof vi.fn>;
     notify: ReturnType<typeof vi.fn>;

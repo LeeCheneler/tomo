@@ -1,4 +1,3 @@
-import type { StdioTransport } from "./stdio-transport.js";
 import type {
   JsonRpcNotification,
   JsonRpcResponse,
@@ -6,6 +5,7 @@ import type {
   McpToolCallResult,
   McpToolDefinition,
   McpToolsListResult,
+  McpTransport,
 } from "./types.js";
 
 const PROTOCOL_VERSION = "2025-03-26";
@@ -21,7 +21,7 @@ export class McpClient {
     | ((notification: JsonRpcNotification) => void)
     | null = null;
 
-  constructor(private transport: StdioTransport) {}
+  constructor(private transport: McpTransport) {}
 
   /** Start the server process and perform the MCP initialize handshake. */
   async initialize(): Promise<McpInitializeResult> {
