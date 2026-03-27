@@ -294,6 +294,7 @@ describe("executeToolCalls with mcpManager", () => {
     return {
       isMcpTool: vi.fn((name: string) => name.startsWith("mcp__")),
       callTool: vi.fn().mockResolvedValue("mcp result"),
+      isAutoApproved: vi.fn().mockReturnValue(true),
       ...overrides,
     };
   }
@@ -456,6 +457,131 @@ describe("executeToolCalls with mcpManager", () => {
     expect(results[1]).toEqual(
       expect.objectContaining({ tool_call_id: "tc2" }),
     );
+  });
+
+  it("prompts for approval when MCP tool is not auto-approved", async () => {
+    const mcpManager = createMockMcpManager({
+      isAutoApproved: vi.fn().mockReturnValue(false),
+    });
+
+    const mockRenderInteractive = vi.fn().mockResolvedValue("approved");
+    const contextWithRender = {
+      ...mockContext,
+      renderInteractive: mockRenderInteractive,
+    };
+
+    const controller = new AbortController();
+    const results = await executeToolCalls(
+      [
+        {
+          id: "tc1",
+          type: "function",
+          function: {
+            name: "mcp__fs__read_file",
+            arguments: '{"path":"/tmp/test"}',
+          },
+        },
+      ],
+      controller.signal,
+      contextWithRender,
+      mcpManager as never,
+    );
+
+    expect(mockRenderInteractive).toHaveBeenCalled();
+    expect(mcpManager.callTool).toHaveBeenCalled();
+    expect(results[0].content).toContain("mcp result");
+  });
+
+  it("denies MCP tool call when user rejects approval", async () => {
+    const mcpManager = createMockMcpManager({
+      isAutoApproved: vi.fn().mockReturnValue(false),
+    });
+
+    const mockRenderInteractive = vi
+      .fn()
+      .mockRejectedValue(
+        new (await import("./tool-execution")).ToolDismissedError(),
+      );
+    const contextWithRender = {
+      ...mockContext,
+      renderInteractive: mockRenderInteractive,
+    };
+
+    const controller = new AbortController();
+    await expect(
+      executeToolCalls(
+        [
+          {
+            id: "tc1",
+            type: "function",
+            function: {
+              name: "mcp__fs__read_file",
+              arguments: '{"path":"/tmp/test"}',
+            },
+          },
+        ],
+        controller.signal,
+        contextWithRender,
+        mcpManager as never,
+      ),
+    ).rejects.toThrow(ToolDismissedError);
+
+    expect(mcpManager.callTool).not.toHaveBeenCalled();
+  });
+
+  it("skips approval prompt for auto-approved MCP servers", async () => {
+    const mcpManager = createMockMcpManager({
+      isAutoApproved: vi.fn().mockReturnValue(true),
+    });
+
+    const mockRenderInteractive = vi.fn();
+    const contextWithRender = {
+      ...mockContext,
+      renderInteractive: mockRenderInteractive,
+    };
+
+    const controller = new AbortController();
+    await executeToolCalls(
+      [
+        {
+          id: "tc1",
+          type: "function",
+          function: { name: "mcp__fs__read_file", arguments: "{}" },
+        },
+      ],
+      controller.signal,
+      contextWithRender,
+      mcpManager as never,
+    );
+
+    expect(mockRenderInteractive).not.toHaveBeenCalled();
+    expect(mcpManager.callTool).toHaveBeenCalled();
+  });
+
+  it("treats non-auto-approved MCP tools as interactive (sequential)", async () => {
+    const mcpManager = createMockMcpManager({
+      isAutoApproved: vi.fn().mockReturnValue(false),
+    });
+
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      executeToolCalls(
+        [
+          {
+            id: "tc1",
+            type: "function",
+            function: { name: "mcp__fs__tool", arguments: "{}" },
+          },
+        ],
+        controller.signal,
+        mockContext,
+        mcpManager as never,
+      ),
+    ).rejects.toThrow("aborted");
+
+    expect(mcpManager.callTool).not.toHaveBeenCalled();
   });
 
   it("works without mcpManager (undefined)", async () => {

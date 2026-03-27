@@ -45,12 +45,14 @@ const mcpStdioServerSchema = z.object({
   command: z.string().min(1, "command is required"),
   args: z.array(z.string()).default([]),
   env: z.record(z.string(), z.string()).optional(),
+  autoApprove: z.boolean().optional(),
 });
 
 const mcpHttpServerSchema = z.object({
   transport: z.literal("http"),
   url: z.string().url("url must be a valid URL"),
   headers: z.record(z.string(), z.string()).optional(),
+  autoApprove: z.boolean().optional(),
 });
 
 const mcpServerSchema = z.discriminatedUnion("transport", [

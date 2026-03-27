@@ -507,6 +507,47 @@ mcpServers:
     }
   });
 
+  it("defaults autoApprove to undefined when not set", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  simple:
+    transport: stdio
+    command: my-server
+`,
+    );
+    const config = loadConfig();
+    const server = config.mcpServers?.simple;
+    expect(server).toBeDefined();
+    expect(server?.autoApprove).toBeUndefined();
+  });
+
+  it("loads autoApprove when set to true", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  trusted:
+    transport: stdio
+    command: my-server
+    autoApprove: true
+`,
+    );
+    const config = loadConfig();
+    const server = config.mcpServers?.trusted;
+    expect(server).toBeDefined();
+    expect(server?.autoApprove).toBe(true);
+  });
+
   it("loads stdio server with env vars", () => {
     writeYaml(
       globalPath,

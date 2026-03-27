@@ -1,7 +1,9 @@
 import chalk from "chalk";
+import { createElement } from "react";
+import { McpToolConfirm } from "../components/mcp-tool-confirm";
 import type { DisplayMessage } from "../components/message-list";
 import { getErrorMessage } from "../errors";
-import type { McpManager } from "../mcp/manager";
+import { decodeToolName, type McpManager } from "../mcp/manager";
 import type { ToolCall } from "../provider/client";
 import { getTool, getToolDisplayName, type ToolContext } from "../tools";
 
@@ -57,8 +59,29 @@ async function executeSingleToolCall(
   if (mcpManager?.isMcpTool(tc.function.name)) {
     try {
       const args = JSON.parse(tc.function.arguments || "{}");
-      result = await mcpManager.callTool(tc.function.name, args);
+      const decoded = decodeToolName(tc.function.name);
+
+      if (!mcpManager.isAutoApproved(tc.function.name) && decoded) {
+        const approval = await toolContext.renderInteractive(
+          (onResult, onCancel) =>
+            createElement(McpToolConfirm, {
+              serverName: decoded.serverName,
+              toolName: decoded.toolName,
+              args,
+              onApprove: () => onResult("approved"),
+              onDeny: () => onCancel(),
+            }),
+        );
+        if (approval !== "approved") {
+          result = "MCP tool call denied by user.";
+        } else {
+          result = await mcpManager.callTool(tc.function.name, args);
+        }
+      } else {
+        result = await mcpManager.callTool(tc.function.name, args);
+      }
     } catch (err) {
+      if (err instanceof ToolDismissedError) throw err;
       result = `Error: ${getErrorMessage(err)}`;
     }
   } else {
@@ -101,7 +124,11 @@ export async function executeToolCalls(
 
   for (const tc of toolCalls) {
     if (mcpManager?.isMcpTool(tc.function.name)) {
-      nonInteractive.push(tc);
+      if (mcpManager.isAutoApproved(tc.function.name)) {
+        nonInteractive.push(tc);
+      } else {
+        interactive.push(tc);
+      }
     } else {
       const tool = getTool(tc.function.name);
       if (tool && tool.interactive === false) {

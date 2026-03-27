@@ -394,5 +394,57 @@ describe("McpManager", () => {
       const definitions = await manager.getToolDefinitions();
       expect(definitions).toHaveLength(0);
     });
+
+    it("clears auto-approve settings after shutdown", async () => {
+      const manager = new McpManager();
+      await manager.startAll({
+        fs: {
+          transport: "stdio",
+          command: "cmd",
+          args: [],
+          autoApprove: true,
+        },
+      });
+
+      expect(manager.isAutoApproved("mcp__fs__tool")).toBe(true);
+      manager.shutdown();
+      expect(manager.isAutoApproved("mcp__fs__tool")).toBe(false);
+    });
+  });
+
+  describe("isAutoApproved", () => {
+    it("returns true for auto-approved servers", async () => {
+      const manager = new McpManager();
+      await manager.startAll({
+        trusted: {
+          transport: "stdio",
+          command: "cmd",
+          args: [],
+          autoApprove: true,
+        },
+      });
+
+      expect(manager.isAutoApproved("mcp__trusted__any_tool")).toBe(true);
+    });
+
+    it("returns false for servers without autoApprove", async () => {
+      const manager = new McpManager();
+      await manager.startAll({
+        untrusted: { transport: "stdio", command: "cmd", args: [] },
+      });
+
+      expect(manager.isAutoApproved("mcp__untrusted__any_tool")).toBe(false);
+    });
+
+    it("returns false for non-MCP tool names", () => {
+      const manager = new McpManager();
+      expect(manager.isAutoApproved("read_file")).toBe(false);
+    });
+
+    it("returns false for unknown servers", async () => {
+      const manager = new McpManager();
+      await manager.startAll({});
+      expect(manager.isAutoApproved("mcp__unknown__tool")).toBe(false);
+    });
   });
 });

@@ -41,6 +41,7 @@ export function decodeToolName(
  */
 export class McpManager {
   private clients = new Map<string, McpClient>();
+  private autoApproveServers = new Set<string>();
 
   /** Start all configured MCP servers and perform initialize handshakes. */
   async startAll(servers: Record<string, McpServerConfig>): Promise<void> {
@@ -51,8 +52,18 @@ export class McpManager {
         const client = new McpClient(transport);
         await client.initialize();
         this.clients.set(name, client);
+        if (config.autoApprove === true) {
+          this.autoApproveServers.add(name);
+        }
       }),
     );
+  }
+
+  /** Returns true if the server is configured to auto-approve tool calls. */
+  isAutoApproved(namespacedName: string): boolean {
+    const decoded = decodeToolName(namespacedName);
+    if (!decoded) return false;
+    return this.autoApproveServers.has(decoded.serverName);
   }
 
   /** Get tool definitions from all servers, namespaced and in ToolDefinition format. */
@@ -106,5 +117,6 @@ export class McpManager {
       client.close();
     }
     this.clients.clear();
+    this.autoApproveServers.clear();
   }
 }
