@@ -3,9 +3,9 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { z } from "zod";
 import { FileAccessConfirm } from "../components/file-access-confirm";
-import { isPathWithinCwd } from "../permissions";
-import { registerTool } from "./registry";
 import { getErrorMessage } from "../errors";
+import { withFilePermission } from "../permissions";
+import { registerTool } from "./registry";
 import { type ToolContext, parseToolArgs } from "./types";
 
 const argsSchema = z.object({
@@ -92,28 +92,23 @@ registerTool({
   async execute(args: string, context: ToolContext): Promise<string> {
     const parsed = parseToolArgs(argsSchema, args);
     const { startLine, endLine } = parsed;
-
     const filePath = resolve(parsed.path);
 
-    // Permission granted and path in cwd — read immediately
-    if (context.permissions.read_file && isPathWithinCwd(filePath)) {
-      return readFile(filePath, startLine, endLine);
-    }
-
-    // Permission not granted or outside cwd — ask for approval
-    const approved = await context.renderInteractive((onResult, _onCancel) =>
-      createElement(FileAccessConfirm, {
-        filePath,
-        action: "Read this file?",
-        onApprove: () => onResult("approved"),
-        onDeny: () => onResult("denied"),
-      }),
-    );
-
-    if (approved !== "approved") {
-      return "The user denied this read.";
-    }
-
-    return readFile(filePath, startLine, endLine);
+    return withFilePermission({
+      context,
+      permission: "read_file",
+      filePath,
+      execute: () => readFile(filePath, startLine, endLine),
+      renderConfirm: () =>
+        context.renderInteractive((onResult) =>
+          createElement(FileAccessConfirm, {
+            filePath,
+            action: "Read this file?",
+            onApprove: () => onResult("approved"),
+            onDeny: () => onResult("denied"),
+          }),
+        ),
+      denyMessage: "The user denied this read.",
+    });
   },
 });

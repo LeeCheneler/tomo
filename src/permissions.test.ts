@@ -1,10 +1,12 @@
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_PERMISSIONS,
   isPathWithinCwd,
   resolvePermissions,
+  withFilePermission,
 } from "./permissions";
+import type { ToolContext } from "./tools/types";
 
 describe("resolvePermissions", () => {
   it("returns defaults when no config provided", () => {
@@ -19,7 +21,6 @@ describe("resolvePermissions", () => {
     const result = resolvePermissions({ write_file: true });
     expect(result.write_file).toBe(true);
     expect(result.read_file).toBe(true);
-    expect(result.edit_file).toBe(false);
   });
 
   it("can disable a default-enabled permission", () => {
@@ -31,12 +32,10 @@ describe("resolvePermissions", () => {
     const result = resolvePermissions({
       read_file: false,
       write_file: true,
-      edit_file: true,
     });
     expect(result).toEqual({
       read_file: false,
       write_file: true,
-      edit_file: true,
     });
   });
 });
@@ -67,5 +66,146 @@ describe("isPathWithinCwd", () => {
 
   it("handles relative paths by resolving them", () => {
     expect(isPathWithinCwd("./src/test.ts")).toBe(true);
+  });
+});
+
+describe("withFilePermission", () => {
+  function makeContext(overrides?: Partial<ToolContext>): ToolContext {
+    return {
+      renderInteractive: vi.fn().mockResolvedValue("approved"),
+      reportProgress: vi.fn(),
+      permissions: { read_file: true, write_file: false },
+      signal: new AbortController().signal,
+      depth: 0,
+      providerConfig: {
+        baseUrl: "",
+        model: "",
+        maxTokens: 1000,
+        contextWindow: 4000,
+      },
+      allowedCommands: [],
+      ...overrides,
+    };
+  }
+
+  it("auto-approves when permission granted and path within cwd", async () => {
+    const execute = vi.fn().mockReturnValue("done");
+    const renderConfirm = vi.fn();
+    const filePath = resolve(process.cwd(), "src/test.ts");
+
+    const result = await withFilePermission({
+      context: makeContext({
+        permissions: { read_file: true, write_file: false },
+      }),
+      permission: "read_file",
+      filePath,
+      execute,
+      renderConfirm,
+      denyMessage: "denied",
+    });
+
+    expect(result).toBe("done");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(renderConfirm).not.toHaveBeenCalled();
+  });
+
+  it("prompts when permission granted but path outside cwd", async () => {
+    const execute = vi.fn().mockReturnValue("done");
+    const renderConfirm = vi.fn().mockResolvedValue("approved");
+
+    const result = await withFilePermission({
+      context: makeContext({
+        permissions: { read_file: true, write_file: false },
+      }),
+      permission: "read_file",
+      filePath: "/tmp/outside.txt",
+      execute,
+      renderConfirm,
+      denyMessage: "denied",
+    });
+
+    expect(result).toBe("done");
+    expect(renderConfirm).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("prompts when permission not granted even for cwd paths", async () => {
+    const execute = vi.fn().mockReturnValue("done");
+    const renderConfirm = vi.fn().mockResolvedValue("approved");
+    const filePath = resolve(process.cwd(), "src/test.ts");
+
+    const result = await withFilePermission({
+      context: makeContext({
+        permissions: { read_file: false, write_file: false },
+      }),
+      permission: "read_file",
+      filePath,
+      execute,
+      renderConfirm,
+      denyMessage: "denied",
+    });
+
+    expect(result).toBe("done");
+    expect(renderConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns deny message when user denies confirmation", async () => {
+    const execute = vi.fn();
+    const renderConfirm = vi.fn().mockResolvedValue("denied");
+    const filePath = resolve(process.cwd(), "src/test.ts");
+
+    const result = await withFilePermission({
+      context: makeContext({
+        permissions: { read_file: false, write_file: false },
+      }),
+      permission: "read_file",
+      filePath,
+      execute,
+      renderConfirm,
+      denyMessage: "The user denied this read.",
+    });
+
+    expect(result).toBe("The user denied this read.");
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("works with write_file permission", async () => {
+    const execute = vi.fn().mockReturnValue("written");
+    const renderConfirm = vi.fn();
+    const filePath = resolve(process.cwd(), "src/test.ts");
+
+    const result = await withFilePermission({
+      context: makeContext({
+        permissions: { read_file: true, write_file: true },
+      }),
+      permission: "write_file",
+      filePath,
+      execute,
+      renderConfirm,
+      denyMessage: "denied",
+    });
+
+    expect(result).toBe("written");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(renderConfirm).not.toHaveBeenCalled();
+  });
+
+  it("handles async execute functions", async () => {
+    const execute = vi.fn().mockResolvedValue("async result");
+    const renderConfirm = vi.fn();
+    const filePath = resolve(process.cwd(), "src/test.ts");
+
+    const result = await withFilePermission({
+      context: makeContext({
+        permissions: { read_file: true, write_file: false },
+      }),
+      permission: "read_file",
+      filePath,
+      execute,
+      renderConfirm,
+      denyMessage: "denied",
+    });
+
+    expect(result).toBe("async result");
   });
 });

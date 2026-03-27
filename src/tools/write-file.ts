@@ -3,10 +3,10 @@ import { dirname, resolve } from "node:path";
 import { createElement } from "react";
 import { z } from "zod";
 import { WriteFileConfirm } from "../components/write-file-confirm";
-import { isPathWithinCwd } from "../permissions";
+import { getErrorMessage } from "../errors";
+import { withFilePermission } from "../permissions";
 import { formatDiff, formatNewFile } from "./format-diff";
 import { registerTool } from "./registry";
-import { getErrorMessage } from "../errors";
 import { type ToolContext, parseToolArgs } from "./types";
 
 const argsSchema = z.object({
@@ -46,38 +46,30 @@ registerTool({
   async execute(args: string, context: ToolContext): Promise<string> {
     const parsed = parseToolArgs(argsSchema, args);
     const { content } = parsed;
-
     const filePath = resolve(parsed.path);
 
-    // Skip confirmation if permission granted and path is within cwd
-    if (context.permissions.write_file && isPathWithinCwd(filePath)) {
-      return performWrite(filePath, content);
-    }
+    return withFilePermission({
+      context,
+      permission: "write_file",
+      filePath,
+      execute: () => performWrite(filePath, content),
+      renderConfirm: () => {
+        const isNewFile = !existsSync(filePath);
+        const diffPreview = isNewFile
+          ? formatNewFile(content)
+          : formatDiff(readFileSync(filePath, "utf-8"), content);
 
-    const isNewFile = !existsSync(filePath);
-
-    let diffPreview: string;
-    if (isNewFile) {
-      diffPreview = formatNewFile(content);
-    } else {
-      const existing = readFileSync(filePath, "utf-8");
-      diffPreview = formatDiff(existing, content);
-    }
-
-    const approved = await context.renderInteractive((onResult, _onCancel) =>
-      createElement(WriteFileConfirm, {
-        filePath,
-        isNewFile,
-        diffPreview,
-        onApprove: () => onResult("approved"),
-        onDeny: () => onResult("denied"),
-      }),
-    );
-
-    if (approved !== "approved") {
-      return "The user denied this write.";
-    }
-
-    return performWrite(filePath, content);
+        return context.renderInteractive((onResult) =>
+          createElement(WriteFileConfirm, {
+            filePath,
+            isNewFile,
+            diffPreview,
+            onApprove: () => onResult("approved"),
+            onDeny: () => onResult("denied"),
+          }),
+        );
+      },
+      denyMessage: "The user denied this write.",
+    });
   },
 });
