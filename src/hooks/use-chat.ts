@@ -100,6 +100,77 @@ function toChatMessages(
   ];
 }
 
+/** Parse skill invocation (//skill-name [args]) from user input. */
+function parseSkillInvocation(
+  text: string,
+):
+  | { chatText: string; skillDisplay: DisplayMessage | null }
+  | { error: DisplayMessage } {
+  if (!text.startsWith("//")) {
+    return { chatText: text, skillDisplay: null };
+  }
+
+  const rest = text.slice(2);
+  const spaceIndex = rest.indexOf(" ");
+  const skillName = spaceIndex === -1 ? rest : rest.slice(0, spaceIndex);
+  const skillArgs = spaceIndex === -1 ? "" : rest.slice(spaceIndex + 1).trim();
+  const skill = getSkill(skillName);
+
+  if (!skill) {
+    return {
+      error: {
+        id: crypto.randomUUID(),
+        role: "system",
+        content: `Unknown skill: //${skillName}. Type /skills for available skills.`,
+      },
+    };
+  }
+
+  const chatText = skillArgs ? `${skill.body}\n\n${skillArgs}` : skill.body;
+  const skillDisplay: DisplayMessage = {
+    id: crypto.randomUUID(),
+    role: "system",
+    content: skillArgs
+      ? `${chalk.bold.yellow(`skill(${skillName})`)}  ${chalk.dim(skillArgs)}`
+      : chalk.bold.yellow(`skill(${skillName})`),
+  };
+
+  return { chatText, skillDisplay };
+}
+
+/** Build the tool context passed to tool execute handlers. */
+function buildToolContext(opts: {
+  setActiveCommand: (el: ReactElement | null) => void;
+  setStreamingContent: (content: string) => void;
+  permissions: Record<string, boolean>;
+  signal: AbortSignal;
+  providerConfig: ToolContext["providerConfig"];
+  allowedCommands: string[];
+}): ToolContext {
+  return {
+    renderInteractive: (factory) =>
+      new Promise<string>((resolve, reject) => {
+        const onResult = (result: string) => {
+          opts.setActiveCommand(null);
+          resolve(result);
+        };
+        const onCancel = () => {
+          opts.setActiveCommand(null);
+          reject(new ToolDismissedError());
+        };
+        opts.setActiveCommand(factory(onResult, onCancel));
+      }),
+    reportProgress: (progressContent: string) => {
+      opts.setStreamingContent(progressContent);
+    },
+    permissions: opts.permissions,
+    signal: opts.signal,
+    depth: 0,
+    providerConfig: opts.providerConfig,
+    allowedCommands: opts.allowedCommands,
+  };
+}
+
 /** Manages conversation state and streaming for a chat session. */
 export function useChat(
   config: Config,
@@ -199,41 +270,15 @@ export function useChat(
       return;
     }
 
-    // Skill invocation: //skill-name [args]
-    let chatText = text;
-    let skillDisplay: DisplayMessage | null = null;
-    if (text.startsWith("//")) {
-      const rest = text.slice(2);
-      const spaceIndex = rest.indexOf(" ");
-      const skillName = spaceIndex === -1 ? rest : rest.slice(0, spaceIndex);
-      const skillArgs =
-        spaceIndex === -1 ? "" : rest.slice(spaceIndex + 1).trim();
-      const skill = getSkill(skillName);
-
-      if (!skill) {
-        addMessages(
-          { id: crypto.randomUUID(), role: "user", content: text },
-          {
-            id: crypto.randomUUID(),
-            role: "system",
-            content: `Unknown skill: //${skillName}. Type /skills for available skills.`,
-          },
-        );
-        return;
-      }
-
-      // Replace input with skill body, appending any args.
-      chatText = skillArgs ? `${skill.body}\n\n${skillArgs}` : skill.body;
-
-      // Format a tool-style display message for the UI.
-      skillDisplay = {
-        id: crypto.randomUUID(),
-        role: "system",
-        content: skillArgs
-          ? `${chalk.bold.yellow(`skill(${skillName})`)}  ${chalk.dim(skillArgs)}`
-          : chalk.bold.yellow(`skill(${skillName})`),
-      };
+    const skillResult = parseSkillInvocation(text);
+    if ("error" in skillResult) {
+      addMessages(
+        { id: crypto.randomUUID(), role: "user", content: text },
+        skillResult.error,
+      );
+      return;
     }
+    const { chatText, skillDisplay } = skillResult;
 
     const parsed = parse(chatText);
 
@@ -358,25 +403,11 @@ export function useChat(
 
     const apiKey = resolveApiKey(activeProvider.type, activeProvider.apiKey);
 
-    const toolContext: ToolContext = {
-      renderInteractive: (factory) =>
-        new Promise<string>((resolve, reject) => {
-          const onResult = (result: string) => {
-            setActiveCommand(null);
-            resolve(result);
-          };
-          const onCancel = () => {
-            setActiveCommand(null);
-            reject(new ToolDismissedError());
-          };
-          setActiveCommand(factory(onResult, onCancel));
-        }),
-      reportProgress: (progressContent: string) => {
-        setStreamingContent(progressContent);
-      },
+    const toolContext = buildToolContext({
+      setActiveCommand,
+      setStreamingContent,
       permissions,
       signal: controller.signal,
-      depth: 0,
       providerConfig: {
         baseUrl: activeProvider.baseUrl,
         model: activeModel,
@@ -385,7 +416,7 @@ export function useChat(
         contextWindow,
       },
       allowedCommands: getAllowedCommands(freshConfig),
-    };
+    });
 
     try {
       const result = await runCompletionLoop({
