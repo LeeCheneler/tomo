@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Skill } from "../skills";
+import { makeMockContext } from "./test-helpers";
 
 const testSkills: Skill[] = [
   {
@@ -25,22 +26,7 @@ vi.mock("../skills", () => ({
 await import("./skill");
 const { getTool } = await import("./registry");
 
-const mockContext = {
-  renderInteractive: vi.fn(),
-  reportProgress: vi.fn(),
-  permissions: {},
-  signal: new AbortController().signal,
-  depth: 0,
-  providerConfig: {
-    baseUrl: "http://localhost",
-    model: "test-model",
-    apiKey: undefined,
-    maxTokens: 1024,
-    contextWindow: 8192,
-  },
-
-  allowedCommands: [],
-};
+const mockContext = makeMockContext({ permissions: {} });
 
 describe("skill tool", () => {
   it("is registered as non-interactive", () => {

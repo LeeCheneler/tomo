@@ -3,27 +3,13 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTool } from "./registry";
+import { makeMockContext } from "./test-helpers";
 
 // Import to trigger registration
 import "./grep";
 
 const tmpDir = resolve(import.meta.dirname, "../../.test-grep-tmp");
-const mockContext = {
-  renderInteractive: vi.fn().mockResolvedValue("approved"),
-  reportProgress: vi.fn(),
-  permissions: { read_file: true },
-  signal: new AbortController().signal,
-  depth: 0,
-  providerConfig: {
-    baseUrl: "http://localhost",
-    model: "test-model",
-    apiKey: undefined,
-    maxTokens: 1024,
-    contextWindow: 8192,
-  },
-
-  allowedCommands: [],
-};
+let mockContext = makeMockContext();
 
 /** Initialise a git repo inside tmpDir with committed files. */
 function setupGitRepo() {
@@ -55,7 +41,7 @@ beforeEach(() => {
     "function App() {\n  return <div>Hello</div>;\n}\n",
   );
   vi.clearAllMocks();
-  mockContext.renderInteractive.mockResolvedValue("approved");
+  mockContext = makeMockContext();
 });
 
 afterEach(() => {
