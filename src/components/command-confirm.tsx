@@ -1,6 +1,6 @@
-import { useState } from "react";
 import chalk from "chalk";
-import { Box, Text, useInput } from "ink";
+import { Text } from "ink";
+import { ConfirmPrompt } from "./confirm-prompt";
 
 interface CommandConfirmProps {
   command: string;
@@ -16,64 +16,30 @@ export function CommandConfirm({
   onApproveAlways,
   onDeny,
 }: CommandConfirmProps) {
-  const [cursor, setCursor] = useState(0);
-
-  useInput((input, key) => {
-    if (key.escape || input === "n" || input === "N") {
-      onDeny();
-      return;
-    }
-
-    if (input === "y" || input === "Y") {
-      onApprove();
-      return;
-    }
-
-    if (input === "a" || input === "A") {
-      onApproveAlways();
-      return;
-    }
-
-    if (key.return) {
-      if (cursor === 0) onApprove();
-      else if (cursor === 1) onApproveAlways();
-      else onDeny();
-      return;
-    }
-
-    if (key.upArrow) {
-      setCursor((c) => (c > 0 ? c - 1 : 2));
-      return;
-    }
-
-    if (key.downArrow) {
-      setCursor((c) => (c < 2 ? c + 1 : 0));
-    }
-  });
-
   return (
-    <Box flexDirection="column">
-      <Text bold color="yellow">
-        {"  Run this command?"}
-      </Text>
+    <ConfirmPrompt
+      title="Run this command?"
+      options={[
+        {
+          label: "Approve",
+          shortcut: "y",
+          color: "green",
+          onSelect: onApprove,
+        },
+        {
+          label: "Approve Always",
+          shortcut: "a",
+          color: "cyan",
+          onSelect: onApproveAlways,
+        },
+        { label: "Deny", shortcut: "n", color: "red", onSelect: onDeny },
+      ]}
+    >
       <Text>{""}</Text>
       <Text>
         {"  "}
         {chalk.bold(`> ${command}`)}
       </Text>
-      <Text>{""}</Text>
-      <Text color={cursor === 0 ? "green" : undefined}>
-        {"  "}
-        {cursor === 0 ? "❯" : " "} Approve (y)
-      </Text>
-      <Text color={cursor === 1 ? "cyan" : undefined}>
-        {"  "}
-        {cursor === 1 ? "❯" : " "} Approve Always (a)
-      </Text>
-      <Text color={cursor === 2 ? "red" : undefined}>
-        {"  "}
-        {cursor === 2 ? "❯" : " "} Deny (n)
-      </Text>
-    </Box>
+    </ConfirmPrompt>
   );
 }
