@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { CheckboxList, type CheckboxItem } from "./checkbox-list";
+import { useListNavigation } from "../hooks/use-list-navigation";
 
 interface PermissionRow {
   key: string;
@@ -63,7 +64,6 @@ export function SettingsSelector({
   onCancel,
 }: SettingsSelectorProps) {
   const [step, setStep] = useState<Step>("menu");
-  const [cursor, setCursor] = useState(0);
   const [toolAvailability, setToolAvailability] = useState({
     ...currentToolAvailability,
   });
@@ -73,6 +73,23 @@ export function SettingsSelector({
   ]);
   const [adding, setAdding] = useState(false);
   const [newEntry, setNewEntry] = useState("");
+
+  // Compute item count based on current step
+  const itemCount = (() => {
+    switch (step) {
+      case "menu":
+        return MENU_OPTIONS.length;
+      case "tools":
+        return tools.length;
+      case "permissions":
+        return PERMISSION_ROWS.length;
+      case "allowed":
+        return allowedCommands.length + 1; // +1 for "Add..." row
+    }
+  })();
+
+  const { cursor, setCursor, handleUp, handleDown } =
+    useListNavigation(itemCount);
 
   // Reset cursor when step changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset cursor on step change
@@ -132,9 +149,9 @@ export function SettingsSelector({
     switch (step) {
       case "menu": {
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : MENU_OPTIONS.length - 1));
+          handleUp();
         } else if (key.downArrow) {
-          setCursor((c) => (c < MENU_OPTIONS.length - 1 ? c + 1 : 0));
+          handleDown();
         } else if (key.return) {
           const steps: Step[] = ["tools", "permissions", "allowed"];
           setStep(steps[cursor]);
@@ -144,9 +161,9 @@ export function SettingsSelector({
 
       case "tools": {
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : tools.length - 1));
+          handleUp();
         } else if (key.downArrow) {
-          setCursor((c) => (c < tools.length - 1 ? c + 1 : 0));
+          handleDown();
         } else if (input === " " || key.return) {
           const name = tools[cursor];
           setToolAvailability((prev) => ({
@@ -159,9 +176,9 @@ export function SettingsSelector({
 
       case "permissions": {
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : PERMISSION_ROWS.length - 1));
+          handleUp();
         } else if (key.downArrow) {
-          setCursor((c) => (c < PERMISSION_ROWS.length - 1 ? c + 1 : 0));
+          handleDown();
         } else if (input === " " || key.return) {
           const row = PERMISSION_ROWS[cursor];
           setPermissions((prev) => ({
@@ -173,17 +190,15 @@ export function SettingsSelector({
       }
 
       case "allowed": {
-        // rows: allowed commands + add row
-        const totalRows = allowedCommands.length + 1;
         const isOnAdd = cursor === allowedCommands.length;
 
         if (key.upArrow) {
-          setCursor((c) => (c > 0 ? c - 1 : totalRows - 1));
+          handleUp();
         } else if (key.downArrow) {
-          setCursor((c) => (c < totalRows - 1 ? c + 1 : 0));
+          handleDown();
         } else if ((input === "d" || input === "D") && !isOnAdd) {
           setAllowedCommands((prev) => prev.filter((_, i) => i !== cursor));
-          if (cursor >= totalRows - 1) {
+          if (cursor >= itemCount - 1) {
             setCursor((c) => Math.max(0, c - 1));
           }
         } else if (input === "a" || input === "A") {
