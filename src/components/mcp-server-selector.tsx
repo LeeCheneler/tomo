@@ -8,6 +8,7 @@ import { StdioTransport } from "../mcp/stdio-transport";
 import { type CheckboxItem, CheckboxList } from "./checkbox-list";
 import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
+import { TextInput } from "./text-input";
 
 type Step =
   | "servers"
@@ -324,10 +325,6 @@ export function McpServerSelector({
           setTextValue("");
           setPendingHeaders({});
           setStep("addHeaders");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
         }
         break;
       }
@@ -399,10 +396,6 @@ export function McpServerSelector({
           setPendingHeaderKey(headerKey);
           setTextValue("");
           setStep("addHeaderValue");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
         }
         break;
       }
@@ -418,10 +411,6 @@ export function McpServerSelector({
           setPendingHeaderKey(null);
           setTextValue("");
           setStep("addHeaders");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
         }
         break;
       }
@@ -436,10 +425,6 @@ export function McpServerSelector({
           setTextValue("");
           setPendingEnvVars({});
           setStep("addEnvVars");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
         }
         break;
       }
@@ -510,10 +495,6 @@ export function McpServerSelector({
           setPendingEnvVarKey(envKey);
           setTextValue("");
           setStep("addEnvVarValue");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
         }
         break;
       }
@@ -529,10 +510,6 @@ export function McpServerSelector({
           setPendingEnvVarKey(null);
           setTextValue("");
           setStep("addEnvVars");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
         }
         break;
       }
@@ -652,11 +629,7 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {textValue}
-            <Text dimColor>█</Text>
-          </Text>
+          <TextInput value={textValue} onChange={setTextValue} />
         </Box>
       );
 
@@ -705,11 +678,7 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {textValue}
-            <Text dimColor>█</Text>
-          </Text>
+          <TextInput value={textValue} onChange={setTextValue} />
         </Box>
       );
 
@@ -724,11 +693,7 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {"*".repeat(textValue.length)}
-            <Text dimColor>█</Text>
-          </Text>
+          <TextInput value={textValue} onChange={setTextValue} masked />
         </Box>
       );
 
@@ -743,11 +708,7 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {textValue}
-            <Text dimColor>█</Text>
-          </Text>
+          <TextInput value={textValue} onChange={setTextValue} />
         </Box>
       );
 
@@ -796,11 +757,7 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {textValue}
-            <Text dimColor>█</Text>
-          </Text>
+          <TextInput value={textValue} onChange={setTextValue} />
         </Box>
       );
 
@@ -815,11 +772,7 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {"*".repeat(textValue.length)}
-            <Text dimColor>█</Text>
-          </Text>
+          <TextInput value={textValue} onChange={setTextValue} masked />
         </Box>
       );
 
