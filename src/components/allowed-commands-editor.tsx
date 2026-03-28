@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
+import { TextInput } from "./text-input";
 
 export interface AllowedCommandsEditorProps {
   state: SettingsState;
@@ -41,13 +42,7 @@ export function AllowedCommandsEditor({
         setNewEntry("");
         return;
       }
-      if (key.backspace || key.delete) {
-        setNewEntry((prev) => prev.slice(0, -1));
-        return;
-      }
-      if (input && !key.ctrl && !key.meta) {
-        setNewEntry((prev) => prev + input);
-      }
+      // TextInput component handles text editing via its own useInput
       return;
     }
 
@@ -102,11 +97,10 @@ export function AllowedCommandsEditor({
         const isCurrent = cursor === state.allowedCommands.length;
         if (adding) {
           return (
-            <Text color="green">
-              {"    ❯ [+] "}
-              {newEntry}
-              {"█"}
-            </Text>
+            <Box>
+              <Text color="green">{"    ❯ [+] "}</Text>
+              <TextInput value={newEntry} onChange={setNewEntry} />
+            </Box>
           );
         }
         return (
