@@ -1,8 +1,19 @@
 import { render } from "ink-testing-library";
 import { describe, expect, it, vi } from "vitest";
 import type { McpServerConfig } from "../config";
+import { McpClient } from "../mcp/client";
 import { McpServerSelector } from "./mcp-server-selector";
 import type { SettingsState } from "./settings-selector";
+
+vi.mock("../mcp/client", () => ({
+  McpClient: vi.fn(),
+}));
+vi.mock("../mcp/http-transport", () => ({
+  HttpTransport: vi.fn(),
+}));
+vi.mock("../mcp/stdio-transport", () => ({
+  StdioTransport: vi.fn(),
+}));
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
@@ -341,6 +352,163 @@ describe("McpServerSelector", () => {
 
       output = lastFrame() ?? "";
       expect(output).toContain("server-b");
+    });
+  });
+
+  describe("connect flow", () => {
+    function setupMockClient(
+      serverName: string,
+      tools: { name: string; description?: string }[],
+    ) {
+      // biome-ignore lint/complexity/useArrowFunction: mockImplementation needs function for new
+      vi.mocked(McpClient).mockImplementation(function () {
+        return {
+          initialize: vi.fn().mockResolvedValue({
+            protocolVersion: "2025-03-26",
+            capabilities: {},
+            serverInfo: { name: serverName, version: "1.0.0" },
+          }),
+          listTools: vi.fn().mockResolvedValue(
+            tools.map((t) => ({
+              name: t.name,
+              description: t.description,
+              inputSchema: {},
+            })),
+          ),
+          close: vi.fn(),
+        } as unknown as McpClient;
+      });
+    }
+
+    it("connects to HTTP server and saves discovered tools", async () => {
+      setupMockClient("weather-server", [
+        { name: "get_weather", description: "Get weather data" },
+      ]);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({ onUpdate });
+
+      // Navigate: Add → http → enter URL (pre-filled with "https://") → submit
+      stdin.write("\r"); // select "Add..."
+      await flush();
+      stdin.write("\r"); // select "http"
+      await flush();
+      stdin.write("mcp.example.com"); // "https://" is pre-filled
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+      await flush(); // extra flush for async connect
+      await flush();
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: {
+          "weather-server": expect.objectContaining({
+            transport: "http",
+            url: "https://mcp.example.com",
+            tools: [
+              {
+                name: "get_weather",
+                enabled: true,
+                description: "Get weather data",
+              },
+            ],
+          }),
+        },
+      });
+    });
+
+    it("appends suffix when server name already exists", async () => {
+      setupMockClient("my-server", []);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({
+        mcpServers: {
+          "my-server": { transport: "http", url: "https://existing.com" },
+        },
+        onUpdate,
+      });
+
+      // Navigate down to "Add..." (past existing server)
+      stdin.write("\x1B[B"); // arrow down
+      await flush();
+      stdin.write("\r"); // select "Add..."
+      await flush();
+      stdin.write("\r"); // select "http"
+      await flush();
+      stdin.write("mcp2.example.com"); // "https://" is pre-filled
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+      await flush();
+      await flush();
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: expect.objectContaining({
+          "my-server": expect.anything(),
+          "my-server-2": expect.objectContaining({
+            transport: "http",
+            url: "https://mcp2.example.com",
+          }),
+        }),
+      });
+    });
+
+    it("shows error on connection failure", async () => {
+      // biome-ignore lint/complexity/useArrowFunction: mockImplementation needs function for new
+      vi.mocked(McpClient).mockImplementation(function () {
+        return {
+          initialize: vi
+            .fn()
+            .mockRejectedValue(new Error("Connection refused")),
+          close: vi.fn(),
+        } as unknown as McpClient;
+      });
+
+      const { stdin, lastFrame } = renderMcp();
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\r"); // http
+      await flush();
+      stdin.write("bad.example.com"); // "https://" is pre-filled
+      await flush();
+      stdin.write("\r"); // submit
+      await flush();
+      await flush();
+      await flush();
+
+      const output = lastFrame() ?? "";
+      expect(output).toContain("Connection refused");
+    });
+
+    it("connects to stdio server", async () => {
+      setupMockClient("stdio-server", [{ name: "run_script" }]);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({ onUpdate });
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\x1B[B"); // arrow down to stdio
+      await flush();
+      stdin.write("\r"); // select stdio
+      await flush();
+      stdin.write("node server.js --port 3000");
+      await flush();
+      stdin.write("\r"); // submit
+      await flush();
+      await flush();
+      await flush();
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: {
+          "stdio-server": expect.objectContaining({
+            transport: "stdio",
+            command: "node",
+            args: ["server.js", "--port", "3000"],
+            tools: [
+              { name: "run_script", enabled: true, description: undefined },
+            ],
+          }),
+        },
+      });
     });
   });
 });
