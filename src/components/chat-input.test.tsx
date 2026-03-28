@@ -635,13 +635,10 @@ describe("ChatInput", () => {
       const { stdin } = render(
         <ChatInput onSubmit={onSubmit} inputHistory={["one", "two"]} />,
       );
-      // First up: recalls "two" (cursor at end)
+      // First up: recalls "two" (cursor at start)
       stdin.write("\x1B[A");
       await flush();
-      // Second up: moves cursor to start of "two"
-      stdin.write("\x1B[A");
-      await flush();
-      // Third up: recalls "one"
+      // Second up: recalls "one" (single press per entry while browsing)
       stdin.write("\x1B[A");
       await flush();
       stdin.write("\r");
@@ -696,13 +693,10 @@ describe("ChatInput", () => {
       const { stdin } = render(
         <ChatInput onSubmit={onSubmit} inputHistory={["only entry"]} />,
       );
-      // First up: recalls "only entry"
+      // First up: recalls "only entry" (cursor at start)
       stdin.write("\x1B[A");
       await flush();
-      // Second up: moves cursor to start
-      stdin.write("\x1B[A");
-      await flush();
-      // Third up: already at oldest — should be a no-op (cursor stays at 0)
+      // Second up: already at oldest — should be a no-op (cursor stays at 0)
       stdin.write("\x1B[A");
       await flush();
       // Type at cursor position to verify it's still at start
@@ -711,6 +705,86 @@ describe("ChatInput", () => {
       stdin.write("\r");
       await flush();
       expect(onSubmit).toHaveBeenCalledWith("Xonly entry");
+    });
+
+    it("up arrow navigates past slash-prefixed history entries without autocomplete capturing input", async () => {
+      const onSubmit = vi.fn();
+      const { stdin } = render(
+        <ChatInput
+          onSubmit={onSubmit}
+          inputHistory={["first", "/help", "third"]}
+        />,
+      );
+      // Up 1: recalls "third" (cursor at start)
+      stdin.write("\x1B[A");
+      await flush();
+      // Up 2: recalls "/help" — NOT captured by autocomplete
+      stdin.write("\x1B[A");
+      await flush();
+      // Up 3: recalls "first"
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenLastCalledWith("first");
+    });
+
+    it("down arrow navigates past slash-prefixed history entries without autocomplete capturing input", async () => {
+      const onSubmit = vi.fn();
+      const { stdin } = render(
+        <ChatInput
+          onSubmit={onSubmit}
+          inputHistory={["first", "/help", "third"]}
+        />,
+      );
+      // Navigate to oldest: single up per entry
+      stdin.write("\x1B[A"); // "third"
+      await flush();
+      stdin.write("\x1B[A"); // "/help"
+      await flush();
+      stdin.write("\x1B[A"); // "first"
+      await flush();
+      // Down 1: recalls "/help" — NOT captured by autocomplete
+      stdin.write("\x1B[B");
+      await flush();
+      // Down 2: recalls "third"
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(onSubmit).toHaveBeenLastCalledWith("third");
+    });
+
+    it("editing a recalled slash-prefixed history entry re-activates autocomplete", async () => {
+      const { lastFrame, stdin } = render(
+        <ChatInput onSubmit={vi.fn()} inputHistory={["/he"]} />,
+      );
+      // Recall "/he" from history (cursor at start)
+      stdin.write("\x1B[A");
+      await flush();
+      // Autocomplete should be suppressed while browsing history
+      expect(lastFrame()).not.toContain("List available commands");
+      // Move cursor to end, then type to edit — this leaves history mode
+      stdin.write("\x05"); // Ctrl+E
+      await flush();
+      stdin.write("l");
+      await flush();
+      // Now autocomplete should activate since we're editing "/hel"
+      const output = lastFrame() ?? "";
+      expect(output).toContain("help");
+    });
+
+    it("does not show autocomplete dropdown for slash-prefixed history entries", async () => {
+      const { lastFrame, stdin } = render(
+        <ChatInput onSubmit={vi.fn()} inputHistory={["/help"]} />,
+      );
+      // Recall "/help" from history
+      stdin.write("\x1B[A");
+      await flush();
+      const output = lastFrame() ?? "";
+      // The input should contain /help but the autocomplete list should not render
+      expect(output).toContain("/help");
+      expect(output).not.toContain("List available commands");
     });
 
     it("preserves draft when scrolling through history", async () => {
@@ -723,18 +797,15 @@ describe("ChatInput", () => {
       stdin.write("my draft");
       await flush();
 
-      // Up arrow: first goes to start of line
+      // Up arrow: goes to start of line (not yet in history)
       stdin.write("\x1B[A");
       await flush();
-      // Up arrow again: recalls "old message"
+      // Up arrow: recalls "old message"
       stdin.write("\x1B[A");
       await flush();
       expect(lastFrame()).toContain("old message");
 
-      // Down arrow: goes to end of "old message"
-      stdin.write("\x1B[B");
-      await flush();
-      // Down arrow again: restores draft
+      // Down arrow: restores draft (single press while browsing history)
       stdin.write("\x1B[B");
       await flush();
       expect(lastFrame()).toContain("my draft");
