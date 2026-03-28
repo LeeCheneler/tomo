@@ -103,7 +103,14 @@ export function ChatInput({
   const totalImages = clipboardImages.length;
 
   const autocomplete = useAutocomplete(defaultProviders, value, cursor);
-  const { active: isAutocomplete, ghost, showGhost } = autocomplete;
+  const {
+    active: isAutocomplete,
+    ghost,
+    showGhost: rawShowGhost,
+  } = autocomplete;
+  // Suppress ghost text while browsing input history — autocomplete should
+  // only activate when the user is actively typing, not replaying history.
+  const showGhost = rawShowGhost && historyIndexRef.current < 0;
 
   useInput(
     (input, key) => {
@@ -217,7 +224,11 @@ export function ChatInput({
 
       // Vertical cursor movement — autocomplete, multi-line, or input history
       if (key.upArrow) {
-        if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
+        if (
+          isAutocomplete &&
+          autocomplete.visibleEntries.length > 0 &&
+          historyIndexRef.current < 0
+        ) {
           autocomplete.moveUp();
           return;
         }
@@ -230,8 +241,10 @@ export function ChatInput({
           setCursor(prevLineStart + Math.min(col, prevLineLength));
           return;
         }
-        // On first line — go to start of line first, then recall history
-        if (cursor > 0) {
+        // On first line — go to start of line first, then recall history.
+        // When already browsing history, skip the cursor-to-start step so a
+        // single up arrow moves to the previous entry immediately.
+        if (cursor > 0 && historyIndexRef.current < 0) {
           setCursor(0);
           return;
         }
@@ -248,12 +261,16 @@ export function ChatInput({
               : historyIndexRef.current - 1;
           historyIndexRef.current = nextIdx;
           setValue(inputHistory[nextIdx]);
-          setCursor(inputHistory[nextIdx].length);
+          setCursor(0);
         }
         return;
       }
       if (key.downArrow) {
-        if (isAutocomplete && autocomplete.visibleEntries.length > 0) {
+        if (
+          isAutocomplete &&
+          autocomplete.visibleEntries.length > 0 &&
+          historyIndexRef.current < 0
+        ) {
           autocomplete.moveDown();
           return;
         }
@@ -270,8 +287,10 @@ export function ChatInput({
           setCursor(nextLineStart + Math.min(col, nextLineLength));
           return;
         }
-        // On last line — go to end of line first, then history/image nav
-        if (cursor < value.length) {
+        // On last line — go to end of line first, then history/image nav.
+        // When already browsing history, skip the cursor-to-end step so a
+        // single down arrow moves to the next entry immediately.
+        if (cursor < value.length && historyIndexRef.current < 0) {
           setCursor(value.length);
           return;
         }
@@ -361,6 +380,8 @@ export function ChatInput({
         (input === "w" && key.ctrl)
       ) {
         if (cursor > 0) {
+          historyIndexRef.current = -1;
+          draftRef.current = null;
           const boundary = findPrevWordBoundary(value, cursor);
           setValue((v) => v.slice(0, boundary) + v.slice(cursor));
           setCursor(boundary);
@@ -370,6 +391,8 @@ export function ChatInput({
 
       if (key.delete) {
         if (cursor > 0) {
+          historyIndexRef.current = -1;
+          draftRef.current = null;
           setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));
           setCursor((c) => c - 1);
         }
@@ -377,6 +400,8 @@ export function ChatInput({
       }
 
       if (input && !key.ctrl && !key.meta) {
+        historyIndexRef.current = -1;
+        draftRef.current = null;
         // Use refs to get the real accumulated value during paste bursts
         // (React batches setValue calls, so the closure `value` may be stale).
         const prev = valueRef.current;
@@ -520,7 +545,9 @@ export function ChatInput({
         {"─".repeat(bottomLineWidth)}
         {contextLabel}
       </Text>
-      {isAutocomplete && autocomplete.visibleEntries.length > 0 ? (
+      {isAutocomplete &&
+      autocomplete.visibleEntries.length > 0 &&
+      historyIndexRef.current < 0 ? (
         <Box flexDirection="column">
           {(() => {
             const maxName = Math.max(
