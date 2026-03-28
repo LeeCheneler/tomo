@@ -40,7 +40,7 @@ Type `/` to see available commands with autocomplete suggestions.
 | `/session <id>` | Load a session by ID                            |
 | `/model`        | Switch the active model                         |
 | `/provider`     | Manage providers (add/remove)                   |
-| `/settings`     | Manage tools, permissions, and allowed commands |
+| `/settings`     | Manage tools, permissions, allowed commands, and MCP servers |
 | `/context`      | Show context window usage stats                 |
 | `/skills`       | List available skills                           |
 | `/help`         | List available commands                         |
@@ -66,18 +66,91 @@ Web Search requires a [Tavily](https://tavily.com) API key. Set `TAVILY_API_KEY`
 
 Agent spawns headless sub-agents that can read files, search code, and explore the codebase in parallel. The model decides when to spawn agents and how many. Active agents show color-coded progress indicators with tool call counts.
 
+## MCP Servers
+
+Tomo supports the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) for connecting to external tool servers. MCP servers extend Tomo with additional tools — database access, API integrations, file systems, and more.
+
+### Adding a Server
+
+Use `/settings` → **MCP Servers** → press **a** to add a new server. The setup wizard walks through:
+
+1. Select transport type (`http` or `stdio`)
+2. Enter connection details (URL for HTTP, command for stdio)
+3. For HTTP: optionally provide an API key (stored as an `Authorization` header)
+4. Tomo connects, discovers available tools, and saves the config
+
+### Managing Servers
+
+From `/settings` → **MCP Servers**:
+
+| Key       | Action                              |
+| --------- | ----------------------------------- |
+| `Space`   | Toggle server on/off                |
+| `Enter`   | View and toggle individual tools    |
+| `a`       | Add a new server                    |
+| `d`       | Delete a server                     |
+| `r`       | Reconnect a failed server           |
+| `Esc`     | Save and exit                       |
+
+Disabled servers won't start. Individual tools within a server can be toggled off to hide them from the model while keeping the server connected.
+
+### Config
+
+MCP servers are stored in the global config (`~/.tomo/config.yaml`) under `mcpServers`:
+
+```yaml
+mcpServers:
+  my-http-server:
+    transport: http
+    url: https://mcp.example.com/mcp
+    headers:
+      Authorization: "Bearer ${MCP_API_KEY}"
+    enabled: true
+    tools:
+      - name: get_data
+        enabled: true
+        description: "Fetch data from the API"
+
+  my-stdio-server:
+    transport: stdio
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "/tmp"
+    env:
+      SOME_VAR: "${MY_ENV_VAR}"
+    enabled: true
+```
+
+**HTTP transport** fields: `url` (required), `headers` (optional).
+
+**Stdio transport** fields: `command` (required), `args` (optional), `env` (optional).
+
+Both transports support `enabled` and `tools` fields.
+
+### Environment Variables
+
+Use `${VAR_NAME}` in any string value to reference environment variables. This is useful for keeping secrets out of config files:
+
+```yaml
+headers:
+  Authorization: "Bearer ${MCP_API_KEY}"
+```
+
+If the variable is not set, it resolves to an empty string.
+
 ## Permissions
 
-Write File and Edit File prompt for confirmation by default. Read File is auto-allowed. Use `/settings` to change this, or set in config:
+Write and edit operations prompt for confirmation by default. Read File is auto-allowed. Use `/settings` → **Tool Permissions** to change this, or set in config:
 
 ```yaml
 permissions:
   read_file: true
-  write_file: true
-  edit_file: true
+  write_file: true  # covers both Write File and Edit File
 ```
 
-Run Command prompts by default. Commands can be auto-approved via allowed commands in config. Use exact commands or `prefix:*` for all commands starting with a given word:
+Run Command prompts by default. Commands can be auto-approved via allowed commands in config. Use exact commands or `prefix:*` for all commands starting with a given prefix:
 
 ```yaml
 allowed_commands:
