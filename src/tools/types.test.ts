@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { parseToolArgs, toToolDefinition } from "./types";
 import type { Tool } from "./types";
+import { parseToolArgs, toToolDefinition } from "./types";
 
 describe("parseToolArgs", () => {
   const schema = z.object({

@@ -5,7 +5,7 @@ import { isCommandAllowed, isCompoundCommand } from "../command-safety";
 import { CommandConfirm } from "../components/command-confirm";
 import { addAllowedCommand } from "../config";
 import { registerTool } from "./registry";
-import { type ToolContext, parseToolArgs } from "./types";
+import { parseToolArgs, type ToolContext } from "./types";
 
 const argsSchema = z.object({
   command: z.string().min(1, "no command provided"),

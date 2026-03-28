@@ -7,7 +7,7 @@ import { getErrorMessage } from "../errors";
 import { isGitRepo } from "../git";
 import { withFilePermission } from "../permissions";
 import { registerTool } from "./registry";
-import { type ToolContext, parseToolArgs } from "./types";
+import { parseToolArgs, type ToolContext } from "./types";
 
 const argsSchema = z.object({
   pattern: z.string().min(1, "no search pattern provided"),

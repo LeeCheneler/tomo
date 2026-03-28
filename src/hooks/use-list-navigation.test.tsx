@@ -1,5 +1,5 @@
-import { render } from "ink-testing-library";
 import { Text } from "ink";
+import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import { useListNavigation } from "./use-list-navigation";
 

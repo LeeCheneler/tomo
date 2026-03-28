@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModelSelector } from "./model-selector";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));

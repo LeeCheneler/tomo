@@ -1,9 +1,9 @@
-import { render } from "ink-testing-library";
 import { Text } from "ink";
+import { render } from "ink-testing-library";
 import { createElement } from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ChatState } from "./hooks/use-chat";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DisplayMessage } from "./components/message-list";
+import type { ChatState } from "./hooks/use-chat";
 
 // Mock useChat to control the chat state returned to App.
 const mockChatState: ChatState = {

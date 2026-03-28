@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { Box, Text } from "ink";
 import chalk from "chalk";
+import { Box, Text } from "ink";
+import { useEffect, useState } from "react";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 

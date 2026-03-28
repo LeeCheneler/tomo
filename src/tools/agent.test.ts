@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CompletionLoopOptions } from "../completion-loop";
-import type { ToolContext } from "./types";
 import { getTool } from "./registry";
+import type { ToolContext } from "./types";
 
 vi.mock("../completion-loop", () => ({
   runCompletionLoop: vi.fn(),

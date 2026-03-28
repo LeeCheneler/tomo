@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { highlight } from "cli-highlight";
 import { Text } from "ink";
 import { Marked } from "marked";
+
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape codes requires control characters
 const ANSI_REGEX = /\x1b\[[0-9;]*m/g;
 

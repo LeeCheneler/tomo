@@ -1,6 +1,6 @@
 import { render } from "ink-testing-library";
-import { describe, it, expect } from "vitest";
-import { Markdown, completePartialMarkdown } from "./markdown";
+import { describe, expect, it } from "vitest";
+import { completePartialMarkdown, Markdown } from "./markdown";
 
 describe("Markdown", () => {
   it("renders bold text", () => {

@@ -9,4 +9,4 @@ import "./settings";
 import "./skills";
 
 // Re-export registry functions
-export { parse, getCommand, getAllCommands } from "./registry";
+export { getAllCommands, getCommand, parse } from "./registry";

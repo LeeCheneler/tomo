@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import "../commands";
 import * as images from "../images";
 import { ChatInput } from "./chat-input";

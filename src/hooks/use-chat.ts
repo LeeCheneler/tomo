@@ -6,6 +6,7 @@ import { runCompletionLoop } from "../completion-loop";
 import type { DisplayMessage } from "../components/message-list";
 import {
   type Config,
+  getAllMcpServers,
   getAllowedCommands,
   getMaxTokens,
   getMcpServers,
@@ -17,7 +18,7 @@ import {
 } from "../config";
 import { getErrorMessage } from "../errors";
 import type { ImageAttachment } from "../images";
-import { McpManager } from "../mcp/manager";
+import { encodeToolName, McpManager } from "../mcp/manager";
 import { resolvePermissions } from "../permissions";
 import type { ChatMessage, ContentPart, TokenUsage } from "../provider/client";
 import {
@@ -462,11 +463,24 @@ export function useChat(
       }
     }
 
+    // Build MCP tool enabled set from per-server config.
+    const allMcpServersConfig = getAllMcpServers(freshConfig);
+    const mcpToolEnabled = new Set<string>();
+    for (const [serverName, serverConfig] of Object.entries(
+      allMcpServersConfig,
+    )) {
+      for (const tool of serverConfig.tools ?? []) {
+        if (tool.enabled) {
+          mcpToolEnabled.add(encodeToolName(serverName, tool.name));
+        }
+      }
+    }
+
     const allMcpToolDefs = mcpManagerRef.current
       ? await mcpManagerRef.current.getToolDefinitions().catch(() => [])
       : [];
-    const mcpToolDefs = allMcpToolDefs.filter(
-      (t) => toolAvailability[t.function.name] !== false,
+    const mcpToolDefs = allMcpToolDefs.filter((t) =>
+      mcpToolEnabled.has(t.function.name),
     );
     const toolDefs = [...builtInToolDefs, ...mcpToolDefs];
 
@@ -503,7 +517,15 @@ export function useChat(
         lastPromptTokens: tokenUsage?.promptTokens ?? null,
         signal: controller.signal,
         mcpManager: mcpManagerRef.current ?? undefined,
-        toolAvailability,
+        toolAvailability: {
+          ...toolAvailability,
+          ...Object.fromEntries(
+            allMcpToolDefs.map((t) => [
+              t.function.name,
+              mcpToolEnabled.has(t.function.name),
+            ]),
+          ),
+        },
         onContent: setStreamingContent,
         onMessage: (msg) => {
           const displayMsg = {

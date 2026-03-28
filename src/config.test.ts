@@ -22,6 +22,7 @@ import {
   removeProvider,
   updateActiveModel,
   updateMcpServerEnabled,
+  updateMcpServerTools,
 } from "./config";
 
 const tmpDir = resolve(import.meta.dirname, "../.test-config-tmp");
@@ -937,6 +938,110 @@ mcpServers:
   it("is a no-op for unknown servers", () => {
     loadConfig(); // create default
     updateMcpServerEnabled("nonexistent", false);
+    const config = loadConfig();
+    expect(config.mcpServers).toBeUndefined();
+  });
+});
+
+describe("MCP server tools config", () => {
+  it("loads tools array from server config", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  my-server:
+    transport: stdio
+    command: my-cmd
+    tools:
+      - name: tool_a
+        enabled: true
+      - name: tool_b
+        enabled: false
+`,
+    );
+    const config = loadConfig();
+    const server = config.mcpServers?.["my-server"];
+    expect(server?.tools).toHaveLength(2);
+    expect(server?.tools?.[0]).toEqual({ name: "tool_a", enabled: true });
+    expect(server?.tools?.[1]).toEqual({ name: "tool_b", enabled: false });
+  });
+
+  it("defaults tools to undefined when not set", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  my-server:
+    transport: stdio
+    command: my-cmd
+`,
+    );
+    const config = loadConfig();
+    expect(config.mcpServers?.["my-server"]?.tools).toBeUndefined();
+  });
+});
+
+describe("updateMcpServerTools", () => {
+  it("sets tools array on a server", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  my-server:
+    transport: stdio
+    command: my-cmd
+`,
+    );
+    updateMcpServerTools("my-server", [
+      { name: "tool_a", enabled: true },
+      { name: "tool_b", enabled: false },
+    ]);
+    const config = loadConfig();
+    expect(config.mcpServers?.["my-server"]?.tools).toEqual([
+      { name: "tool_a", enabled: true },
+      { name: "tool_b", enabled: false },
+    ]);
+  });
+
+  it("overwrites existing tools array", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  my-server:
+    transport: stdio
+    command: my-cmd
+    tools:
+      - name: old_tool
+        enabled: true
+`,
+    );
+    updateMcpServerTools("my-server", [{ name: "new_tool", enabled: false }]);
+    const config = loadConfig();
+    expect(config.mcpServers?.["my-server"]?.tools).toEqual([
+      { name: "new_tool", enabled: false },
+    ]);
+  });
+
+  it("is a no-op for unknown servers", () => {
+    loadConfig();
+    updateMcpServerTools("nonexistent", [{ name: "tool", enabled: true }]);
     const config = loadConfig();
     expect(config.mcpServers).toBeUndefined();
   });

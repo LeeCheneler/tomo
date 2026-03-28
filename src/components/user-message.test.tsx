@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { UserMessage } from "./user-message";
 
 describe("UserMessage", () => {

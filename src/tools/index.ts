@@ -12,11 +12,11 @@ import "./write-file";
 
 // Re-export registry functions
 export {
-  registerTool,
-  getTool,
-  getToolDisplayName,
   getAllTools,
+  getTool,
   getToolDefinitions,
+  getToolDisplayName,
+  registerTool,
   resolveToolAvailability,
 } from "./registry";
 export type { Tool, ToolContext } from "./types";

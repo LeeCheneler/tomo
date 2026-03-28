@@ -82,6 +82,7 @@ vi.mock("../config", () => ({
   updateActiveProvider: vi.fn(),
   getAllowedCommands: () => [],
   getMcpServers: () => ({}),
+  getAllMcpServers: () => ({}),
 }));
 
 vi.mock("../commands", () => ({

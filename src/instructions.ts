@@ -2,7 +2,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { arch, homedir, platform, release, userInfo } from "node:os";
 import { resolve } from "node:path";
 import { env } from "./env";
-import { getAllSkills } from "./skills";
 import {
   getDefaultBranch,
   getGitBranch,
@@ -12,6 +11,7 @@ import {
   isGitHubRemote,
   isGitRepo,
 } from "./git";
+import { getAllSkills } from "./skills";
 
 const FILENAMES = ["claude.md", "agents.md"];
 

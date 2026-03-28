@@ -1,5 +1,5 @@
-import { type ReactNode, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { type ReactNode, useState } from "react";
 
 export interface ConfirmOption {
   label: string;
