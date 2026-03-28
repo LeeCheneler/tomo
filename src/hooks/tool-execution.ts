@@ -1,8 +1,9 @@
 import chalk from "chalk";
 import type { DisplayMessage } from "../components/message-list";
-import type { ToolCall } from "../provider/client";
 import { getErrorMessage } from "../errors";
-import { type ToolContext, getTool, getToolDisplayName } from "../tools";
+import type { McpManager } from "../mcp/manager";
+import type { ToolCall } from "../provider/client";
+import { getTool, getToolDisplayName, type ToolContext } from "../tools";
 
 export class ToolDismissedError extends Error {
   constructor() {
@@ -49,17 +50,36 @@ export function formatToolHeader(name: string, args: string): string {
 async function executeSingleToolCall(
   tc: ToolCall,
   toolContext: ToolContext,
+  mcpManager?: McpManager,
+  toolAvailability?: Record<string, boolean>,
 ): Promise<DisplayMessage> {
-  const tool = getTool(tc.function.name);
   let result: string;
-  if (!tool) {
-    result = `Error: unknown tool "${tc.function.name}"`;
+
+  if (mcpManager?.isMcpTool(tc.function.name)) {
+    if (toolAvailability?.[tc.function.name] === false) {
+      result = "This MCP tool has been disabled.";
+    } else {
+      try {
+        const args = JSON.parse(tc.function.arguments || "{}");
+        result = await mcpManager.callTool(tc.function.name, args);
+      } catch (err) {
+        result = `Error: ${getErrorMessage(err)}`;
+      }
+    }
+  } else if (tc.function.name.startsWith("mcp__")) {
+    result =
+      "This MCP tool is no longer available. The server has been disabled.";
   } else {
-    try {
-      result = await tool.execute(tc.function.arguments, toolContext);
-    } catch (err) {
-      if (err instanceof ToolDismissedError) throw err;
-      result = `Error: ${getErrorMessage(err)}`;
+    const tool = getTool(tc.function.name);
+    if (!tool) {
+      result = `Error: unknown tool "${tc.function.name}"`;
+    } else {
+      try {
+        result = await tool.execute(tc.function.arguments, toolContext);
+      } catch (err) {
+        if (err instanceof ToolDismissedError) throw err;
+        result = `Error: ${getErrorMessage(err)}`;
+      }
     }
   }
 
@@ -80,17 +100,27 @@ export async function executeToolCalls(
   toolCalls: ToolCall[],
   signal: AbortSignal,
   toolContext: ToolContext,
+  mcpManager?: McpManager,
+  toolAvailability?: Record<string, boolean>,
 ): Promise<DisplayMessage[]> {
   // Separate into non-interactive (can run in parallel) and interactive (must be sequential).
+  // MCP tools are always non-interactive — access is controlled via tool availability in settings.
   const nonInteractive: ToolCall[] = [];
   const interactive: ToolCall[] = [];
 
   for (const tc of toolCalls) {
-    const tool = getTool(tc.function.name);
-    if (tool && tool.interactive === false) {
+    if (
+      mcpManager?.isMcpTool(tc.function.name) ||
+      tc.function.name.startsWith("mcp__")
+    ) {
       nonInteractive.push(tc);
     } else {
-      interactive.push(tc);
+      const tool = getTool(tc.function.name);
+      if (tool && tool.interactive === false) {
+        nonInteractive.push(tc);
+      } else {
+        interactive.push(tc);
+      }
     }
   }
 
@@ -98,7 +128,14 @@ export async function executeToolCalls(
   const parallelResults =
     nonInteractive.length > 0
       ? await Promise.all(
-          nonInteractive.map((tc) => executeSingleToolCall(tc, toolContext)),
+          nonInteractive.map((tc) =>
+            executeSingleToolCall(
+              tc,
+              toolContext,
+              mcpManager,
+              toolAvailability,
+            ),
+          ),
         )
       : [];
 
@@ -108,7 +145,14 @@ export async function executeToolCalls(
     if (signal.aborted) {
       throw new DOMException("aborted", "AbortError");
     }
-    sequentialResults.push(await executeSingleToolCall(tc, toolContext));
+    sequentialResults.push(
+      await executeSingleToolCall(
+        tc,
+        toolContext,
+        mcpManager,
+        toolAvailability,
+      ),
+    );
   }
 
   // Return results in the original tool call order.

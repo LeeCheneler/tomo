@@ -24,6 +24,7 @@ function makeCallbacks(
     maxTokens: 8192,
     tokenUsage: null,
     messageCount: 0,
+    mcpFailedServers: [],
     ...overrides,
   };
 }

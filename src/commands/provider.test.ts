@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getCommand } from "./registry";
 import "./provider";
 
@@ -20,6 +20,7 @@ const mockCallbacks = () => ({
   maxTokens: 8192,
   tokenUsage: null,
   messageCount: 0,
+  mcpFailedServers: [],
 });
 
 describe("/provider command", () => {

@@ -2,12 +2,13 @@ import chalk from "chalk";
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 import { getCommand, parse } from "../commands";
-import type { DisplayMessage } from "../components/message-list";
 import { runCompletionLoop } from "../completion-loop";
+import type { DisplayMessage } from "../components/message-list";
 import {
   type Config,
   getAllowedCommands,
   getMaxTokens,
+  getMcpServers,
   getProviderByName,
   loadConfig,
   type ProviderConfig,
@@ -16,6 +17,7 @@ import {
 } from "../config";
 import { getErrorMessage } from "../errors";
 import type { ImageAttachment } from "../images";
+import { McpManager } from "../mcp/manager";
 import { resolvePermissions } from "../permissions";
 import type { ChatMessage, ContentPart, TokenUsage } from "../provider/client";
 import {
@@ -51,6 +53,7 @@ export interface ChatState {
   pendingMessage: string | null;
   toolActive: boolean;
   inputHistory: string[];
+  mcpWarnings: string[];
   submit: (text: string, clipboardImages?: ImageAttachment[]) => void;
   cancel: () => void;
   cancelPending: () => void;
@@ -200,8 +203,38 @@ export function useChat(
   const sessionRef = useRef<Session>(initialSession);
   const streamingRef = useRef(false);
   const pendingMessageRef = useRef<string | null>(null);
+  const mcpManagerRef = useRef<McpManager | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const inputHistoryRef = useRef<string[]>([]);
+  const [mcpWarnings, setMcpWarnings] = useState<string[]>([]);
+
+  // Start MCP servers on mount, shut down on unmount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only run once on mount
+  useEffect(() => {
+    let cancelled = false;
+    const mcpServers = getMcpServers(config);
+    const serverNames = Object.keys(mcpServers);
+    if (serverNames.length > 0) {
+      const manager = new McpManager();
+      manager.startAll(mcpServers).then((failures) => {
+        if (cancelled) {
+          manager.shutdown();
+          return;
+        }
+        mcpManagerRef.current = manager;
+        if (failures.length > 0) {
+          setMcpWarnings(
+            failures.map((name) => `MCP server "${name}": failed to connect`),
+          );
+        }
+      });
+    }
+    return () => {
+      cancelled = true;
+      mcpManagerRef.current?.shutdown();
+      mcpManagerRef.current = null;
+    };
+  }, []);
 
   // Detect context window from provider when model or provider changes.
   // Config override takes precedence — only fetch if no override is set.
@@ -247,6 +280,8 @@ export function useChat(
     setPendingMessage(null);
     inputHistoryRef.current = [];
     abortRef.current?.abort();
+    mcpManagerRef.current?.shutdown();
+    mcpManagerRef.current = null;
     setMessages([]);
     setStreaming(false);
     setStreamingContent("");
@@ -352,6 +387,12 @@ export function useChat(
         maxTokens: getMaxTokens(config, activeProvider, activeModel),
         tokenUsage,
         messageCount: messages.length,
+        mcpFailedServers: mcpWarnings
+          .map((w) => {
+            const match = w.match(/^MCP server "(.+?)":/);
+            return match?.[1];
+          })
+          .filter((n): n is string => n !== undefined),
       });
 
       if ("interactive" in result) {
@@ -397,7 +438,37 @@ export function useChat(
     const freshConfig = loadConfig();
     const maxTokens = getMaxTokens(config, activeProvider, activeModel);
     const toolAvailability = resolveToolAvailability(freshConfig.tools);
-    const toolDefs = getToolDefinitions(toolAvailability);
+    const builtInToolDefs = getToolDefinitions(toolAvailability);
+
+    // Start or restart MCP servers if config changed.
+    const mcpServers = getMcpServers(freshConfig);
+    const desiredNames = Object.keys(mcpServers).sort().join(",");
+    const currentNames = mcpManagerRef.current
+      ? mcpManagerRef.current.getServerNames().sort().join(",")
+      : "";
+
+    if (desiredNames !== currentNames) {
+      mcpManagerRef.current?.shutdown();
+      mcpManagerRef.current = null;
+
+      if (desiredNames) {
+        const manager = new McpManager();
+        try {
+          await manager.startAll(mcpServers);
+          mcpManagerRef.current = manager;
+        } catch {
+          // MCP server startup failed — continue without MCP tools.
+        }
+      }
+    }
+
+    const allMcpToolDefs = mcpManagerRef.current
+      ? await mcpManagerRef.current.getToolDefinitions().catch(() => [])
+      : [];
+    const mcpToolDefs = allMcpToolDefs.filter(
+      (t) => toolAvailability[t.function.name] !== false,
+    );
+    const toolDefs = [...builtInToolDefs, ...mcpToolDefs];
 
     const permissions = resolvePermissions(freshConfig.permissions);
 
@@ -431,6 +502,8 @@ export function useChat(
         contextWindow,
         lastPromptTokens: tokenUsage?.promptTokens ?? null,
         signal: controller.signal,
+        mcpManager: mcpManagerRef.current ?? undefined,
+        toolAvailability,
         onContent: setStreamingContent,
         onMessage: (msg) => {
           const displayMsg = {
@@ -504,6 +577,7 @@ export function useChat(
     pendingMessage,
     toolActive,
     inputHistory: inputHistoryRef.current,
+    mcpWarnings,
     submit,
     cancel,
     cancelPending,

@@ -27,6 +27,7 @@ export interface CommandCallbacks {
   maxTokens: number;
   tokenUsage: { promptTokens: number; completionTokens: number } | null;
   messageCount: number;
+  mcpFailedServers: string[];
 }
 
 /** A registered slash command with a name, description, and execute handler. */

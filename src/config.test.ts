@@ -1,17 +1,27 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import {
-  type Config,
   addAllowedCommand,
+  addMcpServer,
   addProvider,
+  type Config,
   getActiveProvider,
+  getAllMcpServers,
   getAllowedCommands,
+  getMcpServers,
   loadConfig,
+  removeMcpServer,
   removeProvider,
   updateActiveModel,
+  updateMcpServerEnabled,
 } from "./config";
 
 const tmpDir = resolve(import.meta.dirname, "../.test-config-tmp");
@@ -392,5 +402,542 @@ allowed_commands:
     );
     const config = loadConfig();
     expect(config.allowed_commands).toEqual(["npm test", "git status"]);
+  });
+});
+
+describe("loadConfig with mcpServers", () => {
+  it("loads stdio MCP server config", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  filesystem:
+    transport: stdio
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "/tmp"
+`,
+    );
+    const config = loadConfig();
+    const fs = config.mcpServers?.filesystem;
+    expect(fs).toBeDefined();
+    expect(fs?.transport).toBe("stdio");
+    if (fs?.transport === "stdio") {
+      expect(fs.command).toBe("npx");
+      expect(fs.args).toEqual([
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp",
+      ]);
+    }
+  });
+
+  it("loads http MCP server config", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  remote:
+    transport: http
+    url: https://mcp.example.com/sse
+    headers:
+      Authorization: "Bearer token123"
+`,
+    );
+    const config = loadConfig();
+    const remote = config.mcpServers?.remote;
+    expect(remote).toBeDefined();
+    expect(remote?.transport).toBe("http");
+    if (remote?.transport === "http") {
+      expect(remote.url).toBe("https://mcp.example.com/sse");
+      expect(remote.headers).toEqual({ Authorization: "Bearer token123" });
+    }
+  });
+
+  it("loads multiple MCP servers", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  filesystem:
+    transport: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem"]
+  remote:
+    transport: http
+    url: https://mcp.example.com/sse
+`,
+    );
+    const config = loadConfig();
+    expect(Object.keys(config.mcpServers ?? {})).toEqual([
+      "filesystem",
+      "remote",
+    ]);
+  });
+
+  it("defaults args to empty array for stdio server", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  simple:
+    transport: stdio
+    command: my-server
+`,
+    );
+    const config = loadConfig();
+    const server = config.mcpServers?.simple;
+    expect(server).toBeDefined();
+    if (server?.transport === "stdio") {
+      expect(server.args).toEqual([]);
+    }
+  });
+
+  it("loads stdio server with env vars", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  postgres:
+    transport: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-postgres"]
+    env:
+      POSTGRES_URL: "postgresql://localhost:5432/mydb"
+`,
+    );
+    const config = loadConfig();
+    const server = config.mcpServers?.postgres;
+    expect(server).toBeDefined();
+    if (server?.transport === "stdio") {
+      expect(server.env).toEqual({
+        POSTGRES_URL: "postgresql://localhost:5432/mydb",
+      });
+    }
+  });
+
+  it("throws on missing transport field", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  broken:
+    command: npx
+`,
+    );
+    expect(() => loadConfig()).toThrow("validation failed");
+  });
+
+  it("throws on invalid transport type", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  broken:
+    transport: websocket
+    url: ws://localhost:8080
+`,
+    );
+    expect(() => loadConfig()).toThrow("validation failed");
+  });
+
+  it("throws on stdio server with missing command", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  broken:
+    transport: stdio
+`,
+    );
+    expect(() => loadConfig()).toThrow("validation failed");
+  });
+
+  it("throws on http server with missing url", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  broken:
+    transport: http
+`,
+    );
+    expect(() => loadConfig()).toThrow("validation failed");
+  });
+
+  it("throws on http server with invalid url", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  broken:
+    transport: http
+    url: not-a-url
+`,
+    );
+    expect(() => loadConfig()).toThrow("validation failed");
+  });
+
+  it("merges local mcpServers on top of global", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  filesystem:
+    transport: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem"]
+`,
+    );
+    writeYaml(
+      localPath,
+      `
+mcpServers:
+  local-server:
+    transport: stdio
+    command: my-local-server
+`,
+    );
+    const config = loadConfig();
+    // Local mcpServers replaces global (shallow merge)
+    expect(config.mcpServers?.["local-server"]).toBeDefined();
+    expect(config.mcpServers?.filesystem).toBeUndefined();
+  });
+
+  it("loads config without mcpServers (optional)", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+`,
+    );
+    const config = loadConfig();
+    expect(config.mcpServers).toBeUndefined();
+  });
+});
+
+describe("getMcpServers", () => {
+  it("returns empty record when no mcpServers configured", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+    };
+    expect(getMcpServers(config)).toEqual({});
+  });
+
+  it("returns servers as-is when no env vars present", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        fs: {
+          transport: "stdio" as const,
+          command: "npx",
+          args: ["-y", "server-fs"],
+        },
+      },
+    };
+    const servers = getMcpServers(config);
+    expect(servers.fs.transport).toBe("stdio");
+    if (servers.fs.transport === "stdio") {
+      expect(servers.fs.command).toBe("npx");
+    }
+  });
+
+  it("substitutes env vars in string values", () => {
+    process.env.TEST_MCP_TOKEN = "secret-token-123";
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        remote: {
+          transport: "http" as const,
+          url: "https://mcp.example.com/sse",
+          headers: {
+            Authorization: "Bearer $" + "{TEST_MCP_TOKEN}",
+          },
+        },
+      },
+    };
+    const servers = getMcpServers(config);
+    if (servers.remote.transport === "http") {
+      expect(servers.remote.headers?.Authorization).toBe(
+        "Bearer secret-token-123",
+      );
+    }
+    delete process.env.TEST_MCP_TOKEN;
+  });
+
+  it("substitutes env vars in stdio env field", () => {
+    process.env.TEST_PG_URL = "postgresql://localhost:5432/db";
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        pg: {
+          transport: "stdio" as const,
+          command: "npx",
+          args: [],
+          env: {
+            POSTGRES_URL: "$" + "{TEST_PG_URL}",
+          },
+        },
+      },
+    };
+    const servers = getMcpServers(config);
+    if (servers.pg.transport === "stdio") {
+      expect(servers.pg.env?.POSTGRES_URL).toBe(
+        "postgresql://localhost:5432/db",
+      );
+    }
+    delete process.env.TEST_PG_URL;
+  });
+
+  it("replaces missing env vars with empty string", () => {
+    delete process.env.NONEXISTENT_VAR;
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        remote: {
+          transport: "http" as const,
+          url: "https://mcp.example.com/sse",
+          headers: {
+            Authorization: "Bearer $" + "{NONEXISTENT_VAR}",
+          },
+        },
+      },
+    };
+    const servers = getMcpServers(config);
+    if (servers.remote.transport === "http") {
+      expect(servers.remote.headers?.Authorization).toBe("Bearer ");
+    }
+  });
+
+  it("substitutes env vars in args array", () => {
+    process.env.TEST_MCP_PATH = "/home/user/data";
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        fs: {
+          transport: "stdio" as const,
+          command: "npx",
+          args: ["-y", "server-fs", "$" + "{TEST_MCP_PATH}"],
+        },
+      },
+    };
+    const servers = getMcpServers(config);
+    if (servers.fs.transport === "stdio") {
+      expect(servers.fs.args).toEqual(["-y", "server-fs", "/home/user/data"]);
+    }
+    delete process.env.TEST_MCP_PATH;
+  });
+
+  it("filters out disabled servers", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        enabled: {
+          transport: "stdio" as const,
+          command: "cmd1",
+          args: [],
+        },
+        disabled: {
+          transport: "stdio" as const,
+          command: "cmd2",
+          args: [],
+          enabled: false,
+        },
+      },
+    };
+    const servers = getMcpServers(config);
+    expect(Object.keys(servers)).toEqual(["enabled"]);
+  });
+});
+
+describe("getAllMcpServers", () => {
+  it("returns all servers including disabled", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        enabled: {
+          transport: "stdio" as const,
+          command: "cmd1",
+          args: [],
+        },
+        disabled: {
+          transport: "stdio" as const,
+          command: "cmd2",
+          args: [],
+          enabled: false,
+        },
+      },
+    };
+    const servers = getAllMcpServers(config);
+    expect(Object.keys(servers)).toEqual(["enabled", "disabled"]);
+  });
+
+  it("returns empty record when no servers configured", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+    };
+    expect(getAllMcpServers(config)).toEqual({});
+  });
+});
+
+describe("addMcpServer", () => {
+  it("adds a server to the global config", () => {
+    loadConfig(); // create default
+    addMcpServer("test-server", {
+      transport: "http",
+      url: "https://mcp.example.com",
+    });
+    const config = loadConfig();
+    expect(config.mcpServers?.["test-server"]).toBeDefined();
+    expect(config.mcpServers?.["test-server"]?.transport).toBe("http");
+  });
+});
+
+describe("removeMcpServer", () => {
+  it("removes a server from the global config", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  server1:
+    transport: stdio
+    command: cmd1
+  server2:
+    transport: stdio
+    command: cmd2
+`,
+    );
+    removeMcpServer("server1");
+    const config = loadConfig();
+    expect(config.mcpServers?.server1).toBeUndefined();
+    expect(config.mcpServers?.server2).toBeDefined();
+  });
+});
+
+describe("updateMcpServerEnabled", () => {
+  it("sets enabled to false", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  server1:
+    transport: stdio
+    command: cmd1
+`,
+    );
+    updateMcpServerEnabled("server1", false);
+    const config = loadConfig();
+    expect(config.mcpServers?.server1?.enabled).toBe(false);
+  });
+
+  it("sets enabled to true", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  server1:
+    transport: stdio
+    command: cmd1
+    enabled: false
+`,
+    );
+    updateMcpServerEnabled("server1", true);
+    const config = loadConfig();
+    expect(config.mcpServers?.server1?.enabled).toBe(true);
+  });
+
+  it("is a no-op for unknown servers", () => {
+    loadConfig(); // create default
+    updateMcpServerEnabled("nonexistent", false);
+    const config = loadConfig();
+    expect(config.mcpServers).toBeUndefined();
   });
 });
