@@ -13,6 +13,7 @@ type Step =
   | "serverTools"
   | "addType"
   | "addUrl"
+  | "addApiKey"
   | "addCommand"
   | "connecting";
 
@@ -42,6 +43,7 @@ export function McpServerSelector({
   );
   const [reconnectName, setReconnectName] = useState<string | null>(null);
   const [activeServer, setActiveServer] = useState<string | null>(null);
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
 
   const activeTools = activeServer
     ? (state.mcpServers[activeServer]?.tools ?? [])
@@ -147,7 +149,13 @@ export function McpServerSelector({
     };
   }, [step, pendingConfig]);
 
-  const subSteps: Step[] = ["addType", "addUrl", "addCommand", "connecting"];
+  const subSteps: Step[] = [
+    "addType",
+    "addUrl",
+    "addApiKey",
+    "addCommand",
+    "connecting",
+  ];
 
   useInput((input, key) => {
     if (key.escape) {
@@ -160,6 +168,7 @@ export function McpServerSelector({
         setTextValue("");
         setConnectError(null);
         setPendingConfig(null);
+        setPendingUrl(null);
         setReconnectName(null);
         setStep("servers");
       }
@@ -176,6 +185,7 @@ export function McpServerSelector({
         setTextValue("");
         setConnectError(null);
         setPendingConfig(null);
+        setPendingUrl(null);
         setReconnectName(null);
         setStep("servers");
       }
@@ -273,8 +283,31 @@ export function McpServerSelector({
         if (key.return) {
           const url = textValue.trim();
           if (!url) return;
-          setPendingConfig({ transport: "http", url });
+          setPendingUrl(url);
+          setTextValue("");
+          setStep("addApiKey");
+        } else if (key.backspace || key.delete) {
+          setTextValue((v) => v.slice(0, -1));
+        } else if (input && !key.ctrl && !key.meta) {
+          setTextValue((v) => v + input);
+        }
+        break;
+      }
+
+      case "addApiKey": {
+        if (key.return) {
+          const apiKey = textValue.trim();
+          const headers = apiKey
+            ? { Authorization: `Bearer ${apiKey}` }
+            : undefined;
+          setPendingConfig({
+            transport: "http",
+            url: pendingUrl ?? "",
+            ...(headers ? { headers } : {}),
+          });
           setConnectError(null);
+          setTextValue("");
+          setPendingUrl(null);
           setStep("connecting");
         } else if (key.backspace || key.delete) {
           setTextValue((v) => v.slice(0, -1));
@@ -399,6 +432,24 @@ export function McpServerSelector({
           <Text>
             {"    "}
             {textValue}
+            <Text dimColor>█</Text>
+          </Text>
+        </Box>
+      );
+
+    case "addApiKey":
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>
+            {"  Enter API key (Enter confirm, leave empty to skip, Esc back):"}
+          </Text>
+          <Text dimColor>
+            {"  Tip: use ${VAR} to reference environment variables"}
+          </Text>
+          <Text>{""}</Text>
+          <Text>
+            {"    "}
+            {"*".repeat(textValue.length)}
             <Text dimColor>█</Text>
           </Text>
         </Box>
