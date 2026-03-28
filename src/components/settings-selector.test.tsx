@@ -34,19 +34,16 @@ function renderSettings(overrides?: {
   state?: Partial<SettingsState>;
   toolMeta?: Partial<ToolMeta>;
   onSave?: (state: SettingsState) => void;
-  onCancel?: () => void;
 }) {
   const onSave = overrides?.onSave ?? vi.fn();
-  const onCancel = overrides?.onCancel ?? vi.fn();
   const result = render(
     <SettingsSelector
       initialState={{ ...defaultState, ...overrides?.state }}
       toolMeta={{ ...defaultToolMeta, ...overrides?.toolMeta }}
       onSave={onSave}
-      onCancel={onCancel}
     />,
   );
-  return { ...result, onSave, onCancel };
+  return { ...result, onSave };
 }
 
 describe("SettingsSelector", () => {
@@ -68,16 +65,6 @@ describe("SettingsSelector", () => {
       await flush();
 
       expect(onSave).toHaveBeenCalledWith(defaultState);
-    });
-
-    it("cancels on q from menu", async () => {
-      const onCancel = vi.fn();
-      const { stdin } = renderSettings({ onCancel });
-
-      stdin.write("q");
-      await flush();
-
-      expect(onCancel).toHaveBeenCalled();
     });
   });
 
@@ -304,11 +291,7 @@ describe("SettingsSelector", () => {
       await flush();
       stdin.write("\r");
       await flush();
-      stdin.write("\x1B[B");
-      await flush();
-      stdin.write("\x1B[B");
-      await flush();
-      stdin.write("\r");
+      stdin.write("a");
       await flush();
       stdin.write("cargo:*");
       await flush();
@@ -437,16 +420,6 @@ describe("SettingsSelector", () => {
       expect(lastFrame()).toContain("Tool Availability");
 
       stdin.write("\x1B");
-      await flush();
-      expect(lastFrame()).toContain("Settings");
-    });
-
-    it("returns to menu with q from a step", async () => {
-      const { stdin, lastFrame } = renderSettings();
-
-      stdin.write("\r");
-      await flush();
-      stdin.write("q");
       await flush();
       expect(lastFrame()).toContain("Settings");
     });

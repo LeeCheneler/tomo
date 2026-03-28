@@ -13,7 +13,9 @@ type Step =
   | "serverTools"
   | "addType"
   | "addUrl"
-  | "addApiKey"
+  | "addHeaders"
+  | "addHeaderKey"
+  | "addHeaderValue"
   | "addCommand"
   | "connecting";
 
@@ -44,10 +46,19 @@ export function McpServerSelector({
   const [reconnectName, setReconnectName] = useState<string | null>(null);
   const [activeServer, setActiveServer] = useState<string | null>(null);
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const [pendingHeaders, setPendingHeaders] = useState<Record<string, string>>(
+    {},
+  );
+  const [pendingHeaderKey, setPendingHeaderKey] = useState<string | null>(null);
+  const [editingServerName, setEditingServerName] = useState<string | null>(
+    null,
+  );
 
   const activeTools = activeServer
     ? (state.mcpServers[activeServer]?.tools ?? [])
     : [];
+
+  const headerKeys = Object.keys(pendingHeaders);
 
   const itemCount = (() => {
     switch (step) {
@@ -57,6 +68,8 @@ export function McpServerSelector({
         return activeTools.length;
       case "addType":
         return TRANSPORT_TYPES.length;
+      case "addHeaders":
+        return headerKeys.length;
       default:
         return 0;
     }
@@ -152,7 +165,9 @@ export function McpServerSelector({
   const subSteps: Step[] = [
     "addType",
     "addUrl",
-    "addApiKey",
+    "addHeaders",
+    "addHeaderKey",
+    "addHeaderValue",
     "addCommand",
     "connecting",
   ];
@@ -169,23 +184,9 @@ export function McpServerSelector({
         setConnectError(null);
         setPendingConfig(null);
         setPendingUrl(null);
-        setReconnectName(null);
-        setStep("servers");
-      }
-      return;
-    }
-
-    if (input === "q" || input === "Q") {
-      if (step === "servers") {
-        onBack();
-      } else if (step === "serverTools") {
-        setActiveServer(null);
-        setStep("servers");
-      } else if (subSteps.includes(step)) {
-        setTextValue("");
-        setConnectError(null);
-        setPendingConfig(null);
-        setPendingUrl(null);
+        setPendingHeaders({});
+        setPendingHeaderKey(null);
+        setEditingServerName(null);
         setReconnectName(null);
         setStep("servers");
       }
@@ -230,11 +231,17 @@ export function McpServerSelector({
           setPendingConfig(state.mcpServers[name]);
           setConnectError(null);
           setStep("connecting");
-        } else if (
-          input === "a" ||
-          input === "A" ||
-          ((input === " " || key.return) && isOnAdd)
-        ) {
+        } else if ((input === "e" || input === "E") && !isOnAdd) {
+          const name = serverNames[cursor];
+          const server = state.mcpServers[name];
+          const currentHeaders =
+            server.transport === "http"
+              ? ((server as { headers?: Record<string, string> }).headers ?? {})
+              : {};
+          setEditingServerName(name);
+          setPendingHeaders({ ...currentHeaders });
+          setStep("addHeaders");
+        } else if (input === "a" || input === "A") {
           setTextValue("");
           setConnectError(null);
           setStep("addType");
@@ -247,7 +254,7 @@ export function McpServerSelector({
           handleUp();
         } else if (key.downArrow) {
           handleDown();
-        } else if ((input === " " || key.return) && activeServer) {
+        } else if (input === " " && activeServer) {
           const tool = activeTools[cursor];
           if (!tool) break;
           const updated = activeTools.map((t) =>
@@ -285,7 +292,8 @@ export function McpServerSelector({
           if (!url) return;
           setPendingUrl(url);
           setTextValue("");
-          setStep("addApiKey");
+          setPendingHeaders({});
+          setStep("addHeaders");
         } else if (key.backspace || key.delete) {
           setTextValue((v) => v.slice(0, -1));
         } else if (input && !key.ctrl && !key.meta) {
@@ -294,21 +302,92 @@ export function McpServerSelector({
         break;
       }
 
-      case "addApiKey": {
-        if (key.return) {
-          const apiKey = textValue.trim();
-          const headers = apiKey
-            ? { Authorization: `Bearer ${apiKey}` }
-            : undefined;
-          setPendingConfig({
-            transport: "http",
-            url: pendingUrl ?? "",
-            ...(headers ? { headers } : {}),
-          });
-          setConnectError(null);
+      case "addHeaders": {
+        if (key.upArrow) {
+          handleUp();
+        } else if (key.downArrow) {
+          handleDown();
+        } else if (key.return) {
+          if (editingServerName) {
+            // Editing headers on an existing server — update config directly.
+            // Destructure to strip old headers, then only add back if non-empty.
+            const { headers: _oldHeaders, ...serverWithoutHeaders } = state
+              .mcpServers[editingServerName] as McpServerConfig & {
+              headers?: Record<string, string>;
+            };
+            const headers =
+              headerKeys.length > 0 ? { ...pendingHeaders } : undefined;
+            onUpdate({
+              mcpServers: {
+                ...state.mcpServers,
+                [editingServerName]: {
+                  ...serverWithoutHeaders,
+                  ...(headers ? { headers } : {}),
+                },
+              },
+            });
+            setEditingServerName(null);
+            setPendingHeaders({});
+            setStep("servers");
+          } else {
+            // Add flow — proceed to connecting
+            const headers =
+              headerKeys.length > 0 ? { ...pendingHeaders } : undefined;
+            setPendingConfig({
+              transport: "http",
+              url: pendingUrl ?? "",
+              ...(headers ? { headers } : {}),
+            });
+            setConnectError(null);
+            setPendingUrl(null);
+            setPendingHeaders({});
+            setStep("connecting");
+          }
+        } else if (input === "a" || input === "A") {
           setTextValue("");
-          setPendingUrl(null);
-          setStep("connecting");
+          setStep("addHeaderKey");
+        } else if ((input === "e" || input === "E") && headerKeys.length > 0) {
+          const keyToEdit = headerKeys[cursor];
+          setPendingHeaderKey(keyToEdit);
+          setTextValue(pendingHeaders[keyToEdit]);
+          setStep("addHeaderValue");
+        } else if ((input === "d" || input === "D") && headerKeys.length > 0) {
+          const keyToRemove = headerKeys[cursor];
+          const { [keyToRemove]: _, ...rest } = pendingHeaders;
+          setPendingHeaders(rest);
+          if (cursor >= headerKeys.length - 1) {
+            setCursor((c) => Math.max(0, c - 1));
+          }
+        }
+        break;
+      }
+
+      case "addHeaderKey": {
+        if (key.return) {
+          const headerKey = textValue.trim();
+          if (!headerKey) return;
+          setPendingHeaderKey(headerKey);
+          setTextValue("");
+          setStep("addHeaderValue");
+        } else if (key.backspace || key.delete) {
+          setTextValue((v) => v.slice(0, -1));
+        } else if (input && !key.ctrl && !key.meta) {
+          setTextValue((v) => v + input);
+        }
+        break;
+      }
+
+      case "addHeaderValue": {
+        if (key.return) {
+          const headerValue = textValue.trim();
+          if (!headerValue) return;
+          setPendingHeaders((prev) => ({
+            ...prev,
+            [pendingHeaderKey!]: headerValue,
+          }));
+          setPendingHeaderKey(null);
+          setTextValue("");
+          setStep("addHeaders");
         } else if (key.backspace || key.delete) {
           setTextValue((v) => v.slice(0, -1));
         } else if (input && !key.ctrl && !key.meta) {
@@ -363,7 +442,7 @@ export function McpServerSelector({
         <Box flexDirection="column">
           <Text dimColor>
             {
-              "  MCP Servers (Space toggle, Enter tools, d delete, a add, r reconnect, Esc back):"
+              "  MCP Servers (Space toggle, Enter tools, a add, e headers, d delete, r reconnect, Esc back):"
             }
           </Text>
           <Text>{""}</Text>
@@ -391,7 +470,7 @@ export function McpServerSelector({
       return (
         <Box flexDirection="column">
           <Text dimColor>
-            {`  ${activeServer} — Tools (Space/Enter toggle, Esc back):`}
+            {`  ${activeServer} — Tools (Space toggle, Esc back):`}
           </Text>
           <Text>{""}</Text>
           {items.length === 0 ? (
@@ -437,14 +516,53 @@ export function McpServerSelector({
         </Box>
       );
 
-    case "addApiKey":
+    case "addHeaders":
       return (
         <Box flexDirection="column">
           <Text dimColor>
-            {"  Enter API key (Enter confirm, leave empty to skip, Esc back):"}
+            {"  Headers (a add, e edit, d delete, Enter confirm, Esc back):"}
           </Text>
           <Text dimColor>
             {"  Tip: use ${VAR} to reference environment variables"}
+          </Text>
+          <Text>{""}</Text>
+          {headerKeys.length === 0 ? (
+            <Text dimColor>{"    No headers configured."}</Text>
+          ) : (
+            headerKeys.map((k, i) => {
+              const isCurrent = i === cursor;
+              return (
+                <Text key={k} color={isCurrent ? "cyan" : undefined}>
+                  {"    "}
+                  {isCurrent ? "❯" : " "} {k}:{" "}
+                  {"*".repeat(pendingHeaders[k].length)}
+                </Text>
+              );
+            })
+          )}
+        </Box>
+      );
+
+    case "addHeaderKey":
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>
+            {"  Enter header name (Enter confirm, Esc back):"}
+          </Text>
+          <Text>{""}</Text>
+          <Text>
+            {"    "}
+            {textValue}
+            <Text dimColor>█</Text>
+          </Text>
+        </Box>
+      );
+
+    case "addHeaderValue":
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>
+            {`  Enter value for ${pendingHeaderKey} (Enter confirm, Esc back):`}
           </Text>
           <Text>{""}</Text>
           <Text>

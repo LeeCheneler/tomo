@@ -13,8 +13,6 @@ import {
   updateLocalAllowedCommands,
   updateLocalPermissions,
   updateLocalToolConfig,
-  updateMcpServerEnabled,
-  updateMcpServerTools,
 } from "../config";
 import { resolvePermissions } from "../permissions";
 import { getAllTools, resolveToolAvailability } from "../tools";
@@ -38,14 +36,8 @@ function saveSettings(state: SettingsState): void {
   }
 
   for (const [name, server] of Object.entries(state.mcpServers)) {
-    if (!existingServers[name]) {
-      addMcpServer(name, server);
-    } else {
-      updateMcpServerEnabled(name, server.enabled !== false);
-      if (server.tools) {
-        updateMcpServerTools(name, server.tools);
-      }
-    }
+    // Always write the full server config to persist all fields (headers, etc.)
+    addMcpServer(name, server);
   }
 }
 
@@ -92,7 +84,6 @@ const settings: Command = {
           saveSettings(state);
           callbacks.onComplete({ output: "Settings updated." });
         },
-        onCancel: callbacks.onCancel,
       }),
     };
   },

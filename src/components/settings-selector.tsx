@@ -39,7 +39,6 @@ export interface SettingsSelectorProps {
   toolMeta: ToolMeta;
   mcpFailedServers?: Set<string>;
   onSave: (state: SettingsState) => void;
-  onCancel: () => void;
 }
 
 /** Settings root. Owns a single config state; sub-components read/update it; saves on final Esc. */
@@ -48,7 +47,6 @@ export function SettingsSelector({
   toolMeta,
   mcpFailedServers,
   onSave,
-  onCancel,
 }: SettingsSelectorProps) {
   const [state, setState] = useState<SettingsState>({ ...initialState });
   const [step, setStep] = useState<Step>("menu");
@@ -66,16 +64,11 @@ export function SettingsSelector({
     setCursor(0);
   }, [step]);
 
-  useInput((input, key) => {
+  useInput((_input, key) => {
     if (step !== "menu") return;
 
     if (key.escape) {
       onSave(state);
-      return;
-    }
-
-    if (input === "q" || input === "Q") {
-      onCancel();
       return;
     }
 
@@ -95,7 +88,7 @@ export function SettingsSelector({
       return (
         <Box flexDirection="column">
           <Text dimColor>
-            {"  Settings (↑↓ navigate, Enter select, Esc save, q cancel):"}
+            {"  Settings (↑↓ navigate, Enter select, Esc save):"}
           </Text>
           <Text>{""}</Text>
           {MENU_OPTIONS.map((option, i) => {

@@ -54,12 +54,7 @@ describe("AllowedCommandsEditor", () => {
     const onUpdate = vi.fn();
     const { stdin } = renderEditor({ onUpdate });
 
-    // Navigate to Add row
-    stdin.write("\x1B[B");
-    await flush();
-    stdin.write("\x1B[B");
-    await flush();
-    stdin.write("\r");
+    stdin.write("a");
     await flush();
     stdin.write("cargo:*");
     await flush();
@@ -110,17 +105,6 @@ describe("AllowedCommandsEditor", () => {
     stdin.write("\x1B");
     await flush();
 
-    expect(onBack).toHaveBeenCalled();
-  });
-
-  it("calls onBack on q", async () => {
-    const onBack = vi.fn();
-    const { stdin } = renderEditor({ onBack });
-
-    stdin.write("q");
-    await flush();
-
-    // q triggers add mode via 'a' check... actually q doesn't match 'a'
     expect(onBack).toHaveBeenCalled();
   });
 

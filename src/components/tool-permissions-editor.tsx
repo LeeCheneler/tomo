@@ -39,7 +39,7 @@ export function ToolPermissionsEditor({
   );
 
   useInput((input, key) => {
-    if (key.escape || input === "q" || input === "Q") {
+    if (key.escape) {
       onBack();
       return;
     }
@@ -48,7 +48,7 @@ export function ToolPermissionsEditor({
       handleUp();
     } else if (key.downArrow) {
       handleDown();
-    } else if (input === " " || key.return) {
+    } else if (input === " ") {
       const row = PERMISSION_ROWS[cursor];
       onUpdate({
         permissions: {
@@ -68,9 +68,7 @@ export function ToolPermissionsEditor({
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>
-        {"  Tool Permissions (Space/Enter toggle, Esc back):"}
-      </Text>
+      <Text dimColor>{"  Tool Permissions (Space toggle, Esc back):"}</Text>
       <Text>{""}</Text>
       <CheckboxList items={items} cursor={cursor} />
     </Box>

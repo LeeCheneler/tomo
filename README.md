@@ -70,29 +70,7 @@ Agent spawns headless sub-agents that can read files, search code, and explore t
 
 Tomo supports the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) for connecting to external tool servers. MCP servers extend Tomo with additional tools — database access, API integrations, file systems, and more.
 
-### Adding a Server
-
-Use `/settings` → **MCP Servers** → press **a** to add a new server. The setup wizard walks through:
-
-1. Select transport type (`http` or `stdio`)
-2. Enter connection details (URL for HTTP, command for stdio)
-3. For HTTP: optionally provide an API key (stored as an `Authorization` header)
-4. Tomo connects, discovers available tools, and saves the config
-
-### Managing Servers
-
-From `/settings` → **MCP Servers**:
-
-| Key       | Action                              |
-| --------- | ----------------------------------- |
-| `Space`   | Toggle server on/off                |
-| `Enter`   | View and toggle individual tools    |
-| `a`       | Add a new server                    |
-| `d`       | Delete a server                     |
-| `r`       | Reconnect a failed server           |
-| `Esc`     | Save and exit                       |
-
-Disabled servers won't start. Individual tools within a server can be toggled off to hide them from the model while keeping the server connected.
+Use `/settings` → **MCP Servers** to add, remove, and configure servers. Individual tools within a server can be toggled off to hide them from the model while keeping the server connected.
 
 ### Config
 
