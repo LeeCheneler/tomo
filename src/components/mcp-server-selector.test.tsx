@@ -280,6 +280,18 @@ describe("McpServerSelector", () => {
       expect(output).toContain("stdio");
     });
 
+    it("Space on Add row starts add flow", async () => {
+      const { stdin, lastFrame } = renderMcp();
+
+      // Cursor starts on Add row (no servers)
+      stdin.write(" ");
+      await flush();
+
+      const output = lastFrame() ?? "";
+      expect(output).toContain("http");
+      expect(output).toContain("stdio");
+    });
+
     it("navigates to URL input for http", async () => {
       const { stdin, lastFrame } = renderMcp();
 
@@ -488,7 +500,9 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("node server.js --port 3000");
       await flush();
-      stdin.write("\r"); // submit
+      stdin.write("\r"); // submit command
+      await flush();
+      stdin.write("\r"); // confirm env vars (none)
       await flush();
       await flush();
       await flush();
@@ -821,6 +835,137 @@ describe("McpServerSelector", () => {
 
       const config = onUpdate.mock.calls[0][0].mcpServers["no-auth-server"];
       expect(config.headers).toBeUndefined();
+    });
+
+    it("shows env var configurator after command entry for stdio", async () => {
+      const { stdin, lastFrame } = renderMcp();
+
+      stdin.write("a"); // Add
+      await flush();
+      stdin.write("\x1B[B"); // arrow down to stdio
+      await flush();
+      stdin.write("\r"); // select stdio
+      await flush();
+      stdin.write("node server.js");
+      await flush();
+      stdin.write("\r"); // submit command
+      await flush();
+
+      const output = lastFrame() ?? "";
+      expect(output).toContain("Environment Variables");
+      expect(output).toContain("a add");
+      expect(output).toContain("No environment variables configured");
+    });
+
+    it("stores env vars from configurator", async () => {
+      setupMockClient("env-server", []);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({ onUpdate });
+
+      stdin.write("a"); // Add
+      await flush();
+      stdin.write("\x1B[B"); // stdio
+      await flush();
+      stdin.write("\r");
+      await flush();
+      stdin.write("node server.js");
+      await flush();
+      stdin.write("\r"); // submit command
+      await flush();
+      // Add env var
+      stdin.write("a");
+      await flush();
+      stdin.write("DATABASE_URL");
+      await flush();
+      stdin.write("\r"); // submit key
+      await flush();
+      stdin.write("postgres://localhost/db");
+      await flush();
+      stdin.write("\r"); // submit value
+      await flush();
+      // Confirm env vars
+      stdin.write("\r");
+      await flush();
+      await flush();
+      await flush();
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: {
+          "env-server": expect.objectContaining({
+            transport: "stdio",
+            command: "node",
+            args: ["server.js"],
+            env: { DATABASE_URL: "postgres://localhost/db" },
+          }),
+        },
+      });
+    });
+
+    it("skips env vars when none are added", async () => {
+      setupMockClient("no-env-server", []);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({ onUpdate });
+
+      stdin.write("a"); // Add
+      await flush();
+      stdin.write("\x1B[B"); // stdio
+      await flush();
+      stdin.write("\r");
+      await flush();
+      stdin.write("node server.js");
+      await flush();
+      stdin.write("\r"); // submit command
+      await flush();
+      stdin.write("\r"); // confirm env vars (none)
+      await flush();
+      await flush();
+      await flush();
+
+      const config = onUpdate.mock.calls[0][0].mcpServers["no-env-server"];
+      expect(config.env).toBeUndefined();
+    });
+
+    it("edits env vars on existing stdio server with e", async () => {
+      const onUpdate = vi.fn();
+      const { stdin, lastFrame } = renderMcp({
+        mcpServers: {
+          "my-server": {
+            transport: "stdio",
+            command: "node",
+            args: ["server.js"],
+            env: { OLD_VAR: "old-value" },
+            tools: [{ name: "tool1", enabled: true }],
+          },
+        },
+        onUpdate,
+      });
+
+      stdin.write("e");
+      await flush();
+      expect(lastFrame()).toContain("Environment Variables");
+      expect(lastFrame()).toContain("OLD_VAR");
+      // Add a new env var
+      stdin.write("a");
+      await flush();
+      stdin.write("NEW_VAR");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      stdin.write("new-value");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Confirm
+      stdin.write("\r");
+      await flush();
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: expect.objectContaining({
+          "my-server": expect.objectContaining({
+            env: { OLD_VAR: "old-value", NEW_VAR: "new-value" },
+          }),
+        }),
+      });
     });
   });
 });

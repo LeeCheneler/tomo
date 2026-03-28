@@ -17,6 +17,9 @@ type Step =
   | "addHeaderKey"
   | "addHeaderValue"
   | "addCommand"
+  | "addEnvVars"
+  | "addEnvVarKey"
+  | "addEnvVarValue"
   | "connecting";
 
 const TRANSPORT_TYPES = ["http", "stdio"] as const;
@@ -53,12 +56,21 @@ export function McpServerSelector({
   const [editingServerName, setEditingServerName] = useState<string | null>(
     null,
   );
+  const [pendingEnvVars, setPendingEnvVars] = useState<Record<string, string>>(
+    {},
+  );
+  const [pendingEnvVarKey, setPendingEnvVarKey] = useState<string | null>(null);
+  const [pendingCommand, setPendingCommand] = useState<{
+    command: string;
+    args: string[];
+  } | null>(null);
 
   const activeTools = activeServer
     ? (state.mcpServers[activeServer]?.tools ?? [])
     : [];
 
   const headerKeys = Object.keys(pendingHeaders);
+  const envVarKeys = Object.keys(pendingEnvVars);
 
   const itemCount = (() => {
     switch (step) {
@@ -70,6 +82,8 @@ export function McpServerSelector({
         return TRANSPORT_TYPES.length;
       case "addHeaders":
         return headerKeys.length;
+      case "addEnvVars":
+        return envVarKeys.length;
       default:
         return 0;
     }
@@ -169,6 +183,9 @@ export function McpServerSelector({
     "addHeaderKey",
     "addHeaderValue",
     "addCommand",
+    "addEnvVars",
+    "addEnvVarKey",
+    "addEnvVarValue",
     "connecting",
   ];
 
@@ -186,6 +203,9 @@ export function McpServerSelector({
         setPendingUrl(null);
         setPendingHeaders({});
         setPendingHeaderKey(null);
+        setPendingEnvVars({});
+        setPendingEnvVarKey(null);
+        setPendingCommand(null);
         setEditingServerName(null);
         setReconnectName(null);
         setStep("servers");
@@ -234,14 +254,23 @@ export function McpServerSelector({
         } else if ((input === "e" || input === "E") && !isOnAdd) {
           const name = serverNames[cursor];
           const server = state.mcpServers[name];
-          const currentHeaders =
-            server.transport === "http"
-              ? ((server as { headers?: Record<string, string> }).headers ?? {})
-              : {};
           setEditingServerName(name);
-          setPendingHeaders({ ...currentHeaders });
-          setStep("addHeaders");
-        } else if (input === "a" || input === "A") {
+          if (server.transport === "http") {
+            const currentHeaders =
+              (server as { headers?: Record<string, string> }).headers ?? {};
+            setPendingHeaders({ ...currentHeaders });
+            setStep("addHeaders");
+          } else {
+            const currentEnv =
+              (server as { env?: Record<string, string> }).env ?? {};
+            setPendingEnvVars({ ...currentEnv });
+            setStep("addEnvVars");
+          }
+        } else if (
+          input === "a" ||
+          input === "A" ||
+          (input === " " && isOnAdd)
+        ) {
           setTextValue("");
           setConnectError(null);
           setStep("addType");
@@ -402,9 +431,103 @@ export function McpServerSelector({
           const command = parts[0];
           if (!command) return;
           const args = parts.slice(1);
-          setPendingConfig({ transport: "stdio", command, args });
-          setConnectError(null);
-          setStep("connecting");
+          setPendingCommand({ command, args });
+          setTextValue("");
+          setPendingEnvVars({});
+          setStep("addEnvVars");
+        } else if (key.backspace || key.delete) {
+          setTextValue((v) => v.slice(0, -1));
+        } else if (input && !key.ctrl && !key.meta) {
+          setTextValue((v) => v + input);
+        }
+        break;
+      }
+
+      case "addEnvVars": {
+        if (key.upArrow) {
+          handleUp();
+        } else if (key.downArrow) {
+          handleDown();
+        } else if (key.return) {
+          if (editingServerName) {
+            const { env: _oldEnv, ...serverWithoutEnv } = state.mcpServers[
+              editingServerName
+            ] as McpServerConfig & {
+              env?: Record<string, string>;
+            };
+            const env =
+              envVarKeys.length > 0 ? { ...pendingEnvVars } : undefined;
+            onUpdate({
+              mcpServers: {
+                ...state.mcpServers,
+                [editingServerName]: {
+                  ...serverWithoutEnv,
+                  ...(env ? { env } : {}),
+                },
+              },
+            });
+            setEditingServerName(null);
+            setPendingEnvVars({});
+            setStep("servers");
+          } else {
+            const env =
+              envVarKeys.length > 0 ? { ...pendingEnvVars } : undefined;
+            setPendingConfig({
+              transport: "stdio",
+              command: pendingCommand?.command ?? "",
+              args: pendingCommand?.args ?? [],
+              ...(env ? { env } : {}),
+            });
+            setConnectError(null);
+            setPendingCommand(null);
+            setPendingEnvVars({});
+            setStep("connecting");
+          }
+        } else if (input === "a" || input === "A") {
+          setTextValue("");
+          setStep("addEnvVarKey");
+        } else if ((input === "e" || input === "E") && envVarKeys.length > 0) {
+          const keyToEdit = envVarKeys[cursor];
+          setPendingEnvVarKey(keyToEdit);
+          setTextValue(pendingEnvVars[keyToEdit]);
+          setStep("addEnvVarValue");
+        } else if ((input === "d" || input === "D") && envVarKeys.length > 0) {
+          const keyToRemove = envVarKeys[cursor];
+          const { [keyToRemove]: _, ...rest } = pendingEnvVars;
+          setPendingEnvVars(rest);
+          if (cursor >= envVarKeys.length - 1) {
+            setCursor((c) => Math.max(0, c - 1));
+          }
+        }
+        break;
+      }
+
+      case "addEnvVarKey": {
+        if (key.return) {
+          const envKey = textValue.trim();
+          if (!envKey) return;
+          setPendingEnvVarKey(envKey);
+          setTextValue("");
+          setStep("addEnvVarValue");
+        } else if (key.backspace || key.delete) {
+          setTextValue((v) => v.slice(0, -1));
+        } else if (input && !key.ctrl && !key.meta) {
+          setTextValue((v) => v + input);
+        }
+        break;
+      }
+
+      case "addEnvVarValue": {
+        if (key.return) {
+          const envValue = textValue.trim();
+          if (!envValue) return;
+          setPendingEnvVars((prev) => ({
+            ...prev,
+            [pendingEnvVarKey!]: envValue,
+          }));
+          setPendingEnvVarKey(null);
+          setTextValue("");
+          setStep("addEnvVars");
         } else if (key.backspace || key.delete) {
           setTextValue((v) => v.slice(0, -1));
         } else if (input && !key.ctrl && !key.meta) {
@@ -442,7 +565,7 @@ export function McpServerSelector({
         <Box flexDirection="column">
           <Text dimColor>
             {
-              "  MCP Servers (Space toggle, Enter tools, a add, e headers, d delete, r reconnect, Esc back):"
+              "  MCP Servers (Space toggle, Enter tools, a add, e headers/env, d delete, r reconnect, Esc back):"
             }
           </Text>
           <Text>{""}</Text>
@@ -585,6 +708,65 @@ export function McpServerSelector({
           <Text>
             {"    "}
             {textValue}
+            <Text dimColor>█</Text>
+          </Text>
+        </Box>
+      );
+
+    case "addEnvVars":
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>
+            {
+              "  Environment Variables (a add, e edit, d delete, Enter confirm, Esc back):"
+            }
+          </Text>
+          <Text dimColor>
+            {"  Tip: use ${VAR} to reference environment variables"}
+          </Text>
+          <Text>{""}</Text>
+          {envVarKeys.length === 0 ? (
+            <Text dimColor>{"    No environment variables configured."}</Text>
+          ) : (
+            envVarKeys.map((k, i) => {
+              const isCurrent = i === cursor;
+              return (
+                <Text key={k} color={isCurrent ? "cyan" : undefined}>
+                  {"    "}
+                  {isCurrent ? "❯" : " "} {k}:{" "}
+                  {"*".repeat(pendingEnvVars[k].length)}
+                </Text>
+              );
+            })
+          )}
+        </Box>
+      );
+
+    case "addEnvVarKey":
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>
+            {"  Enter variable name (Enter confirm, Esc back):"}
+          </Text>
+          <Text>{""}</Text>
+          <Text>
+            {"    "}
+            {textValue}
+            <Text dimColor>█</Text>
+          </Text>
+        </Box>
+      );
+
+    case "addEnvVarValue":
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>
+            {`  Enter value for ${pendingEnvVarKey} (Enter confirm, Esc back):`}
+          </Text>
+          <Text>{""}</Text>
+          <Text>
+            {"    "}
+            {"*".repeat(textValue.length)}
             <Text dimColor>█</Text>
           </Text>
         </Box>
