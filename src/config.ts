@@ -51,6 +51,7 @@ const mcpStdioServerSchema = z.object({
   command: z.string().min(1, "command is required"),
   args: z.array(z.string()).default([]),
   env: z.record(z.string(), z.string()).optional(),
+  sensitiveKeys: z.array(z.string()).optional(),
   enabled: z.boolean().optional(),
   tools: z.array(mcpToolSchema).optional(),
 });
@@ -59,6 +60,7 @@ const mcpHttpServerSchema = z.object({
   transport: z.literal("http"),
   url: z.string().url("url must be a valid URL"),
   headers: z.record(z.string(), z.string()).optional(),
+  sensitiveKeys: z.array(z.string()).optional(),
   enabled: z.boolean().optional(),
   tools: z.array(mcpToolSchema).optional(),
 });

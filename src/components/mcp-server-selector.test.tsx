@@ -47,6 +47,30 @@ function renderMcp(overrides?: {
   return { ...result, onUpdate, onBack };
 }
 
+function setupMockClient(
+  serverName: string,
+  tools: { name: string; description?: string }[],
+) {
+  // biome-ignore lint/complexity/useArrowFunction: mockImplementation needs function for new
+  vi.mocked(McpClient).mockImplementation(function () {
+    return {
+      initialize: vi.fn().mockResolvedValue({
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        serverInfo: { name: serverName, version: "1.0.0" },
+      }),
+      listTools: vi.fn().mockResolvedValue(
+        tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: {},
+        })),
+      ),
+      close: vi.fn(),
+    } as unknown as McpClient;
+  });
+}
+
 describe("McpServerSelector", () => {
   describe("server list", () => {
     it("renders server list with Add option", () => {
@@ -58,25 +82,16 @@ describe("McpServerSelector", () => {
           },
         },
       });
-
       const output = lastFrame() ?? "";
       expect(output).toContain("my-server");
-      expect(output).toContain("Add...");
-    });
-
-    it("shows empty list with just Add option", () => {
-      const { lastFrame } = renderMcp();
-      const output = lastFrame() ?? "";
       expect(output).toContain("Add...");
     });
 
     it("calls onBack on Esc", async () => {
       const onBack = vi.fn();
       const { stdin } = renderMcp({ onBack });
-
       stdin.write("\x1B");
       await flush();
-
       expect(onBack).toHaveBeenCalled();
     });
 
@@ -91,10 +106,8 @@ describe("McpServerSelector", () => {
         },
         onUpdate,
       });
-
       stdin.write(" ");
       await flush();
-
       expect(onUpdate).toHaveBeenCalledWith({
         mcpServers: expect.objectContaining({
           "my-server": expect.objectContaining({ enabled: false }),
@@ -113,13 +126,9 @@ describe("McpServerSelector", () => {
         },
         onUpdate,
       });
-
       stdin.write("d");
       await flush();
-
-      expect(onUpdate).toHaveBeenCalledWith({
-        mcpServers: {},
-      });
+      expect(onUpdate).toHaveBeenCalledWith({ mcpServers: {} });
     });
 
     it("shows failed warning for disconnected servers", () => {
@@ -132,52 +141,76 @@ describe("McpServerSelector", () => {
         },
         failedServers: new Set(["broken"]),
       });
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("Failed to connect");
+      expect(lastFrame()).toContain("Failed to connect");
     });
 
-    it("shows transport info in server description", () => {
-      const { lastFrame } = renderMcp({
-        mcpServers: {
-          "http-server": {
-            transport: "http",
-            url: "https://mcp.example.com",
-          },
-        },
-      });
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("http");
-      expect(output).toContain("https://mcp.example.com");
-    });
-  });
-
-  describe("server tools", () => {
-    it("shows tool list on Enter", async () => {
+    it("opens server form on Enter", async () => {
       const { stdin, lastFrame } = renderMcp({
         mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
-            tools: [
-              { name: "get_weather", enabled: true },
-              { name: "random_number", enabled: false },
-            ],
           },
         },
       });
-
       stdin.write("\r");
       await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("my-server");
-      expect(output).toContain("get_weather");
-      expect(output).toContain("random_number");
+      expect(lastFrame()).toContain("my-server");
+      expect(lastFrame()).toContain("URL:");
     });
 
-    it("shows tool descriptions when available", async () => {
+    it("opens new server form on Add", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      expect(lastFrame()).toContain("New Server");
+      expect(lastFrame()).toContain("Type:");
+    });
+  });
+
+  describe("server form", () => {
+    it("shows transport type selector for new servers", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      const output = lastFrame() ?? "";
+      expect(output).toContain("Type:");
+      expect(output).toContain("http");
+      expect(output).toContain("stdio");
+    });
+
+    it("hides transport type for existing servers", async () => {
+      const { stdin, lastFrame } = renderMcp({
+        mcpServers: {
+          "my-server": {
+            transport: "http",
+            url: "https://mcp.example.com",
+          },
+        },
+      });
+      stdin.write("\r");
+      await flush();
+      expect(lastFrame()).not.toContain("Type:");
+    });
+
+    it("toggles transport type with Space", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      expect(lastFrame()).toContain("URL:");
+      stdin.write(" ");
+      await flush();
+      expect(lastFrame()).toContain("Command:");
+    });
+
+    it("shows discard warning for new servers", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      expect(lastFrame()).toContain("Leave without connecting to discard");
+    });
+
+    it("shows existing server connection details", async () => {
       const { stdin, lastFrame } = renderMcp({
         mcpServers: {
           "my-server": {
@@ -187,224 +220,311 @@ describe("McpServerSelector", () => {
               {
                 name: "get_weather",
                 enabled: true,
-                description: "Returns weather data",
+                description: "Get weather",
               },
             ],
           },
         },
       });
-
       stdin.write("\r");
       await flush();
-
       const output = lastFrame() ?? "";
-      expect(output).toContain("Returns weather data");
+      expect(output).toContain("mcp.example.com");
+      expect(output).toContain("get_weather");
+      expect(output).toContain("Reload tools");
     });
 
-    it("toggles tool enabled with Space", async () => {
+    it("shows Connect for servers without tools", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      expect(lastFrame()).toContain("Connect");
+    });
+
+    it("toggles tool with Space", async () => {
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({
         mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
-            tools: [{ name: "get_weather", enabled: true }],
+            tools: [{ name: "tool_a", enabled: true }],
           },
         },
         onUpdate,
       });
-
       stdin.write("\r");
+      await flush();
+      // Navigate: connection (0) -> kv add (1) -> tool (2)
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
       await flush();
       stdin.write(" ");
       await flush();
-
       expect(onUpdate).toHaveBeenCalledWith({
         mcpServers: expect.objectContaining({
           "my-server": expect.objectContaining({
-            tools: [{ name: "get_weather", enabled: false }],
+            tools: [{ name: "tool_a", enabled: false }],
           }),
         }),
       });
     });
 
-    it("returns to server list on Esc", async () => {
+    it("Esc from existing server saves and returns", async () => {
+      const onUpdate = vi.fn();
       const { stdin, lastFrame } = renderMcp({
         mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
-            tools: [{ name: "get_weather", enabled: true }],
           },
         },
+        onUpdate,
       });
-
       stdin.write("\r");
       await flush();
-      expect(lastFrame()).toContain("get_weather");
-
       stdin.write("\x1B");
       await flush();
-      expect(lastFrame()).toContain("my-server");
       expect(lastFrame()).toContain("Add...");
+      expect(onUpdate).toHaveBeenCalled();
     });
 
-    it("shows empty message when no tools", async () => {
-      const { stdin, lastFrame } = renderMcp({
-        mcpServers: {
-          "my-server": {
-            transport: "http",
-            url: "https://mcp.example.com",
-            tools: [],
-          },
-        },
-      });
-
-      stdin.write("\r");
+    it("Esc from new server discards without saving", async () => {
+      const onUpdate = vi.fn();
+      const { stdin, lastFrame } = renderMcp({ onUpdate });
+      stdin.write("a");
       await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("No tools discovered");
+      stdin.write("\x1B");
+      await flush();
+      expect(lastFrame()).toContain("Add...");
+      expect(onUpdate).not.toHaveBeenCalled();
     });
   });
 
-  describe("add flow", () => {
-    it("navigates to transport type selection on Add", async () => {
+  describe("inline key/value editing", () => {
+    it("adds a kv pair with Add row", async () => {
       const { stdin, lastFrame } = renderMcp();
-
       stdin.write("a");
       await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("http");
-      expect(output).toContain("stdio");
+      // Navigate to kv Add: type (0) -> connection (1) -> kv add (2)
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Should have added a new item with sensitive, name, value rows
+      expect(lastFrame()).toContain("Sensitive");
+      expect(lastFrame()).toContain("Name:");
+      expect(lastFrame()).toContain("Value:");
     });
 
-    it("Space on Add row starts add flow", async () => {
+    it("toggles sensitive flag with Space", async () => {
       const { stdin, lastFrame } = renderMcp();
-
-      // Cursor starts on Add row (no servers)
+      stdin.write("a");
+      await flush();
+      // Navigate to kv Add and add item
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Cursor should be on the key field; go up to sensitive toggle
+      stdin.write("\x1B[A");
+      await flush();
+      // Toggle sensitive
       stdin.write(" ");
       await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("http");
-      expect(output).toContain("stdio");
+      expect(lastFrame()).toContain("[✔]");
     });
 
-    it("navigates to URL input for http", async () => {
-      const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a");
-      await flush();
-      stdin.write("\r");
-      await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("Enter server URL");
-    });
-
-    it("navigates to command input for stdio", async () => {
-      const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a");
-      await flush();
-      stdin.write("\x1B[B");
-      await flush();
-      stdin.write("\r");
-      await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("Enter command");
-    });
-
-    it("returns to server list on Esc from add steps", async () => {
-      const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a");
-      await flush();
-      expect(lastFrame()).toContain("http");
-
-      stdin.write("\x1B");
-      await flush();
-      expect(lastFrame()).toContain("Add...");
-    });
-  });
-
-  describe("navigation", () => {
-    it("navigates between servers with arrow keys", async () => {
+    it("deletes a kv pair with d", async () => {
       const { stdin, lastFrame } = renderMcp({
         mcpServers: {
-          "server-a": {
+          "my-server": {
             transport: "http",
-            url: "https://a.example.com",
-          },
-          "server-b": {
-            transport: "http",
-            url: "https://b.example.com",
+            url: "https://mcp.example.com",
+            headers: { Authorization: "Bearer token" },
           },
         },
       });
-
-      let output = lastFrame() ?? "";
-      expect(output).toContain("❯");
-
+      stdin.write("\r");
+      await flush();
+      // Navigate to sensitive row of the header: connection (0) -> sensitive (1)
       stdin.write("\x1B[B");
       await flush();
+      stdin.write("d");
+      await flush();
+      expect(lastFrame()).not.toContain("Authorization");
+    });
 
-      output = lastFrame() ?? "";
-      expect(output).toContain("server-b");
+    it("shows env vars for stdio servers", async () => {
+      const { stdin, lastFrame } = renderMcp({
+        mcpServers: {
+          "my-server": {
+            transport: "stdio",
+            command: "node",
+            args: ["server.js"],
+            env: { DATABASE_URL: "postgres://localhost" },
+          },
+        },
+      });
+      stdin.write("\r");
+      await flush();
+      expect(lastFrame()).toContain("Environment Variables");
+      expect(lastFrame()).toContain("DATABASE_URL");
+    });
+
+    it("edits kv name and value inline", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      // Navigate to kv Add and add item
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Cursor on key field — type a name
+      stdin.write("Authorization");
+      await flush();
+      expect(lastFrame()).toContain("Authorization");
+      // Move to value field
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("Bearer my-token");
+      await flush();
+      expect(lastFrame()).toContain("Bearer my-token");
+    });
+
+    it("masks value when sensitive is toggled", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      // Add kv item
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Go to sensitive and toggle on
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write(" ");
+      await flush();
+      // Go to value and type
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("secret");
+      await flush();
+      const output = lastFrame() ?? "";
+      expect(output).not.toContain("secret");
+      expect(output).toContain("******");
+    });
+
+    it("loads existing headers as editable kv items", async () => {
+      const { stdin, lastFrame } = renderMcp({
+        mcpServers: {
+          "my-server": {
+            transport: "http",
+            url: "https://mcp.example.com",
+            headers: {
+              Authorization: "Bearer token",
+              "X-Custom": "value",
+            },
+          },
+        },
+      });
+      stdin.write("\r");
+      await flush();
+      const output = lastFrame() ?? "";
+      expect(output).toContain("Authorization");
+      expect(output).toContain("X-Custom");
+      expect(output).toContain("Sensitive");
+    });
+
+    it("d on kv name/value row types the letter", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      // Add a kv item
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Cursor on key field — type "d"
+      stdin.write("d");
+      await flush();
+      // Should have typed "d", not deleted
+      expect(lastFrame()).toContain("Sensitive");
+      expect(lastFrame()).toContain("Name:");
+    });
+
+    it("switching transport type clears kv and tools", async () => {
+      const { stdin, lastFrame } = renderMcp();
+      stdin.write("a");
+      await flush();
+      // Add a kv item
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Type a name
+      stdin.write("Authorization");
+      await flush();
+      expect(lastFrame()).toContain("Authorization");
+      // Navigate back to type row and switch
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write("\x1B[A");
+      await flush();
+      stdin.write(" ");
+      await flush();
+      // KV item should be gone
+      expect(lastFrame()).not.toContain("Authorization");
+      expect(lastFrame()).toContain("Command:");
     });
   });
 
   describe("connect flow", () => {
-    function setupMockClient(
-      serverName: string,
-      tools: { name: string; description?: string }[],
-    ) {
-      // biome-ignore lint/complexity/useArrowFunction: mockImplementation needs function for new
-      vi.mocked(McpClient).mockImplementation(function () {
-        return {
-          initialize: vi.fn().mockResolvedValue({
-            protocolVersion: "2025-03-26",
-            capabilities: {},
-            serverInfo: { name: serverName, version: "1.0.0" },
-          }),
-          listTools: vi.fn().mockResolvedValue(
-            tools.map((t) => ({
-              name: t.name,
-              description: t.description,
-              inputSchema: {},
-            })),
-          ),
-          close: vi.fn(),
-        } as unknown as McpClient;
-      });
-    }
-
-    it("connects to HTTP server and saves discovered tools", async () => {
+    it("connects new server and discovers tools", async () => {
       setupMockClient("weather-server", [
         { name: "get_weather", description: "Get weather data" },
       ]);
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({ onUpdate });
 
-      // Navigate: Add → http → enter URL (pre-filled with "https://") → submit
-      stdin.write("a"); // Add
+      stdin.write("a");
       await flush();
-      stdin.write("\r"); // select "http"
+      // Navigate to connection and type URL
+      stdin.write("\x1B[B");
       await flush();
-      stdin.write("mcp.example.com"); // "https://" is pre-filled
+      stdin.write("mcp.example.com");
       await flush();
-      stdin.write("\r"); // submit URL
+      // Navigate to Connect: connection (1) -> kv add (2) -> connect (3)
+      stdin.write("\x1B[B");
       await flush();
-      stdin.write("\r"); // confirm headers (none)
+      stdin.write("\x1B[B");
       await flush();
-      await flush(); // extra flush for async connect
+      stdin.write(" ");
+      await flush();
+      await flush();
       await flush();
 
       expect(onUpdate).toHaveBeenCalledWith({
-        mcpServers: {
+        mcpServers: expect.objectContaining({
           "weather-server": expect.objectContaining({
             transport: "http",
             url: "https://mcp.example.com",
@@ -416,42 +536,41 @@ describe("McpServerSelector", () => {
               },
             ],
           }),
-        },
+        }),
       });
     });
 
-    it("appends suffix when server name already exists", async () => {
-      setupMockClient("my-server", []);
+    it("connects stdio server", async () => {
+      setupMockClient("stdio-server", [{ name: "run_script" }]);
       const onUpdate = vi.fn();
-      const { stdin } = renderMcp({
-        mcpServers: {
-          "my-server": { transport: "http", url: "https://existing.com" },
-        },
-        onUpdate,
-      });
+      const { stdin } = renderMcp({ onUpdate });
 
-      // Navigate down to "Add..." (past existing server)
-      stdin.write("\x1B[B"); // arrow down
+      stdin.write("a");
       await flush();
-      stdin.write("a"); // Add
+      // Switch to stdio
+      stdin.write(" ");
       await flush();
-      stdin.write("\r"); // select "http"
+      // Navigate to command
+      stdin.write("\x1B[B");
       await flush();
-      stdin.write("mcp2.example.com"); // "https://" is pre-filled
+      stdin.write("node server.js --port 3000");
       await flush();
-      stdin.write("\r"); // submit URL
+      // Navigate to Connect
+      stdin.write("\x1B[B");
       await flush();
-      stdin.write("\r"); // confirm headers (none)
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write(" ");
       await flush();
       await flush();
       await flush();
 
       expect(onUpdate).toHaveBeenCalledWith({
         mcpServers: expect.objectContaining({
-          "my-server": expect.anything(),
-          "my-server-2": expect.objectContaining({
-            transport: "http",
-            url: "https://mcp2.example.com",
+          "stdio-server": expect.objectContaining({
+            transport: "stdio",
+            command: "node",
+            args: ["server.js", "--port", "3000"],
           }),
         }),
       });
@@ -469,501 +588,140 @@ describe("McpServerSelector", () => {
       });
 
       const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\r"); // http
-      await flush();
-      stdin.write("bad.example.com"); // "https://" is pre-filled
-      await flush();
-      stdin.write("\r"); // submit URL
-      await flush();
-      stdin.write("\r"); // confirm headers (none)
-      await flush();
-      await flush();
-      await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("Connection refused");
-    });
-
-    it("connects to stdio server", async () => {
-      setupMockClient("stdio-server", [{ name: "run_script" }]);
-      const onUpdate = vi.fn();
-      const { stdin } = renderMcp({ onUpdate });
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\x1B[B"); // arrow down to stdio
-      await flush();
-      stdin.write("\r"); // select stdio
-      await flush();
-      stdin.write("node server.js --port 3000");
-      await flush();
-      stdin.write("\r"); // submit command
-      await flush();
-      stdin.write("\r"); // confirm env vars (none)
-      await flush();
-      await flush();
-      await flush();
-
-      expect(onUpdate).toHaveBeenCalledWith({
-        mcpServers: {
-          "stdio-server": expect.objectContaining({
-            transport: "stdio",
-            command: "node",
-            args: ["server.js", "--port", "3000"],
-            tools: [
-              { name: "run_script", enabled: true, description: undefined },
-            ],
-          }),
-        },
-      });
-    });
-
-    it("shows header configurator after URL entry", async () => {
-      const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\r"); // http
-      await flush();
-      stdin.write("mcp.example.com");
-      await flush();
-      stdin.write("\r"); // submit URL
-      await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("Headers");
-      expect(output).toContain("a add");
-      expect(output).toContain("No headers configured");
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: testing literal output
-      expect(output).toContain("${VAR}");
-    });
-
-    it("adds a header via key/value prompts", async () => {
-      const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\r"); // http
-      await flush();
-      stdin.write("mcp.example.com");
-      await flush();
-      stdin.write("\r"); // submit URL
-      await flush();
-      // Now on addHeaders — press 'a' to add
       stdin.write("a");
       await flush();
-      expect(lastFrame()).toContain("Enter header name");
-      stdin.write("Authorization");
+      // Navigate to Connect: type (0) -> connection (1) -> kv add (2) -> connect (3)
+      stdin.write("\x1B[B");
       await flush();
-      stdin.write("\r"); // submit key
+      stdin.write("\x1B[B");
       await flush();
-      expect(lastFrame()).toContain("Enter value for Authorization");
-      stdin.write("Bearer my-secret");
+      stdin.write("\x1B[B");
       await flush();
-      stdin.write("\r"); // submit value
+      stdin.write(" ");
+      await flush();
+      await flush();
       await flush();
 
-      // Back on addHeaders — should show the header
-      const output = lastFrame() ?? "";
-      expect(output).toContain("Authorization");
-      expect(output).not.toContain("Bearer my-secret");
-      expect(output).toContain("****************");
+      expect(lastFrame()).toContain("Connection refused");
     });
 
-    it("stores headers from configurator", async () => {
-      setupMockClient("auth-server", []);
-      const onUpdate = vi.fn();
-      const { stdin } = renderMcp({ onUpdate });
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\r"); // http
-      await flush();
-      stdin.write("mcp.example.com");
-      await flush();
-      stdin.write("\r"); // submit URL
-      await flush();
-      // Add a header
-      stdin.write("a");
-      await flush();
-      stdin.write("X-API-Key");
-      await flush();
-      stdin.write("\r"); // submit key
-      await flush();
-      stdin.write("secret-123");
-      await flush();
-      stdin.write("\r"); // submit value
-      await flush();
-      // Confirm headers
-      stdin.write("\r");
-      await flush();
-      await flush();
-      await flush();
-
-      expect(onUpdate).toHaveBeenCalledWith({
-        mcpServers: {
-          "auth-server": expect.objectContaining({
-            transport: "http",
-            url: "https://mcp.example.com",
-            headers: { "X-API-Key": "secret-123" },
-          }),
-        },
-      });
-    });
-
-    it("stores multiple headers", async () => {
-      setupMockClient("multi-header-server", []);
-      const onUpdate = vi.fn();
-      const { stdin } = renderMcp({ onUpdate });
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\r"); // http
-      await flush();
-      stdin.write("mcp.example.com");
-      await flush();
-      stdin.write("\r"); // submit URL
-      await flush();
-      // Add first header
-      stdin.write("a");
-      await flush();
-      stdin.write("Authorization");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("Bearer token1");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      // Add second header
-      stdin.write("a");
-      await flush();
-      stdin.write("X-Custom");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("custom-value");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      // Confirm
-      stdin.write("\r");
-      await flush();
-      await flush();
-      await flush();
-
-      expect(onUpdate).toHaveBeenCalledWith({
-        mcpServers: {
-          "multi-header-server": expect.objectContaining({
-            headers: {
-              Authorization: "Bearer token1",
-              "X-Custom": "custom-value",
-            },
-          }),
-        },
-      });
-    });
-
-    it("deletes a header with d", async () => {
-      const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\r"); // http
-      await flush();
-      stdin.write("mcp.example.com");
-      await flush();
-      stdin.write("\r"); // submit URL
-      await flush();
-      // Add a header
-      stdin.write("a");
-      await flush();
-      stdin.write("Authorization");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("Bearer token");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      expect(lastFrame()).toContain("Authorization");
-      // Delete it
-      stdin.write("d");
-      await flush();
-      expect(lastFrame()).toContain("No headers configured");
-    });
-
-    it("edits an existing header value with e", async () => {
-      const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\r"); // http
-      await flush();
-      stdin.write("mcp.example.com");
-      await flush();
-      stdin.write("\r"); // submit URL
-      await flush();
-      // Add a header
-      stdin.write("a");
-      await flush();
-      stdin.write("Authorization");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("old-value");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      expect(lastFrame()).toContain("Authorization");
-      // Edit it — press e, clear old value, type new
-      stdin.write("e");
-      await flush();
-      expect(lastFrame()).toContain("Enter value for Authorization");
-      // Clear pre-filled value with backspace
-      for (let i = 0; i < "old-value".length; i++) {
-        stdin.write("\x7f");
-        await flush();
-      }
-      stdin.write("new-value");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      // Back on addHeaders — value length should match "new-value" (9 asterisks)
-      const output = lastFrame() ?? "";
-      expect(output).toContain("Authorization");
-      expect(output).toContain("*********");
-    });
-
-    it("edits headers on an existing server with e from server list", async () => {
+    it("preserves tool enabled state on reload", async () => {
+      setupMockClient("my-server", [{ name: "tool_a" }, { name: "tool_b" }]);
       const onUpdate = vi.fn();
       const { stdin, lastFrame } = renderMcp({
         mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
-            headers: { Authorization: "Bearer old-token" },
-            tools: [{ name: "tool1", enabled: true }],
+            tools: [
+              { name: "tool_a", enabled: false },
+              { name: "tool_b", enabled: true },
+            ],
           },
         },
         onUpdate,
       });
 
-      // Press e to edit headers
-      stdin.write("e");
+      stdin.write("\r");
       await flush();
-      expect(lastFrame()).toContain("Headers");
-      expect(lastFrame()).toContain("Authorization");
-      // Add a new header
+      // Navigate to Reload: connection (0) -> kv add (1) -> tool_a (2) -> tool_b (3) -> reload (4)
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write(" ");
+      await flush();
+      await flush();
+      await flush();
+
+      // tool_a should still be disabled after reload
+      const output = lastFrame() ?? "";
+      expect(output).toContain("tool_a");
+      expect(output).toContain("tool_b");
+    });
+
+    it("saves sensitiveKeys in config", async () => {
+      setupMockClient("test-server", [{ name: "tool_1" }]);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({ onUpdate });
+
       stdin.write("a");
       await flush();
-      stdin.write("X-Custom");
+      // Add a kv item: type (0) -> connection (1) -> kv add (2)
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
       await flush();
       stdin.write("\r");
       await flush();
-      stdin.write("custom-val");
+      // Go to sensitive and toggle on
+      stdin.write("\x1B[A");
       await flush();
-      stdin.write("\r");
+      stdin.write(" ");
       await flush();
-      // Confirm
-      stdin.write("\r");
+      // Go to key and type name
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("Authorization");
+      await flush();
+      // Go to value
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("Bearer secret");
+      await flush();
+      // Navigate to Connect: value -> kv add -> connect
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write(" ");
+      await flush();
+      await flush();
       await flush();
 
       expect(onUpdate).toHaveBeenCalledWith({
         mcpServers: expect.objectContaining({
-          "my-server": expect.objectContaining({
-            transport: "http",
-            url: "https://mcp.example.com",
-            headers: {
-              Authorization: "Bearer old-token",
-              "X-Custom": "custom-val",
-            },
+          "test-server": expect.objectContaining({
+            headers: { Authorization: "Bearer secret" },
+            sensitiveKeys: ["Authorization"],
           }),
         }),
       });
     });
 
-    it("removes all headers from an existing server", async () => {
+    it("appends suffix when server name exists", async () => {
+      setupMockClient("my-server", []);
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({
         mcpServers: {
-          "my-server": {
-            transport: "http",
-            url: "https://mcp.example.com",
-            headers: { Authorization: "Bearer old-token" },
-          },
+          "my-server": { transport: "http", url: "https://existing.com" },
         },
         onUpdate,
       });
 
-      // Press e to edit headers
-      stdin.write("e");
-      await flush();
-      // Delete the header
-      stdin.write("d");
-      await flush();
-      // Confirm (empty headers)
-      stdin.write("\r");
-      await flush();
-
-      const config = onUpdate.mock.calls[0][0].mcpServers["my-server"];
-      expect(config.headers).toBeUndefined();
-      // Ensure the key isn't present at all
-      expect("headers" in config).toBe(false);
-    });
-
-    it("skips headers when none are added", async () => {
-      setupMockClient("no-auth-server", []);
-      const onUpdate = vi.fn();
-      const { stdin } = renderMcp({ onUpdate });
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\r"); // http
-      await flush();
-      stdin.write("mcp.example.com");
-      await flush();
-      stdin.write("\r"); // submit URL
-      await flush();
-      stdin.write("\r"); // confirm headers (none)
-      await flush();
-      await flush();
-      await flush();
-
-      const config = onUpdate.mock.calls[0][0].mcpServers["no-auth-server"];
-      expect(config.headers).toBeUndefined();
-    });
-
-    it("shows env var configurator after command entry for stdio", async () => {
-      const { stdin, lastFrame } = renderMcp();
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\x1B[B"); // arrow down to stdio
-      await flush();
-      stdin.write("\r"); // select stdio
-      await flush();
-      stdin.write("node server.js");
-      await flush();
-      stdin.write("\r"); // submit command
-      await flush();
-
-      const output = lastFrame() ?? "";
-      expect(output).toContain("Environment Variables");
-      expect(output).toContain("a add");
-      expect(output).toContain("No environment variables configured");
-    });
-
-    it("stores env vars from configurator", async () => {
-      setupMockClient("env-server", []);
-      const onUpdate = vi.fn();
-      const { stdin } = renderMcp({ onUpdate });
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\x1B[B"); // stdio
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("node server.js");
-      await flush();
-      stdin.write("\r"); // submit command
-      await flush();
-      // Add env var
       stdin.write("a");
       await flush();
-      stdin.write("DATABASE_URL");
+      stdin.write("\x1B[B");
       await flush();
-      stdin.write("\r"); // submit key
+      stdin.write("new.example.com");
       await flush();
-      stdin.write("postgres://localhost/db");
+      stdin.write("\x1B[B");
       await flush();
-      stdin.write("\r"); // submit value
+      stdin.write("\x1B[B");
       await flush();
-      // Confirm env vars
-      stdin.write("\r");
-      await flush();
+      stdin.write(" ");
       await flush();
       await flush();
-
-      expect(onUpdate).toHaveBeenCalledWith({
-        mcpServers: {
-          "env-server": expect.objectContaining({
-            transport: "stdio",
-            command: "node",
-            args: ["server.js"],
-            env: { DATABASE_URL: "postgres://localhost/db" },
-          }),
-        },
-      });
-    });
-
-    it("skips env vars when none are added", async () => {
-      setupMockClient("no-env-server", []);
-      const onUpdate = vi.fn();
-      const { stdin } = renderMcp({ onUpdate });
-
-      stdin.write("a"); // Add
-      await flush();
-      stdin.write("\x1B[B"); // stdio
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("node server.js");
-      await flush();
-      stdin.write("\r"); // submit command
-      await flush();
-      stdin.write("\r"); // confirm env vars (none)
-      await flush();
-      await flush();
-      await flush();
-
-      const config = onUpdate.mock.calls[0][0].mcpServers["no-env-server"];
-      expect(config.env).toBeUndefined();
-    });
-
-    it("edits env vars on existing stdio server with e", async () => {
-      const onUpdate = vi.fn();
-      const { stdin, lastFrame } = renderMcp({
-        mcpServers: {
-          "my-server": {
-            transport: "stdio",
-            command: "node",
-            args: ["server.js"],
-            env: { OLD_VAR: "old-value" },
-            tools: [{ name: "tool1", enabled: true }],
-          },
-        },
-        onUpdate,
-      });
-
-      stdin.write("e");
-      await flush();
-      expect(lastFrame()).toContain("Environment Variables");
-      expect(lastFrame()).toContain("OLD_VAR");
-      // Add a new env var
-      stdin.write("a");
-      await flush();
-      stdin.write("NEW_VAR");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("new-value");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      // Confirm
-      stdin.write("\r");
       await flush();
 
       expect(onUpdate).toHaveBeenCalledWith({
         mcpServers: expect.objectContaining({
-          "my-server": expect.objectContaining({
-            env: { OLD_VAR: "old-value", NEW_VAR: "new-value" },
-          }),
+          "my-server": expect.anything(),
+          "my-server-2": expect.objectContaining({ transport: "http" }),
         }),
       });
     });

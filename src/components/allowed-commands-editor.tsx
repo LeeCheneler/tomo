@@ -64,7 +64,11 @@ export function AllowedCommandsEditor({
       if (cursor >= itemCount - 1) {
         setCursor((c) => Math.max(0, c - 1));
       }
-    } else if (input === "a" || input === "A" || (input === " " && isOnAdd)) {
+    } else if (
+      input === "a" ||
+      input === "A" ||
+      ((input === " " || key.return) && isOnAdd)
+    ) {
       setCursor(state.allowedCommands.length);
       setAdding(true);
     }
