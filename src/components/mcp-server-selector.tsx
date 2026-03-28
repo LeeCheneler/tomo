@@ -1,6 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import { useEffect, useRef, useState } from "react";
-import type { McpServerConfig, McpToolConfig } from "../config";
+import type { McpKvEntry, McpServerConfig, McpToolConfig } from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { McpClient } from "../mcp/client";
 import { HttpTransport } from "../mcp/http-transport";
@@ -105,21 +105,33 @@ export function McpServerSelector({
     }
   }, [step]);
 
-  /** Convert Record<string, string> to KvItem array. */
-  function recordToKv(
-    record: Record<string, string>,
-    sensitiveKeys?: string[],
-  ): KvItem[] {
-    const sensitive = new Set(sensitiveKeys ?? []);
-    return Object.entries(record).map(([key, value]) => ({
+  /** Convert config kv entries to KvItem array. */
+  function configToKv(record: Record<string, McpKvEntry>): KvItem[] {
+    return Object.entries(record).map(([key, entry]) => ({
       key,
-      value,
-      sensitive: sensitive.has(key),
+      value: entry.value,
+      sensitive: entry.sensitive ?? false,
     }));
   }
 
-  /** Convert KvItem array to Record<string, string>. */
-  function kvToRecord(items: KvItem[]): Record<string, string> | undefined {
+  /** Convert KvItem array to config kv entries. */
+  function kvToConfig(items: KvItem[]): Record<string, McpKvEntry> | undefined {
+    const filtered = items.filter((item) => item.key.trim());
+    if (filtered.length === 0) return undefined;
+    const record: Record<string, McpKvEntry> = {};
+    for (const item of filtered) {
+      record[item.key] = {
+        value: item.value,
+        ...(item.sensitive ? { sensitive: true } : {}),
+      };
+    }
+    return record;
+  }
+
+  /** Extract plain string values from KvItem array for transport use. */
+  function kvToPlainRecord(
+    items: KvItem[],
+  ): Record<string, string> | undefined {
     const filtered = items.filter((item) => item.key.trim());
     if (filtered.length === 0) return undefined;
     const record: Record<string, string> = {};
@@ -129,35 +141,25 @@ export function McpServerSelector({
     return record;
   }
 
-  /** Get sensitive key names from KvItem array. */
-  function kvSensitiveKeys(items: KvItem[]): string[] | undefined {
-    const keys = items
-      .filter((item) => item.sensitive && item.key.trim())
-      .map((item) => item.key);
-    return keys.length > 0 ? keys : undefined;
-  }
-
   /** Load form state from an existing server config. */
   function loadFormFromServer(name: string) {
     const server = state.mcpServers[name];
-    const sk = (server as { sensitiveKeys?: string[] }).sensitiveKeys;
     setFormTransport(server.transport as TransportType);
     if (server.transport === "http") {
       setFormConnection((server as { url: string }).url);
       setFormKv(
-        recordToKv(
-          (server as { headers?: Record<string, string> }).headers ?? {},
-          sk,
+        configToKv(
+          (server as { headers?: Record<string, McpKvEntry> }).headers ?? {},
         ),
       );
     } else {
       const s = server as {
         command: string;
         args: string[];
-        env?: Record<string, string>;
+        env?: Record<string, McpKvEntry>;
       };
       setFormConnection([s.command, ...s.args].join(" "));
-      setFormKv(recordToKv(s.env ?? {}, sk));
+      setFormKv(configToKv(s.env ?? {}));
     }
     setFormTools([...(server.tools ?? [])]);
     setFormConnected(true);
@@ -175,14 +177,12 @@ export function McpServerSelector({
 
   /** Build a McpServerConfig from the current form state. */
   function buildConfig(): McpServerConfig {
-    const kv = kvToRecord(formKv);
-    const sk = kvSensitiveKeys(formKv);
+    const kv = kvToConfig(formKv);
     if (formTransport === "http") {
       return {
         transport: "http",
         url: formConnection.trim(),
         ...(kv ? { headers: kv } : {}),
-        ...(sk ? { sensitiveKeys: sk } : {}),
         ...(formTools.length > 0 ? { tools: formTools } : {}),
       };
     }
@@ -192,7 +192,6 @@ export function McpServerSelector({
       command: parts[0] ?? "",
       args: parts.slice(1),
       ...(kv ? { env: kv } : {}),
-      ...(sk ? { sensitiveKeys: sk } : {}),
       ...(formTools.length > 0 ? { tools: formTools } : {}),
     };
   }
@@ -218,17 +217,15 @@ export function McpServerSelector({
       let client: McpClient | null = null;
       try {
         const config = buildConfig();
+        const plainKv = kvToPlainRecord(formKv);
         const transport =
           config.transport === "stdio"
             ? new StdioTransport(
                 (config as { command: string }).command,
                 (config as { args: string[] }).args,
-                (config as { env?: Record<string, string> }).env,
+                plainKv,
               )
-            : new HttpTransport(
-                (config as { url: string }).url,
-                (config as { headers?: Record<string, string> }).headers,
-              );
+            : new HttpTransport((config as { url: string }).url, plainKv);
 
         client = new McpClient(transport);
         const initResult = await client.initialize();

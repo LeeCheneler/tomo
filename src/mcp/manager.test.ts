@@ -121,7 +121,7 @@ describe("McpManager", () => {
         remote: {
           transport: "http",
           url: "https://mcp.example.com",
-          headers: { Authorization: "Bearer token" },
+          headers: { Authorization: { value: "Bearer token" } },
         },
       });
 

@@ -452,7 +452,8 @@ mcpServers:
     transport: http
     url: https://mcp.example.com/sse
     headers:
-      Authorization: "Bearer token123"
+      Authorization:
+        value: "Bearer token123"
 `,
     );
     const config = loadConfig();
@@ -461,7 +462,9 @@ mcpServers:
     expect(remote?.transport).toBe("http");
     if (remote?.transport === "http") {
       expect(remote.url).toBe("https://mcp.example.com/sse");
-      expect(remote.headers).toEqual({ Authorization: "Bearer token123" });
+      expect(remote.headers).toEqual({
+        Authorization: { value: "Bearer token123" },
+      });
     }
   });
 
@@ -526,7 +529,8 @@ mcpServers:
     command: npx
     args: ["-y", "@modelcontextprotocol/server-postgres"]
     env:
-      POSTGRES_URL: "postgresql://localhost:5432/mydb"
+      POSTGRES_URL:
+        value: "postgresql://localhost:5432/mydb"
 `,
     );
     const config = loadConfig();
@@ -534,7 +538,7 @@ mcpServers:
     expect(server).toBeDefined();
     if (server?.transport === "stdio") {
       expect(server.env).toEqual({
-        POSTGRES_URL: "postgresql://localhost:5432/mydb",
+        POSTGRES_URL: { value: "postgresql://localhost:5432/mydb" },
       });
     }
   });
@@ -710,16 +714,16 @@ describe("getMcpServers", () => {
           transport: "http" as const,
           url: "https://mcp.example.com/sse",
           headers: {
-            Authorization: "Bearer $" + "{TEST_MCP_TOKEN}",
+            Authorization: { value: "Bearer $" + "{TEST_MCP_TOKEN}" },
           },
         },
       },
     };
     const servers = getMcpServers(config);
     if (servers.remote.transport === "http") {
-      expect(servers.remote.headers?.Authorization).toBe(
-        "Bearer secret-token-123",
-      );
+      expect(
+        (servers.remote.headers?.Authorization as { value: string }).value,
+      ).toBe("Bearer secret-token-123");
     }
     delete process.env.TEST_MCP_TOKEN;
   });
@@ -737,14 +741,14 @@ describe("getMcpServers", () => {
           command: "npx",
           args: [],
           env: {
-            POSTGRES_URL: "$" + "{TEST_PG_URL}",
+            POSTGRES_URL: { value: "$" + "{TEST_PG_URL}" },
           },
         },
       },
     };
     const servers = getMcpServers(config);
     if (servers.pg.transport === "stdio") {
-      expect(servers.pg.env?.POSTGRES_URL).toBe(
+      expect((servers.pg.env?.POSTGRES_URL as { value: string }).value).toBe(
         "postgresql://localhost:5432/db",
       );
     }
@@ -763,14 +767,16 @@ describe("getMcpServers", () => {
           transport: "http" as const,
           url: "https://mcp.example.com/sse",
           headers: {
-            Authorization: "Bearer $" + "{NONEXISTENT_VAR}",
+            Authorization: { value: "Bearer $" + "{NONEXISTENT_VAR}" },
           },
         },
       },
     };
     const servers = getMcpServers(config);
     if (servers.remote.transport === "http") {
-      expect(servers.remote.headers?.Authorization).toBe("Bearer ");
+      expect(
+        (servers.remote.headers?.Authorization as { value: string }).value,
+      ).toBe("Bearer ");
     }
   });
 

@@ -1,4 +1,4 @@
-import type { McpServerConfig } from "../config.js";
+import type { McpKvEntry, McpServerConfig } from "../config.js";
 import type { ToolDefinition } from "../provider/client.js";
 import { McpClient } from "./client.js";
 import { HttpTransport } from "./http-transport.js";
@@ -7,12 +7,28 @@ import type { McpTransport } from "./types.js";
 
 const NAMESPACE_SEP = "__";
 
+/** Extract plain string values from a kv entry record for transport use. */
+function kvEntriesToRecord(
+  entries?: Record<string, McpKvEntry>,
+): Record<string, string> | undefined {
+  if (!entries) return undefined;
+  const result: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(entries)) {
+    result[key] = entry.value;
+  }
+  return result;
+}
+
 /** Creates the appropriate transport for an MCP server config. */
 function createTransport(config: McpServerConfig): McpTransport {
   if (config.transport === "stdio") {
-    return new StdioTransport(config.command, config.args, config.env);
+    return new StdioTransport(
+      config.command,
+      config.args,
+      kvEntriesToRecord(config.env),
+    );
   }
-  return new HttpTransport(config.url, config.headers);
+  return new HttpTransport(config.url, kvEntriesToRecord(config.headers));
 }
 
 /** Encodes a namespaced tool name: mcp__<server>__<tool>. */

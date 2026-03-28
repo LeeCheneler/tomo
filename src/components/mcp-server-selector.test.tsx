@@ -343,7 +343,7 @@ describe("McpServerSelector", () => {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
-            headers: { Authorization: "Bearer token" },
+            headers: { Authorization: { value: "Bearer token" } },
           },
         },
       });
@@ -364,7 +364,7 @@ describe("McpServerSelector", () => {
             transport: "stdio",
             command: "node",
             args: ["server.js"],
-            env: { DATABASE_URL: "postgres://localhost" },
+            env: { DATABASE_URL: { value: "postgres://localhost" } },
           },
         },
       });
@@ -432,8 +432,8 @@ describe("McpServerSelector", () => {
             transport: "http",
             url: "https://mcp.example.com",
             headers: {
-              Authorization: "Bearer token",
-              "X-Custom": "value",
+              Authorization: { value: "Bearer token" },
+              "X-Custom": { value: "value" },
             },
           },
         },
@@ -646,7 +646,7 @@ describe("McpServerSelector", () => {
       expect(output).toContain("tool_b");
     });
 
-    it("saves sensitiveKeys in config", async () => {
+    it("saves sensitive flag in header config", async () => {
       setupMockClient("test-server", [{ name: "tool_1" }]);
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({ onUpdate });
@@ -686,8 +686,9 @@ describe("McpServerSelector", () => {
       expect(onUpdate).toHaveBeenCalledWith({
         mcpServers: expect.objectContaining({
           "test-server": expect.objectContaining({
-            headers: { Authorization: "Bearer secret" },
-            sensitiveKeys: ["Authorization"],
+            headers: {
+              Authorization: { value: "Bearer secret", sensitive: true },
+            },
           }),
         }),
       });
