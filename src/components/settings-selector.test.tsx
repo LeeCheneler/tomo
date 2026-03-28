@@ -30,6 +30,7 @@ function renderSettings(overrides?: {
   onAddMcpServer?: (...args: unknown[]) => void;
   onRemoveMcpServer?: (...args: unknown[]) => void;
   onToggleMcpServer?: (...args: unknown[]) => void;
+  onUpdateMcpTools?: (...args: unknown[]) => void;
   onCancel?: () => void;
 }) {
   const onSave = overrides?.onSave ?? vi.fn();
@@ -49,6 +50,7 @@ function renderSettings(overrides?: {
       onAddMcpServer={overrides?.onAddMcpServer ?? vi.fn()}
       onRemoveMcpServer={overrides?.onRemoveMcpServer ?? vi.fn()}
       onToggleMcpServer={overrides?.onToggleMcpServer ?? vi.fn()}
+      onUpdateMcpTools={overrides?.onUpdateMcpTools ?? vi.fn()}
       mcpServers={overrides?.mcpServers ?? {}}
       onCancel={onCancel}
     />,
@@ -339,9 +341,8 @@ describe("SettingsSelector", () => {
       expect(onToggle).toHaveBeenCalledWith("my-server", false);
     });
 
-    it("removes MCP server and its tools from availability", async () => {
+    it("removes MCP server", async () => {
       const onRemove = vi.fn();
-      const onSave = vi.fn();
       const { stdin } = renderSettings({
         mcpServers: {
           "my-server": {
@@ -349,13 +350,7 @@ describe("SettingsSelector", () => {
             url: "https://mcp.example.com",
           },
         },
-        toolAvailability: {
-          ...defaultToolAvailability,
-          "mcp__my-server__tool_a": true,
-          "mcp__my-server__tool_b": false,
-        },
         onRemoveMcpServer: onRemove,
-        onSave,
       });
 
       // Navigate to MCP Servers
@@ -373,26 +368,11 @@ describe("SettingsSelector", () => {
       await flush();
 
       expect(onRemove).toHaveBeenCalledWith("my-server");
-
-      // Go back to menu and save
-      stdin.write("\x1B");
-      await flush();
-      stdin.write("\x1B");
-      await flush();
-
-      const savedTools = onSave.mock.calls[0][0];
-      expect(savedTools["mcp__my-server__tool_a"]).toBeUndefined();
-      expect(savedTools["mcp__my-server__tool_b"]).toBeUndefined();
-      expect(savedTools.read_file).toBe(true);
     });
 
-    it("shows MCP tools in tool availability list", async () => {
+    it("does not show MCP tools in global tool availability list", async () => {
       const { stdin, lastFrame } = renderSettings({
-        toolAvailability: {
-          ...defaultToolAvailability,
-          "mcp__my-server__get_weather": true,
-          "mcp__my-server__random_number": false,
-        },
+        toolAvailability: defaultToolAvailability,
       });
 
       // Navigate to Tool Availability
@@ -400,9 +380,8 @@ describe("SettingsSelector", () => {
       await flush();
 
       const output = lastFrame() ?? "";
-      expect(output).toContain("my-server");
-      expect(output).toContain("get_weather");
-      expect(output).toContain("random_number");
+      expect(output).toContain("read_file");
+      expect(output).not.toContain("mcp__");
     });
   });
 

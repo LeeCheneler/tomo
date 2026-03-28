@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { useState } from "react";
+import { useListNavigation } from "../hooks/use-list-navigation";
 import type { Session } from "../session";
 import { listSessions } from "../session";
-import { useListNavigation } from "../hooks/use-list-navigation";
 
 const WINDOW_SIZE = 5;
 const MAX_PREVIEW_LENGTH = 50;

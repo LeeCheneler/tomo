@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { runCompletionLoop } from "../completion-loop";
 import { type AgentsConfig, getAgentsConfig, loadConfig } from "../config";
+import { getErrorMessage } from "../errors";
 import { loadInstructions } from "../instructions";
 import type { ChatMessage } from "../provider/client";
 import { addAgent, incrementToolCalls, removeAgent } from "./agent-tracker";
 import { getTool, registerTool } from "./registry";
-import { getErrorMessage } from "../errors";
-import { type ToolContext, parseToolArgs, toToolDefinition } from "./types";
+import { parseToolArgs, type ToolContext, toToolDefinition } from "./types";
 
 const argsSchema = z.object({
   prompt: z.string().min(1, "prompt is required"),

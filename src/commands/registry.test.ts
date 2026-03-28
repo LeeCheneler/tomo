@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { register, parse, getCommand, getAllCommands } from "./registry";
+import { beforeEach, describe, expect, it } from "vitest";
+import { getAllCommands, getCommand, parse, register } from "./registry";
 import type { Command } from "./types";
 
 const makeCommand = (name: string, description = "test"): Command => ({

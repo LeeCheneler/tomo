@@ -1,7 +1,7 @@
+import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { describe, expect, it, vi } from "vitest";
 import { ConfirmPrompt } from "./confirm-prompt";
-import { Text } from "ink";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
 

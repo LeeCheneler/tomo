@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "../session";
 import { SessionSelector } from "./session-selector";
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import "../commands";
 import { getAllCommands } from "./registry";
 import type { CommandCallbacks } from "./types";

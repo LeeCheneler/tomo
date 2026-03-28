@@ -10,8 +10,8 @@ import {
   updateLocalPermissions,
   updateLocalToolConfig,
   updateMcpServerEnabled,
+  updateMcpServerTools,
 } from "../config";
-import { decodeToolName } from "../mcp/manager";
 import { resolvePermissions } from "../permissions";
 import { getAllTools, resolveToolAvailability } from "../tools";
 import { register } from "./registry";
@@ -23,7 +23,7 @@ const settings: Command = {
   execute: (_args, callbacks) => {
     const config = loadConfig();
 
-    // Tool availability
+    // Tool availability (built-in tools only)
     const allTools = getAllTools();
     const toolAvailability = resolveToolAvailability(config.tools);
     const toolWarnings: Record<string, string> = {};
@@ -38,20 +38,6 @@ const settings: Command = {
         desc.charAt(0).toUpperCase() + desc.slice(1);
     }
 
-    // Include MCP tools from config in the tool list
-    const mcpToolNames: string[] = [];
-    if (config.tools) {
-      for (const name of Object.keys(config.tools)) {
-        const decoded = decodeToolName(name);
-        if (decoded) {
-          mcpToolNames.push(name);
-          toolDisplayNames[name] =
-            `MCP → ${decoded.serverName} → ${decoded.toolName}`;
-          toolAvailability[name] = config.tools[name] ?? false;
-        }
-      }
-    }
-
     // Permissions
     const permissions = resolvePermissions(config.permissions);
 
@@ -60,7 +46,7 @@ const settings: Command = {
 
     return {
       interactive: createElement(SettingsSelector, {
-        tools: [...allTools.map((t) => t.name), ...mcpToolNames],
+        tools: allTools.map((t) => t.name),
         toolDisplayNames,
         toolDescriptions,
         currentToolAvailability: toolAvailability,
@@ -84,31 +70,16 @@ const settings: Command = {
           server: import("../config").McpServerConfig,
           toolNames: string[],
         ) => {
-          addMcpServer(name, server);
-          // Disable all discovered MCP tools by default
-          const freshConfig = loadConfig();
-          const currentTools = freshConfig.tools ?? {};
-          const updated = { ...currentTools };
-          for (const toolName of toolNames) {
-            updated[toolName] = false;
-          }
-          updateLocalToolConfig(updated);
+          // Save server with all tools disabled by default
+          const serverWithTools = {
+            ...server,
+            tools: toolNames.map((t) => ({ name: t, enabled: false })),
+          };
+          addMcpServer(name, serverWithTools);
         },
-        onRemoveMcpServer: (name: string) => {
-          removeMcpServer(name);
-          // Remove tools belonging to this server from local config
-          const freshConfig = loadConfig();
-          const currentTools = freshConfig.tools ?? {};
-          const prefix = `mcp__${name}__`;
-          const cleaned: Record<string, boolean> = {};
-          for (const [key, value] of Object.entries(currentTools)) {
-            if (!key.startsWith(prefix)) {
-              cleaned[key] = value;
-            }
-          }
-          updateLocalToolConfig(cleaned);
-        },
+        onRemoveMcpServer: removeMcpServer,
         onToggleMcpServer: updateMcpServerEnabled,
+        onUpdateMcpTools: updateMcpServerTools,
         onCancel: callbacks.onCancel,
       }),
     };

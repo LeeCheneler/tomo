@@ -6,7 +6,7 @@ import { FileAccessConfirm } from "../components/file-access-confirm";
 import { getErrorMessage } from "../errors";
 import { withFilePermission } from "../permissions";
 import { registerTool } from "./registry";
-import { type ToolContext, parseToolArgs } from "./types";
+import { parseToolArgs, type ToolContext } from "./types";
 
 const argsSchema = z.object({
   path: z.string().min(1, "no file path provided"),

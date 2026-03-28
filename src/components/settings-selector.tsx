@@ -4,7 +4,6 @@ import type { McpServerConfig } from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { McpClient } from "../mcp/client";
 import { HttpTransport } from "../mcp/http-transport";
-import { decodeToolName, encodeToolName } from "../mcp/manager";
 import { StdioTransport } from "../mcp/stdio-transport";
 import { type CheckboxItem, CheckboxList } from "./checkbox-list";
 
@@ -69,6 +68,10 @@ export interface SettingsSelectorProps {
   ) => void;
   onRemoveMcpServer: (name: string) => void;
   onToggleMcpServer: (name: string, enabled: boolean) => void;
+  onUpdateMcpTools: (
+    serverName: string,
+    tools: import("../config").McpToolConfig[],
+  ) => void;
   onCancel: () => void;
 }
 
@@ -87,6 +90,7 @@ export function SettingsSelector({
   onAddMcpServer,
   onRemoveMcpServer,
   onToggleMcpServer,
+  onUpdateMcpTools: _onUpdateMcpTools,
   onCancel,
 }: SettingsSelectorProps) {
   const [step, setStep] = useState<Step>("menu");
@@ -99,14 +103,6 @@ export function SettingsSelector({
   ]);
   const [adding, setAdding] = useState(false);
   const [newEntry, setNewEntry] = useState("");
-
-  // Derive full tool list: static props + any MCP tools added during this session
-  const allToolNames = [
-    ...tools,
-    ...Object.keys(toolAvailability).filter(
-      (name) => name.startsWith("mcp__") && !tools.includes(name),
-    ),
-  ];
 
   // MCP server state
   const [mcpServerList, setMcpServerList] = useState(mcpServers);
@@ -126,7 +122,7 @@ export function SettingsSelector({
       case "menu":
         return MENU_OPTIONS.length;
       case "tools":
-        return allToolNames.length;
+        return tools.length;
       case "permissions":
         return PERMISSION_ROWS.length;
       case "allowed":
@@ -198,24 +194,18 @@ export function SettingsSelector({
             serverName = `${serverName}-${suffix}`;
           }
 
-          // Disable all discovered tools by default
-          const toolNames = tools.map((t) =>
-            encodeToolName(serverName, t.name),
-          );
+          // Save with all tools disabled by default
+          const toolNames = tools.map((t) => t.name);
+          const serverWithTools = {
+            ...mcpPendingConfig,
+            tools: toolNames.map((t) => ({ name: t, enabled: false })),
+          };
 
           onAddMcpServer(serverName, mcpPendingConfig, toolNames);
           setMcpServerList((prev) => ({
             ...prev,
-            [serverName]: mcpPendingConfig,
+            [serverName]: serverWithTools,
           }));
-          // Mark tools as disabled in local tool availability
-          setToolAvailability((prev) => {
-            const updated = { ...prev };
-            for (const name of toolNames) {
-              updated[name] = false;
-            }
-            return updated;
-          });
         }
         setMcpTextValue("");
         setMcpPendingConfig(null);
@@ -326,7 +316,7 @@ export function SettingsSelector({
         } else if (key.downArrow) {
           handleDown();
         } else if (input === " " || key.return) {
-          const name = allToolNames[cursor];
+          const name = tools[cursor];
           setToolAvailability((prev) => ({
             ...prev,
             [name]: !prev[name],
@@ -389,20 +379,10 @@ export function SettingsSelector({
           }));
         } else if ((input === "d" || input === "D") && !isOnAdd) {
           const name = mcpServerNames[cursor];
-          const toolPrefix = `mcp__${name}__`;
           onRemoveMcpServer(name);
           setMcpServerList((prev) => {
             const next = { ...prev };
             delete next[name];
-            return next;
-          });
-          setToolAvailability((prev) => {
-            const next = { ...prev };
-            for (const key of Object.keys(next)) {
-              if (key.startsWith(toolPrefix)) {
-                delete next[key];
-              }
-            }
             return next;
           });
           if (cursor >= mcpServerNames.length - 1) {
@@ -504,23 +484,14 @@ export function SettingsSelector({
       );
 
     case "tools": {
-      const items: CheckboxItem[] = allToolNames.map((name) => {
-        let label = toolDisplayNames?.[name];
-        if (!label) {
-          const decoded = decodeToolName(name);
-          label = decoded
-            ? `MCP → ${decoded.serverName} → ${decoded.toolName}`
-            : name;
-        }
-        return {
-          key: name,
-          label,
-          description: toolDescriptions?.[name],
-          checked: toolAvailability[name] ?? true,
-          warning:
-            (toolAvailability[name] ?? true) ? toolWarnings?.[name] : undefined,
-        };
-      });
+      const items: CheckboxItem[] = tools.map((name) => ({
+        key: name,
+        label: toolDisplayNames?.[name] ?? name,
+        description: toolDescriptions?.[name],
+        checked: toolAvailability[name] ?? true,
+        warning:
+          (toolAvailability[name] ?? true) ? toolWarnings?.[name] : undefined,
+      }));
       return (
         <Box flexDirection="column">
           <Text dimColor>

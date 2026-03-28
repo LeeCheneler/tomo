@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
-import type { ModelInfo } from "../provider/client";
+import { useEffect, useState } from "react";
 import { getErrorMessage } from "../errors";
-import { fetchModels, resolveApiKey } from "../provider/client";
 import { useListNavigation } from "../hooks/use-list-navigation";
+import type { ModelInfo } from "../provider/client";
+import { fetchModels, resolveApiKey } from "../provider/client";
 
 interface ProviderEntry {
   name: string;

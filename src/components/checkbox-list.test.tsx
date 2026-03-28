@@ -1,6 +1,6 @@
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
-import { CheckboxList, type CheckboxItem } from "./checkbox-list";
+import { type CheckboxItem, CheckboxList } from "./checkbox-list";
 
 describe("CheckboxList", () => {
   const items: CheckboxItem[] = [

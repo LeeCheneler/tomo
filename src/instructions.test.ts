@@ -1,8 +1,8 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getGitContext, getSystemInfo, loadInstructions } from "./instructions";
 import * as git from "./git";
+import { getGitContext, getSystemInfo, loadInstructions } from "./instructions";
 
 const tmpDir = resolve(import.meta.dirname, "../.test-instructions-tmp");
 const globalTomoDir = resolve(tmpDir, "global/.tomo");

@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { render } from "ink-testing-library";
 import { Text } from "ink";
+import { render } from "ink-testing-library";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import {
   type AutocompleteProvider,

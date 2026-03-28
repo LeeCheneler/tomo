@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { ConfigureSelector } from "../components/configure-selector";
-import { addProvider, removeProvider, type ProviderConfig } from "../config";
+import { addProvider, type ProviderConfig, removeProvider } from "../config";
 import { register } from "./registry";
 import type { Command } from "./types";
 

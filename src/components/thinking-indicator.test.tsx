@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ThinkingIndicator } from "./thinking-indicator";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));

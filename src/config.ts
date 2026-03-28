@@ -40,12 +40,18 @@ const agentsSchema = z
   })
   .optional();
 
+const mcpToolSchema = z.object({
+  name: z.string().min(1),
+  enabled: z.boolean(),
+});
+
 const mcpStdioServerSchema = z.object({
   transport: z.literal("stdio"),
   command: z.string().min(1, "command is required"),
   args: z.array(z.string()).default([]),
   env: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().optional(),
+  tools: z.array(mcpToolSchema).optional(),
 });
 
 const mcpHttpServerSchema = z.object({
@@ -53,6 +59,7 @@ const mcpHttpServerSchema = z.object({
   url: z.string().url("url must be a valid URL"),
   headers: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().optional(),
+  tools: z.array(mcpToolSchema).optional(),
 });
 
 const mcpServerSchema = z.discriminatedUnion("transport", [
@@ -74,6 +81,7 @@ const configSchema = z.object({
 
 export type ProviderConfig = z.infer<typeof providerSchema>;
 export type McpServerConfig = z.infer<typeof mcpServerSchema>;
+export type McpToolConfig = z.infer<typeof mcpToolSchema>;
 export type Config = z.infer<typeof configSchema>;
 
 export interface AgentsConfig {
@@ -333,6 +341,21 @@ export function updateMcpServerEnabled(name: string, enabled: boolean): void {
       (raw.mcpServers as Record<string, Record<string, unknown>>) ?? {};
     if (servers[name]) {
       servers[name].enabled = enabled;
+      raw.mcpServers = servers;
+    }
+  });
+}
+
+/** Updates the tools list for an MCP server in the global config. */
+export function updateMcpServerTools(
+  serverName: string,
+  tools: McpToolConfig[],
+): void {
+  updateConfigFile(globalConfigPath(), (raw) => {
+    const servers =
+      (raw.mcpServers as Record<string, Record<string, unknown>>) ?? {};
+    if (servers[serverName]) {
+      servers[serverName].tools = tools;
       raw.mcpServers = servers;
     }
   });

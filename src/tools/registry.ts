@@ -36,14 +36,6 @@ export function resolveToolAvailability(
   for (const tool of getAllTools()) {
     result[tool.name] = config?.[tool.name] ?? tool.enabled ?? true;
   }
-  // Include non-registry entries from config (e.g. MCP tools)
-  if (config) {
-    for (const [name, enabled] of Object.entries(config)) {
-      if (!(name in result)) {
-        result[name] = enabled;
-      }
-    }
-  }
   return result;
 }
 

@@ -1,14 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
 import { execSync } from "node:child_process";
+import { describe, expect, it, vi } from "vitest";
 import {
-  isGitRepo,
-  getGitBranch,
   getDefaultBranch,
-  getGitStatusSummary,
+  getGitBranch,
   getGitLog,
   getGitRemoteUrl,
-  isGitHubRemote,
+  getGitStatusSummary,
   isGhCliAvailable,
+  isGitHubRemote,
+  isGitRepo,
 } from "./git";
 
 vi.mock("node:child_process", () => ({

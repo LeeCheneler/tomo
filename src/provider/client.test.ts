@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  streamChatCompletion,
+  type ChatMessage,
+  clearContextWindowCache,
   fetchContextWindow,
   fetchModels,
-  clearContextWindowCache,
   resolveApiKey,
-  type ChatMessage,
+  streamChatCompletion,
 } from "./client";
 
 function createSSEResponse(chunks: string[]): Response {
