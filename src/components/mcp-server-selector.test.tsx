@@ -396,6 +396,8 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r"); // submit URL
       await flush();
+      stdin.write("\r"); // skip API key (empty)
+      await flush();
       await flush(); // extra flush for async connect
       await flush();
 
@@ -437,6 +439,8 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r"); // submit URL
       await flush();
+      stdin.write("\r"); // skip API key
+      await flush();
       await flush();
       await flush();
 
@@ -470,7 +474,9 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("bad.example.com"); // "https://" is pre-filled
       await flush();
-      stdin.write("\r"); // submit
+      stdin.write("\r"); // submit URL
+      await flush();
+      stdin.write("\r"); // skip API key
       await flush();
       await flush();
       await flush();
@@ -509,6 +515,97 @@ describe("McpServerSelector", () => {
           }),
         },
       });
+    });
+
+    it("shows API key prompt after URL entry", async () => {
+      const { stdin, lastFrame } = renderMcp();
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\r"); // http
+      await flush();
+      stdin.write("mcp.example.com");
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+
+      const output = lastFrame() ?? "";
+      expect(output).toContain("Enter API key");
+      expect(output).toContain("leave empty to skip");
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: testing literal output
+      expect(output).toContain("${VAR}");
+    });
+
+    it("masks API key input with asterisks", async () => {
+      const { stdin, lastFrame } = renderMcp();
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\r"); // http
+      await flush();
+      stdin.write("mcp.example.com");
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+      stdin.write("secret123");
+      await flush();
+
+      const output = lastFrame() ?? "";
+      expect(output).toContain("*********");
+      expect(output).not.toContain("secret123");
+    });
+
+    it("stores API key as Authorization Bearer header", async () => {
+      setupMockClient("auth-server", []);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({ onUpdate });
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\r"); // http
+      await flush();
+      stdin.write("mcp.example.com");
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+      stdin.write("my-secret-key");
+      await flush();
+      stdin.write("\r"); // submit API key
+      await flush();
+      await flush();
+      await flush();
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: {
+          "auth-server": expect.objectContaining({
+            transport: "http",
+            url: "https://mcp.example.com",
+            headers: { Authorization: "Bearer my-secret-key" },
+          }),
+        },
+      });
+    });
+
+    it("skips headers when API key is empty", async () => {
+      setupMockClient("no-auth-server", []);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({ onUpdate });
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\r"); // http
+      await flush();
+      stdin.write("mcp.example.com");
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+      stdin.write("\r"); // skip API key (empty)
+      await flush();
+      await flush();
+      await flush();
+
+      const config = onUpdate.mock.calls[0][0].mcpServers["no-auth-server"];
+      expect(config.headers).toBeUndefined();
     });
   });
 });
