@@ -629,7 +629,10 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <TextInput value={textValue} onChange={setTextValue} />
+          <Text>
+            {"    "}
+            <TextInput value={textValue} onChange={setTextValue} />
+          </Text>
         </Box>
       );
 
@@ -678,7 +681,10 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <TextInput value={textValue} onChange={setTextValue} />
+          <Text>
+            {"    "}
+            <TextInput value={textValue} onChange={setTextValue} />
+          </Text>
         </Box>
       );
 
@@ -693,7 +699,10 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <TextInput value={textValue} onChange={setTextValue} masked />
+          <Text>
+            {"    "}
+            <TextInput value={textValue} onChange={setTextValue} masked />
+          </Text>
         </Box>
       );
 
@@ -708,7 +717,10 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <TextInput value={textValue} onChange={setTextValue} />
+          <Text>
+            {"    "}
+            <TextInput value={textValue} onChange={setTextValue} />
+          </Text>
         </Box>
       );
 
@@ -757,7 +769,10 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <TextInput value={textValue} onChange={setTextValue} />
+          <Text>
+            {"    "}
+            <TextInput value={textValue} onChange={setTextValue} />
+          </Text>
         </Box>
       );
 
@@ -772,7 +787,10 @@ export function McpServerSelector({
             ]}
           />
           <Text>{""}</Text>
-          <TextInput value={textValue} onChange={setTextValue} masked />
+          <Text>
+            {"    "}
+            <TextInput value={textValue} onChange={setTextValue} masked />
+          </Text>
         </Box>
       );
 

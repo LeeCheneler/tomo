@@ -117,7 +117,6 @@ export function TextInput({ value, onChange, masked }: TextInputProps) {
 
   return (
     <Text>
-      {"    "}
       {before}
       {cursorStr}
       {after}
