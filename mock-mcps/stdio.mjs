@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // MCP stdio server — reads newline-delimited JSON from stdin, writes to stdout.
-// Tools: echo (returns input text), add (adds two numbers)
+// Tools: get_time (current time in a timezone), coin_flip (flip a coin)
 
 import { createInterface } from "readline";
 
@@ -10,37 +10,65 @@ const PROTOCOL_VERSION = "2025-03-26";
 
 const TOOLS = [
   {
-    name: "echo",
-    description: "Echoes back the provided text",
-    inputSchema: {
-      type: "object",
-      properties: { text: { type: "string", description: "Text to echo" } },
-      required: ["text"],
-    },
-  },
-  {
-    name: "add",
-    description: "Adds two numbers together",
+    name: "get_time",
+    description: "Returns the current date and time in the specified timezone",
     inputSchema: {
       type: "object",
       properties: {
-        a: { type: "number", description: "First number" },
-        b: { type: "number", description: "Second number" },
+        timezone: {
+          type: "string",
+          description:
+            "IANA timezone identifier (e.g. America/New_York, Europe/London, Asia/Tokyo)",
+        },
       },
-      required: ["a", "b"],
+      required: ["timezone"],
+    },
+  },
+  {
+    name: "coin_flip",
+    description: "Flips a coin and returns heads or tails",
+    inputSchema: {
+      type: "object",
+      properties: {},
     },
   },
 ];
 
 function handleToolCall(name, args) {
   switch (name) {
-    case "echo":
-      return { content: [{ type: "text", text: args.text }], isError: false };
-    case "add":
+    case "get_time": {
+      try {
+        const now = new Date();
+        const formatted = now.toLocaleString("en-GB", {
+          timeZone: args.timezone,
+          dateStyle: "full",
+          timeStyle: "long",
+        });
+        return {
+          content: [
+            { type: "text", text: `${formatted} (${args.timezone})` },
+          ],
+          isError: false,
+        };
+      } catch {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Unknown timezone: ${args.timezone}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+    case "coin_flip": {
+      const result = Math.random() < 0.5 ? "Heads" : "Tails";
       return {
-        content: [{ type: "text", text: String(args.a + args.b) }],
+        content: [{ type: "text", text: result }],
         isError: false,
       };
+    }
     default:
       return {
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
