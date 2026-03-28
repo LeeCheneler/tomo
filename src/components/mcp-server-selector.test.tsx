@@ -80,16 +80,6 @@ describe("McpServerSelector", () => {
       expect(onBack).toHaveBeenCalled();
     });
 
-    it("calls onBack on q", async () => {
-      const onBack = vi.fn();
-      const { stdin } = renderMcp({ onBack });
-
-      stdin.write("q");
-      await flush();
-
-      expect(onBack).toHaveBeenCalled();
-    });
-
     it("toggles server enabled with Space", async () => {
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({
@@ -282,7 +272,7 @@ describe("McpServerSelector", () => {
     it("navigates to transport type selection on Add", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r");
+      stdin.write("a");
       await flush();
 
       const output = lastFrame() ?? "";
@@ -293,7 +283,7 @@ describe("McpServerSelector", () => {
     it("navigates to URL input for http", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r");
+      stdin.write("a");
       await flush();
       stdin.write("\r");
       await flush();
@@ -305,7 +295,7 @@ describe("McpServerSelector", () => {
     it("navigates to command input for stdio", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r");
+      stdin.write("a");
       await flush();
       stdin.write("\x1B[B");
       await flush();
@@ -319,7 +309,7 @@ describe("McpServerSelector", () => {
     it("returns to server list on Esc from add steps", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r");
+      stdin.write("a");
       await flush();
       expect(lastFrame()).toContain("http");
 
@@ -388,7 +378,7 @@ describe("McpServerSelector", () => {
       const { stdin } = renderMcp({ onUpdate });
 
       // Navigate: Add → http → enter URL (pre-filled with "https://") → submit
-      stdin.write("\r"); // select "Add..."
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // select "http"
       await flush();
@@ -431,7 +421,7 @@ describe("McpServerSelector", () => {
       // Navigate down to "Add..." (past existing server)
       stdin.write("\x1B[B"); // arrow down
       await flush();
-      stdin.write("\r"); // select "Add..."
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // select "http"
       await flush();
@@ -468,7 +458,7 @@ describe("McpServerSelector", () => {
 
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // http
       await flush();
@@ -490,7 +480,7 @@ describe("McpServerSelector", () => {
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({ onUpdate });
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\x1B[B"); // arrow down to stdio
       await flush();
@@ -520,7 +510,7 @@ describe("McpServerSelector", () => {
     it("shows header configurator after URL entry", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // http
       await flush();
@@ -540,7 +530,7 @@ describe("McpServerSelector", () => {
     it("adds a header via key/value prompts", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // http
       await flush();
@@ -574,7 +564,7 @@ describe("McpServerSelector", () => {
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({ onUpdate });
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // http
       await flush();
@@ -615,7 +605,7 @@ describe("McpServerSelector", () => {
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({ onUpdate });
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // http
       await flush();
@@ -666,7 +656,7 @@ describe("McpServerSelector", () => {
     it("deletes a header with d", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // http
       await flush();
@@ -695,7 +685,7 @@ describe("McpServerSelector", () => {
     it("edits an existing header value with e", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // http
       await flush();
@@ -816,7 +806,7 @@ describe("McpServerSelector", () => {
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({ onUpdate });
 
-      stdin.write("\r"); // Add
+      stdin.write("a"); // Add
       await flush();
       stdin.write("\r"); // http
       await flush();

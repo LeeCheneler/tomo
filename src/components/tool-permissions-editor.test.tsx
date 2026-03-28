@@ -62,14 +62,4 @@ describe("ToolPermissionsEditor", () => {
 
     expect(onBack).toHaveBeenCalled();
   });
-
-  it("calls onBack on q", async () => {
-    const onBack = vi.fn();
-    const { stdin } = renderEditor({ onBack });
-
-    stdin.write("q");
-    await flush();
-
-    expect(onBack).toHaveBeenCalled();
-  });
 });

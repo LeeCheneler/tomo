@@ -50,7 +50,7 @@ export function AllowedCommandsEditor({
       return;
     }
 
-    if (key.escape || input === "q" || input === "Q") {
+    if (key.escape) {
       onBack();
       return;
     }
@@ -70,8 +70,6 @@ export function AllowedCommandsEditor({
       }
     } else if (input === "a" || input === "A") {
       setCursor(state.allowedCommands.length);
-      setAdding(true);
-    } else if ((input === " " || key.return) && isOnAdd) {
       setAdding(true);
     }
   });

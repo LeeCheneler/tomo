@@ -38,7 +38,7 @@ export function ToolAvailabilityEditor({
   );
 
   useInput((input, key) => {
-    if (key.escape || input === "q" || input === "Q") {
+    if (key.escape) {
       onBack();
       return;
     }
@@ -47,7 +47,7 @@ export function ToolAvailabilityEditor({
       handleUp();
     } else if (key.downArrow) {
       handleDown();
-    } else if (input === " " || key.return) {
+    } else if (input === " ") {
       const item = allToolItems[cursor];
       if (item?.type === "builtin") {
         onUpdate({
@@ -117,9 +117,7 @@ export function ToolAvailabilityEditor({
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>
-        {"  Tool Availability (Space/Enter toggle, Esc back):"}
-      </Text>
+      <Text dimColor>{"  Tool Availability (Space toggle, Esc back):"}</Text>
       <Text>{""}</Text>
       {builtInItems.map((item, i) => {
         const isCurrent = i === cursor;

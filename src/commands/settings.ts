@@ -84,7 +84,6 @@ const settings: Command = {
           saveSettings(state);
           callbacks.onComplete({ output: "Settings updated." });
         },
-        onCancel: callbacks.onCancel,
       }),
     };
   },

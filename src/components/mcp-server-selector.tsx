@@ -193,26 +193,6 @@ export function McpServerSelector({
       return;
     }
 
-    if (input === "q" || input === "Q") {
-      if (step === "servers") {
-        onBack();
-      } else if (step === "serverTools") {
-        setActiveServer(null);
-        setStep("servers");
-      } else if (subSteps.includes(step)) {
-        setTextValue("");
-        setConnectError(null);
-        setPendingConfig(null);
-        setPendingUrl(null);
-        setPendingHeaders({});
-        setPendingHeaderKey(null);
-        setEditingServerName(null);
-        setReconnectName(null);
-        setStep("servers");
-      }
-      return;
-    }
-
     switch (step) {
       case "servers": {
         const isOnAdd = cursor === serverNames.length;
@@ -261,11 +241,7 @@ export function McpServerSelector({
           setEditingServerName(name);
           setPendingHeaders({ ...currentHeaders });
           setStep("addHeaders");
-        } else if (
-          input === "a" ||
-          input === "A" ||
-          ((input === " " || key.return) && isOnAdd)
-        ) {
+        } else if (input === "a" || input === "A") {
           setTextValue("");
           setConnectError(null);
           setStep("addType");
@@ -278,7 +254,7 @@ export function McpServerSelector({
           handleUp();
         } else if (key.downArrow) {
           handleDown();
-        } else if ((input === " " || key.return) && activeServer) {
+        } else if (input === " " && activeServer) {
           const tool = activeTools[cursor];
           if (!tool) break;
           const updated = activeTools.map((t) =>
@@ -466,7 +442,7 @@ export function McpServerSelector({
         <Box flexDirection="column">
           <Text dimColor>
             {
-              "  MCP Servers (Space toggle, Enter tools, e headers, d delete, a add, r reconnect, Esc back):"
+              "  MCP Servers (Space toggle, Enter tools, a add, e headers, d delete, r reconnect, Esc back):"
             }
           </Text>
           <Text>{""}</Text>
@@ -494,7 +470,7 @@ export function McpServerSelector({
       return (
         <Box flexDirection="column">
           <Text dimColor>
-            {`  ${activeServer} — Tools (Space/Enter toggle, Esc back):`}
+            {`  ${activeServer} — Tools (Space toggle, Esc back):`}
           </Text>
           <Text>{""}</Text>
           {items.length === 0 ? (
