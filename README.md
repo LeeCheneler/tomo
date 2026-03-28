@@ -33,38 +33,87 @@ Context window size is auto-detected for all provider types.
 
 Type `/` to see available commands with autocomplete suggestions.
 
-| Command         | Description                                     |
-| --------------- | ----------------------------------------------- |
-| `/new`          | Start a new conversation                        |
-| `/session`      | Browse and load previous sessions               |
-| `/session <id>` | Load a session by ID                            |
-| `/model`        | Switch the active model                         |
-| `/provider`     | Manage providers (add/remove)                   |
-| `/settings`     | Manage tools, permissions, and allowed commands |
-| `/context`      | Show context window usage stats                 |
-| `/skills`       | List available skills                           |
-| `/help`         | List available commands                         |
+| Command         | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `/new`          | Start a new conversation                             |
+| `/session`      | Browse and load previous sessions                    |
+| `/session <id>` | Load a session by ID                                 |
+| `/model`        | Switch the active model                              |
+| `/provider`     | Manage providers (add/remove)                        |
+| `/settings`     | Manage tools, permissions, commands, and MCP servers |
+| `/context`      | Show context window usage stats                      |
+| `/skills`       | List available skills                                |
+| `/help`         | List available commands                              |
 
 ## Tools
 
 Tomo can read, write, and search files, run commands, and more. Tools are enabled by default and the model calls them as needed.
 
-| Tool         | Description                                           | Default  |
-| ------------ | ----------------------------------------------------- | -------- |
-| Read File    | Read file contents with line numbers                  | Enabled  |
-| Write File   | Create or overwrite a file                            | Enabled  |
-| Edit File    | Apply string replacements to a file                   | Enabled  |
-| Glob         | Find files by glob pattern (respects `.gitignore`)    | Enabled  |
-| Grep         | Search file contents by regex (respects `.gitignore`) | Enabled  |
-| Run Command  | Run a shell command                                   | Enabled  |
-| Ask          | Ask the user a question                               | Enabled  |
-| Skill        | Load specialized task instructions                    | Enabled  |
-| Agent        | Spawn sub-agents for parallel research/exploration    | Enabled  |
-| Web Search   | Search the web via Tavily API                         | Disabled |
+| Tool        | Description                                           | Default  |
+| ----------- | ----------------------------------------------------- | -------- |
+| Read File   | Read file contents with line numbers                  | Enabled  |
+| Write File  | Create or overwrite a file                            | Enabled  |
+| Edit File   | Apply string replacements to a file                   | Enabled  |
+| Glob        | Find files by glob pattern (respects `.gitignore`)    | Enabled  |
+| Grep        | Search file contents by regex (respects `.gitignore`) | Enabled  |
+| Run Command | Run a shell command                                   | Enabled  |
+| Ask         | Ask the user a question                               | Enabled  |
+| Skill       | Load specialized task instructions                    | Enabled  |
+| Agent       | Spawn sub-agents for parallel research/exploration    | Enabled  |
+| Web Search  | Search the web via Tavily API                         | Disabled |
 
 Web Search requires a [Tavily](https://tavily.com) API key. Set `TAVILY_API_KEY` in your environment and enable the tool with `/settings`.
 
 Agent spawns headless sub-agents that can read files, search code, and explore the codebase in parallel. The model decides when to spawn agents and how many. Active agents show color-coded progress indicators with tool call counts.
+
+## MCP Servers
+
+Tomo supports the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) for connecting to external tool servers. MCP servers expose tools that the model can call alongside tomo's built-in tools.
+
+Two transport types are supported:
+
+| Transport | Description                    | Example                   |
+| --------- | ------------------------------ | ------------------------- |
+| `http`    | Remote server via HTTP POST    | `https://mcp.example.com` |
+| `stdio`   | Local process via stdin/stdout | `node my-server.js`       |
+
+### Adding a Server
+
+Use `/settings` → **MCP Servers** → **Add**:
+
+1. Select transport type (HTTP or stdio)
+2. Enter the server URL or command (with args)
+3. Tomo connects, discovers the server name and tools
+4. Tools appear in **Tool Availability**, disabled by default
+5. Enable the tools you want the model to use
+
+### Config
+
+MCP servers are stored in the global config (`~/.tomo/config.yaml`):
+
+```yaml
+mcpServers:
+  my-server:
+    transport: http
+    url: https://mcp.example.com
+    # headers:              # optional HTTP headers
+    #   Authorization: "Bearer ${MCP_TOKEN}"
+  local-tools:
+    transport: stdio
+    command: node
+    args: ["my-mcp-server.js"]
+    # env:                  # optional environment variables
+    #   DB_URL: postgresql://localhost:5432/mydb
+    # enabled: false        # disable without removing
+```
+
+Environment variable substitution (`${VAR}`) is supported in all string values.
+
+Tool availability is controlled per-tool in the local config (`./.tomo/config.yaml`) under the `tools` key, using namespaced names like `mcp__server-name__tool-name`.
+
+### Connection Failures
+
+If an MCP server fails to connect at startup, a warning is displayed and other servers continue normally. Use `/settings` → **MCP Servers** and press `r` on a failed server to retry.
 
 ## Permissions
 
