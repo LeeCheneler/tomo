@@ -331,10 +331,7 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r");
       await flush();
-      // Cursor should be on the key field; go up to sensitive toggle
-      stdin.write("\x1B[A");
-      await flush();
-      // Toggle sensitive
+      // Cursor lands on sensitive toggle — toggle it
       stdin.write(" ");
       await flush();
       expect(lastFrame()).toContain("[✔]");
@@ -388,7 +385,9 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r");
       await flush();
-      // Cursor on key field — type a name
+      // Cursor on sensitive — move to key field
+      stdin.write("\x1B[B");
+      await flush();
       stdin.write("Authorization");
       await flush();
       expect(lastFrame()).toContain("Authorization");
@@ -411,12 +410,10 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r");
       await flush();
-      // Go to sensitive and toggle on
-      stdin.write("\x1B[A");
-      await flush();
+      // Cursor on sensitive — toggle on
       stdin.write(" ");
       await flush();
-      // Go to value and type
+      // Go to value (sensitive -> key -> value)
       stdin.write("\x1B[B");
       await flush();
       stdin.write("\x1B[B");
@@ -460,7 +457,10 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r");
       await flush();
-      // Cursor on key field — type "d"
+      // Cursor on sensitive — move to key field
+      stdin.write("\x1B[B");
+      await flush();
+      // Type "d"
       stdin.write("d");
       await flush();
       // Should have typed "d", not deleted
@@ -472,18 +472,20 @@ describe("McpServerSelector", () => {
       const { stdin, lastFrame } = renderMcp();
       stdin.write("a");
       await flush();
-      // Add a kv item
+      // Add a kv item: type (0) -> connection (1) -> kv add (2)
       stdin.write("\x1B[B");
       await flush();
       stdin.write("\x1B[B");
       await flush();
       stdin.write("\r");
       await flush();
-      // Type a name
+      // Cursor on sensitive (2) — move to key (3) and type
+      stdin.write("\x1B[B");
+      await flush();
       stdin.write("Authorization");
       await flush();
       expect(lastFrame()).toContain("Authorization");
-      // Navigate back to type row and switch
+      // Navigate back to type row: key (3) -> sensitive (2) -> connection (1) -> type (0)
       stdin.write("\x1B[A");
       await flush();
       stdin.write("\x1B[A");
@@ -658,9 +660,7 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r");
       await flush();
-      // Go to sensitive and toggle on
-      stdin.write("\x1B[A");
-      await flush();
+      // Cursor on sensitive — toggle on
       stdin.write(" ");
       await flush();
       // Go to key and type name

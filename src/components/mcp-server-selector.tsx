@@ -208,18 +208,6 @@ export function McpServerSelector({
     });
   }
 
-  /** Get the kv item index for a form row, or -1 if not a kv row. */
-  function kvIndexForRow(row: FormRow): number {
-    if (
-      row.type === "kvSensitive" ||
-      row.type === "kvKey" ||
-      row.type === "kvValue"
-    ) {
-      return row.index;
-    }
-    return -1;
-  }
-
   // Connect effect
   // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger on step changes
   useEffect(() => {
@@ -442,9 +430,9 @@ export function McpServerSelector({
               ...prev,
               { key: "", value: "", sensitive: false },
             ]);
-            // Move cursor to the new item's key field (skip sensitive toggle)
-            const newKvKeyRow = formRows.length - 2 + 1; // insert before kvAdd, +1 to land on key
-            setCursor(newKvKeyRow);
+            // Cursor stays at current position — the new item's sensitive
+            // row takes the slot where kvAdd was, pushing kvAdd down.
+            setCursor(cursor);
           }
         } else if (row.type === "tool") {
           if (input === " ") {
