@@ -27,6 +27,23 @@ function sseResponse(events: string[]): Response {
   });
 }
 
+/** Creates an SSE response where the raw string is split into separate chunks at given byte offsets. */
+function chunkedSseResponse(chunks: string[]): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
 describe("HttpTransport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -224,6 +241,101 @@ describe("HttpTransport", () => {
       }),
     });
 
+    transport.close();
+  });
+
+  it("handles SSE event split across multiple chunks", async () => {
+    const transport = new HttpTransport("https://mcp.example.com");
+    transport.start();
+
+    const responseData = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { value: "chunked" },
+    });
+
+    // Split the SSE event in the middle of the data line
+    const fullEvent = `data: ${responseData}\n\n`;
+    const mid = Math.floor(fullEvent.length / 2);
+
+    mockFetch.mockResolvedValueOnce(
+      chunkedSseResponse([fullEvent.slice(0, mid), fullEvent.slice(mid)]),
+    );
+
+    const response = await transport.request({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "test",
+    });
+
+    expect(response.result).toEqual({ value: "chunked" });
+    transport.close();
+  });
+
+  it("handles SSE event split on double-newline boundary", async () => {
+    const transport = new HttpTransport("https://mcp.example.com");
+    transport.start();
+
+    const responseData = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: "ok",
+    });
+
+    // First chunk has data line and first newline, second chunk has second newline
+    mockFetch.mockResolvedValueOnce(
+      chunkedSseResponse([`data: ${responseData}\n`, "\n"]),
+    );
+
+    const response = await transport.request({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "test",
+    });
+
+    expect(response.result).toBe("ok");
+    transport.close();
+  });
+
+  it("handles multiple SSE events across many small chunks", async () => {
+    const transport = new HttpTransport("https://mcp.example.com");
+    const handler = vi.fn();
+    transport.start();
+    transport.onNotification(handler);
+
+    const notification = JSON.stringify({
+      jsonrpc: "2.0",
+      method: "notifications/progress",
+    });
+    const responseData = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { done: true },
+    });
+
+    // Split across 4 tiny chunks: notification event split in two, then response event split in two
+    const notifEvent = `data: ${notification}\n\n`;
+    const respEvent = `data: ${responseData}\n\n`;
+
+    mockFetch.mockResolvedValueOnce(
+      chunkedSseResponse([
+        notifEvent.slice(0, 10),
+        notifEvent.slice(10),
+        respEvent.slice(0, 15),
+        respEvent.slice(15),
+      ]),
+    );
+
+    const response = await transport.request({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "test",
+    });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "notifications/progress" }),
+    );
+    expect(response.result).toEqual({ done: true });
     transport.close();
   });
 

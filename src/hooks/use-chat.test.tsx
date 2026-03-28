@@ -2,6 +2,8 @@ import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getCommand, parse } from "../commands";
+import { getMcpServers, loadConfig } from "../config";
+import { McpManager } from "../mcp/manager";
 import type { ToolCall } from "../provider/client";
 import { streamChatCompletion } from "../provider/client";
 import { appendMessage } from "../session";
@@ -77,12 +79,19 @@ vi.mock("../session", () => ({
 vi.mock("../config", () => ({
   getMaxTokens: () => 8192,
   getProviderByName: vi.fn(),
-  loadConfig: () => ({}),
+  loadConfig: vi.fn().mockReturnValue({}),
   updateActiveModel: vi.fn(),
   updateActiveProvider: vi.fn(),
   getAllowedCommands: () => [],
-  getMcpServers: () => ({}),
-  getAllMcpServers: () => ({}),
+  getMcpServers: vi.fn().mockReturnValue({}),
+  getAllMcpServers: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("../mcp/manager", () => ({
+  McpManager: vi.fn(),
+  encodeToolName: vi.fn(
+    (server: string, tool: string) => `mcp__${server}__${tool}`,
+  ),
 }));
 
 vi.mock("../commands", () => ({
@@ -1037,6 +1046,186 @@ describe("useChat", () => {
       expect(chat.messages[0].content).toBe("//nonexistent");
       expect(chat.messages[1].role).toBe("system");
       expect(chat.messages[1].content).toContain("Unknown skill");
+    });
+  });
+
+  describe("MCP startup", () => {
+    function createMockManager(overrides?: {
+      startAll?: ReturnType<typeof vi.fn>;
+      shutdown?: ReturnType<typeof vi.fn>;
+      getServerNames?: ReturnType<typeof vi.fn>;
+      getToolDefinitions?: ReturnType<typeof vi.fn>;
+    }) {
+      const manager = {
+        startAll: overrides?.startAll ?? vi.fn().mockResolvedValue([]),
+        shutdown: overrides?.shutdown ?? vi.fn(),
+        getServerNames:
+          overrides?.getServerNames ?? vi.fn().mockReturnValue([]),
+        getToolDefinitions:
+          overrides?.getToolDefinitions ?? vi.fn().mockResolvedValue([]),
+      };
+      // biome-ignore lint/complexity/useArrowFunction: mockImplementation needs function for new
+      vi.mocked(McpManager).mockImplementation(function () {
+        return manager as unknown as McpManager;
+      });
+      return manager;
+    }
+
+    it("starts MCP servers on mount when config has servers", async () => {
+      const mcpServers = {
+        "test-server": {
+          transport: "http" as const,
+          url: "https://mcp.example.com",
+        },
+      };
+      vi.mocked(getMcpServers).mockReturnValue(mcpServers);
+      const manager = createMockManager();
+
+      render(<TestApp />);
+      await flush();
+
+      expect(McpManager).toHaveBeenCalled();
+      expect(manager.startAll).toHaveBeenCalledWith(mcpServers);
+    });
+
+    it("surfaces warnings when MCP server fails to connect", async () => {
+      vi.mocked(getMcpServers).mockReturnValue({
+        "broken-server": {
+          transport: "http" as const,
+          url: "https://broken.example.com",
+        },
+      });
+      createMockManager({
+        startAll: vi.fn().mockResolvedValue(["broken-server"]),
+      });
+
+      render(<TestApp />);
+      await flush();
+      await flush();
+
+      expect(chat.mcpWarnings).toEqual([
+        'MCP server "broken-server": failed to connect',
+      ]);
+    });
+
+    it("does not create manager when no MCP servers configured", async () => {
+      vi.mocked(getMcpServers).mockReturnValue({});
+
+      render(<TestApp />);
+      await flush();
+
+      expect(McpManager).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("MCP restart on config change", () => {
+    function createMockManager(overrides?: {
+      startAll?: ReturnType<typeof vi.fn>;
+      shutdown?: ReturnType<typeof vi.fn>;
+      getServerNames?: ReturnType<typeof vi.fn>;
+      getToolDefinitions?: ReturnType<typeof vi.fn>;
+    }) {
+      const manager = {
+        startAll: overrides?.startAll ?? vi.fn().mockResolvedValue([]),
+        shutdown: overrides?.shutdown ?? vi.fn(),
+        getServerNames:
+          overrides?.getServerNames ?? vi.fn().mockReturnValue([]),
+        getToolDefinitions:
+          overrides?.getToolDefinitions ?? vi.fn().mockResolvedValue([]),
+      };
+      // biome-ignore lint/complexity/useArrowFunction: mockImplementation needs function for new
+      vi.mocked(McpManager).mockImplementation(function () {
+        return manager as unknown as McpManager;
+      });
+      return manager;
+    }
+
+    it("restarts manager when server config changes between submits", async () => {
+      // Mount with server-a
+      const mountServers = {
+        "server-a": {
+          transport: "http" as const,
+          url: "https://a.example.com",
+        },
+      };
+      vi.mocked(getMcpServers).mockReturnValue(mountServers);
+
+      const mountManager = createMockManager({
+        getServerNames: vi.fn().mockReturnValue(["server-a"]),
+      });
+
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(streamChatCompletion).mockImplementation(async (options) =>
+        createDeferredStream(options.signal),
+      );
+
+      render(<TestApp />);
+      await flush();
+
+      expect(mountManager.startAll).toHaveBeenCalledWith(mountServers);
+
+      // Submit with changed config (server-b instead of server-a)
+      const newServers = {
+        "server-b": {
+          transport: "http" as const,
+          url: "https://b.example.com",
+        },
+      };
+      vi.mocked(loadConfig).mockReturnValue(testConfig);
+      vi.mocked(getMcpServers).mockReturnValue(newServers);
+
+      const restartManager = createMockManager({
+        getServerNames: vi.fn().mockReturnValue(["server-b"]),
+      });
+
+      chat.submit("hello");
+      await flush();
+
+      // Old manager should be shut down
+      expect(mountManager.shutdown).toHaveBeenCalled();
+      // New manager should be started with new servers
+      expect(restartManager.startAll).toHaveBeenCalledWith(newServers);
+
+      streams[0].complete();
+      await flush();
+    });
+
+    it("keeps existing manager when server config is unchanged", async () => {
+      const servers = {
+        "server-a": {
+          transport: "http" as const,
+          url: "https://a.example.com",
+        },
+      };
+      vi.mocked(getMcpServers).mockReturnValue(servers);
+
+      const manager = createMockManager({
+        getServerNames: vi.fn().mockReturnValue(["server-a"]),
+      });
+
+      vi.mocked(parse).mockReturnValue(null);
+      vi.mocked(streamChatCompletion).mockImplementation(async (options) =>
+        createDeferredStream(options.signal),
+      );
+
+      render(<TestApp />);
+      await flush();
+
+      expect(manager.startAll).toHaveBeenCalledTimes(1);
+
+      // Submit with same config
+      vi.mocked(loadConfig).mockReturnValue(testConfig);
+      // getMcpServers still returns same servers
+
+      chat.submit("hello");
+      await flush();
+
+      // Manager should NOT be restarted (startAll only called once during mount)
+      expect(manager.shutdown).not.toHaveBeenCalled();
+      expect(manager.startAll).toHaveBeenCalledTimes(1);
+
+      streams[0].complete();
+      await flush();
     });
   });
 });
