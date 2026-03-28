@@ -6,6 +6,7 @@ import { McpClient } from "../mcp/client";
 import { HttpTransport } from "../mcp/http-transport";
 import { StdioTransport } from "../mcp/stdio-transport";
 import { type CheckboxItem, CheckboxList } from "./checkbox-list";
+import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
 
 type Step =
@@ -563,11 +564,18 @@ export function McpServerSelector({
       });
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {
-              "  MCP Servers (Space toggle, Enter tools, a add, e headers/env, d delete, r reconnect, Esc back):"
-            }
-          </Text>
+          <HintBar
+            label="MCP Servers"
+            hints={[
+              { key: "Space", action: "toggle" },
+              { key: "Enter", action: "tools" },
+              { key: "a", action: "add" },
+              { key: "e", action: "headers/env" },
+              { key: "d", action: "delete" },
+              { key: "r", action: "reconnect" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           <CheckboxList items={items} cursor={cursor} />
           {(() => {
@@ -592,9 +600,13 @@ export function McpServerSelector({
       }));
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {`  ${activeServer} — Tools (Space toggle, Esc back):`}
-          </Text>
+          <HintBar
+            label={`${activeServer} — Tools`}
+            hints={[
+              { key: "Space", action: "toggle" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           {items.length === 0 ? (
             <Text dimColor>{"    No tools discovered."}</Text>
@@ -608,9 +620,14 @@ export function McpServerSelector({
     case "addType":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {"  Select transport type (↑↓ navigate, Enter select, Esc back):"}
-          </Text>
+          <HintBar
+            label="Select transport type"
+            hints={[
+              { key: "↑↓", action: "navigate" },
+              { key: "Enter", action: "select" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           {TRANSPORT_TYPES.map((type, i) => {
             const isCurrent = i === cursor;
@@ -627,9 +644,13 @@ export function McpServerSelector({
     case "addUrl":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {"  Enter server URL (Enter confirm, Esc back):"}
-          </Text>
+          <HintBar
+            label="Enter server URL"
+            hints={[
+              { key: "Enter", action: "confirm" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           <Text>
             {"    "}
@@ -642,9 +663,16 @@ export function McpServerSelector({
     case "addHeaders":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {"  Headers (a add, e edit, d delete, Enter confirm, Esc back):"}
-          </Text>
+          <HintBar
+            label="Headers"
+            hints={[
+              { key: "a", action: "add" },
+              { key: "e", action: "edit" },
+              { key: "d", action: "delete" },
+              { key: "Enter", action: "confirm" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text dimColor>
             {"  Tip: use ${VAR} to reference environment variables"}
           </Text>
@@ -669,9 +697,13 @@ export function McpServerSelector({
     case "addHeaderKey":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {"  Enter header name (Enter confirm, Esc back):"}
-          </Text>
+          <HintBar
+            label="Enter header name"
+            hints={[
+              { key: "Enter", action: "confirm" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           <Text>
             {"    "}
@@ -684,9 +716,13 @@ export function McpServerSelector({
     case "addHeaderValue":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {`  Enter value for ${pendingHeaderKey} (Enter confirm, Esc back):`}
-          </Text>
+          <HintBar
+            label={`Enter value for ${pendingHeaderKey}`}
+            hints={[
+              { key: "Enter", action: "confirm" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           <Text>
             {"    "}
@@ -699,11 +735,13 @@ export function McpServerSelector({
     case "addCommand":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {
-              "  Enter command and args to start the server (Enter confirm, Esc back):"
-            }
-          </Text>
+          <HintBar
+            label="Enter command and args"
+            hints={[
+              { key: "Enter", action: "confirm" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           <Text>
             {"    "}
@@ -716,11 +754,16 @@ export function McpServerSelector({
     case "addEnvVars":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {
-              "  Environment Variables (a add, e edit, d delete, Enter confirm, Esc back):"
-            }
-          </Text>
+          <HintBar
+            label="Environment Variables"
+            hints={[
+              { key: "a", action: "add" },
+              { key: "e", action: "edit" },
+              { key: "d", action: "delete" },
+              { key: "Enter", action: "confirm" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text dimColor>
             {"  Tip: use ${VAR} to reference environment variables"}
           </Text>
@@ -745,9 +788,13 @@ export function McpServerSelector({
     case "addEnvVarKey":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {"  Enter variable name (Enter confirm, Esc back):"}
-          </Text>
+          <HintBar
+            label="Enter variable name"
+            hints={[
+              { key: "Enter", action: "confirm" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           <Text>
             {"    "}
@@ -760,9 +807,13 @@ export function McpServerSelector({
     case "addEnvVarValue":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {`  Enter value for ${pendingEnvVarKey} (Enter confirm, Esc back):`}
-          </Text>
+          <HintBar
+            label={`Enter value for ${pendingEnvVarKey}`}
+            hints={[
+              { key: "Enter", action: "confirm" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           <Text>
             {"    "}

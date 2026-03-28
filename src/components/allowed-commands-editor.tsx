@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 import { useListNavigation } from "../hooks/use-list-navigation";
+import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
 
 export interface AllowedCommandsEditorProps {
@@ -76,7 +77,14 @@ export function AllowedCommandsEditor({
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>{"  Allowed Commands (d delete, a add, Esc back):"}</Text>
+      <HintBar
+        label="Allowed Commands"
+        hints={[
+          { key: "d", action: "delete" },
+          { key: "a", action: "add" },
+          { key: "Esc", action: "back" },
+        ]}
+      />
       <Text dimColor>
         {"  Use exact commands (npm test) or prefixes (git:*)"}
       </Text>

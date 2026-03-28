@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { McpServerConfig } from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { AllowedCommandsEditor } from "./allowed-commands-editor";
+import { HintBar } from "./hint-bar";
 import { McpServerSelector } from "./mcp-server-selector";
 import { ToolAvailabilityEditor } from "./tool-availability-editor";
 import { ToolPermissionsEditor } from "./tool-permissions-editor";
@@ -87,9 +88,14 @@ export function SettingsSelector({
     case "menu":
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {"  Settings (↑↓ navigate, Enter select, Esc save):"}
-          </Text>
+          <HintBar
+            label="Settings"
+            hints={[
+              { key: "↑↓", action: "navigate" },
+              { key: "Enter", action: "select" },
+              { key: "Esc", action: "save" },
+            ]}
+          />
           <Text>{""}</Text>
           {MENU_OPTIONS.map((option, i) => {
             const isCurrent = i === cursor;

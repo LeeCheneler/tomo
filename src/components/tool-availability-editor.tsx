@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import type { CheckboxItem } from "./checkbox-list";
+import { HintBar } from "./hint-bar";
 import type { SettingsState, ToolMeta } from "./settings-selector";
 
 export interface ToolAvailabilityEditorProps {
@@ -117,7 +118,13 @@ export function ToolAvailabilityEditor({
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>{"  Tool Availability (Space toggle, Esc back):"}</Text>
+      <HintBar
+        label="Tool Availability"
+        hints={[
+          { key: "Space", action: "toggle" },
+          { key: "Esc", action: "back" },
+        ]}
+      />
       <Text>{""}</Text>
       {builtInItems.map((item, i) => {
         const isCurrent = i === cursor;
