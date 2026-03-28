@@ -23,6 +23,7 @@ const mockChatState: ChatState = {
   pendingMessage: null,
   toolActive: false,
   inputHistory: [],
+  mcpWarnings: [],
   submit: vi.fn(),
   cancel: vi.fn(),
   cancelPending: vi.fn(),

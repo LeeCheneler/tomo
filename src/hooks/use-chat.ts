@@ -53,6 +53,7 @@ export interface ChatState {
   pendingMessage: string | null;
   toolActive: boolean;
   inputHistory: string[];
+  mcpWarnings: string[];
   submit: (text: string, clipboardImages?: ImageAttachment[]) => void;
   cancel: () => void;
   cancelPending: () => void;
@@ -205,10 +206,31 @@ export function useChat(
   const mcpManagerRef = useRef<McpManager | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const inputHistoryRef = useRef<string[]>([]);
+  const [mcpWarnings, setMcpWarnings] = useState<string[]>([]);
 
-  // Shut down MCP servers on unmount.
+  // Start MCP servers on mount, shut down on unmount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only run once on mount
   useEffect(() => {
+    let cancelled = false;
+    const mcpServers = getMcpServers(config);
+    const serverNames = Object.keys(mcpServers);
+    if (serverNames.length > 0) {
+      const manager = new McpManager();
+      manager.startAll(mcpServers).then((failures) => {
+        if (cancelled) {
+          manager.shutdown();
+          return;
+        }
+        mcpManagerRef.current = manager;
+        if (failures.length > 0) {
+          setMcpWarnings(
+            failures.map((name) => `MCP server "${name}": failed to connect`),
+          );
+        }
+      });
+    }
     return () => {
+      cancelled = true;
       mcpManagerRef.current?.shutdown();
       mcpManagerRef.current = null;
     };
@@ -365,6 +387,12 @@ export function useChat(
         maxTokens: getMaxTokens(config, activeProvider, activeModel),
         tokenUsage,
         messageCount: messages.length,
+        mcpFailedServers: mcpWarnings
+          .map((w) => {
+            const match = w.match(/^MCP server "(.+?)":/);
+            return match?.[1];
+          })
+          .filter((n): n is string => n !== undefined),
       });
 
       if ("interactive" in result) {
@@ -412,21 +440,34 @@ export function useChat(
     const toolAvailability = resolveToolAvailability(freshConfig.tools);
     const builtInToolDefs = getToolDefinitions(toolAvailability);
 
-    // Start MCP servers if configured and not already running.
+    // Start or restart MCP servers if config changed.
     const mcpServers = getMcpServers(freshConfig);
-    if (Object.keys(mcpServers).length > 0 && !mcpManagerRef.current) {
-      const manager = new McpManager();
-      try {
-        await manager.startAll(mcpServers);
-        mcpManagerRef.current = manager;
-      } catch {
-        // MCP server startup failed — continue without MCP tools.
+    const desiredNames = Object.keys(mcpServers).sort().join(",");
+    const currentNames = mcpManagerRef.current
+      ? mcpManagerRef.current.getServerNames().sort().join(",")
+      : "";
+
+    if (desiredNames !== currentNames) {
+      mcpManagerRef.current?.shutdown();
+      mcpManagerRef.current = null;
+
+      if (desiredNames) {
+        const manager = new McpManager();
+        try {
+          await manager.startAll(mcpServers);
+          mcpManagerRef.current = manager;
+        } catch {
+          // MCP server startup failed — continue without MCP tools.
+        }
       }
     }
 
-    const mcpToolDefs = mcpManagerRef.current
+    const allMcpToolDefs = mcpManagerRef.current
       ? await mcpManagerRef.current.getToolDefinitions().catch(() => [])
       : [];
+    const mcpToolDefs = allMcpToolDefs.filter(
+      (t) => toolAvailability[t.function.name] !== false,
+    );
     const toolDefs = [...builtInToolDefs, ...mcpToolDefs];
 
     const permissions = resolvePermissions(freshConfig.permissions);
@@ -462,6 +503,7 @@ export function useChat(
         lastPromptTokens: tokenUsage?.promptTokens ?? null,
         signal: controller.signal,
         mcpManager: mcpManagerRef.current ?? undefined,
+        toolAvailability,
         onContent: setStreamingContent,
         onMessage: (msg) => {
           const displayMsg = {
@@ -535,6 +577,7 @@ export function useChat(
     pendingMessage,
     toolActive,
     inputHistory: inputHistoryRef.current,
+    mcpWarnings,
     submit,
     cancel,
     cancelPending,

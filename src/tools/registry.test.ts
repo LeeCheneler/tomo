@@ -130,4 +130,26 @@ describe("tool registry", () => {
     });
     expect(result["test-override-default"]).toBe(true);
   });
+
+  it("includes non-registry config entries (e.g. MCP tools)", () => {
+    registerTool(makeTool("test-builtin"));
+
+    const result = resolveToolAvailability({
+      "test-builtin": true,
+      mcp__server__read_file: false,
+      mcp__server__search: true,
+    });
+
+    expect(result["test-builtin"]).toBe(true);
+    expect(result.mcp__server__read_file).toBe(false);
+    expect(result.mcp__server__search).toBe(true);
+  });
+
+  it("does not include non-registry entries when config is undefined", () => {
+    registerTool(makeTool("test-no-config"));
+
+    const result = resolveToolAvailability();
+    expect(Object.keys(result)).toContain("test-no-config");
+    expect(Object.keys(result).some((k) => k.startsWith("mcp__"))).toBe(false);
+  });
 });

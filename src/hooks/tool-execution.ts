@@ -1,9 +1,7 @@
 import chalk from "chalk";
-import { createElement } from "react";
-import { McpToolConfirm } from "../components/mcp-tool-confirm";
 import type { DisplayMessage } from "../components/message-list";
 import { getErrorMessage } from "../errors";
-import { decodeToolName, type McpManager } from "../mcp/manager";
+import type { McpManager } from "../mcp/manager";
 import type { ToolCall } from "../provider/client";
 import { getTool, getToolDisplayName, type ToolContext } from "../tools";
 
@@ -53,37 +51,24 @@ async function executeSingleToolCall(
   tc: ToolCall,
   toolContext: ToolContext,
   mcpManager?: McpManager,
+  toolAvailability?: Record<string, boolean>,
 ): Promise<DisplayMessage> {
   let result: string;
 
   if (mcpManager?.isMcpTool(tc.function.name)) {
-    try {
-      const args = JSON.parse(tc.function.arguments || "{}");
-      const decoded = decodeToolName(tc.function.name);
-
-      if (!mcpManager.isAutoApproved(tc.function.name) && decoded) {
-        const approval = await toolContext.renderInteractive(
-          (onResult, onCancel) =>
-            createElement(McpToolConfirm, {
-              serverName: decoded.serverName,
-              toolName: decoded.toolName,
-              args,
-              onApprove: () => onResult("approved"),
-              onDeny: () => onCancel(),
-            }),
-        );
-        if (approval !== "approved") {
-          result = "MCP tool call denied by user.";
-        } else {
-          result = await mcpManager.callTool(tc.function.name, args);
-        }
-      } else {
+    if (toolAvailability?.[tc.function.name] === false) {
+      result = "This MCP tool has been disabled.";
+    } else {
+      try {
+        const args = JSON.parse(tc.function.arguments || "{}");
         result = await mcpManager.callTool(tc.function.name, args);
+      } catch (err) {
+        result = `Error: ${getErrorMessage(err)}`;
       }
-    } catch (err) {
-      if (err instanceof ToolDismissedError) throw err;
-      result = `Error: ${getErrorMessage(err)}`;
     }
+  } else if (tc.function.name.startsWith("mcp__")) {
+    result =
+      "This MCP tool is no longer available. The server has been disabled.";
   } else {
     const tool = getTool(tc.function.name);
     if (!tool) {
@@ -116,19 +101,19 @@ export async function executeToolCalls(
   signal: AbortSignal,
   toolContext: ToolContext,
   mcpManager?: McpManager,
+  toolAvailability?: Record<string, boolean>,
 ): Promise<DisplayMessage[]> {
   // Separate into non-interactive (can run in parallel) and interactive (must be sequential).
-  // MCP tools are always treated as non-interactive since they don't render UI.
+  // MCP tools are always non-interactive — access is controlled via tool availability in settings.
   const nonInteractive: ToolCall[] = [];
   const interactive: ToolCall[] = [];
 
   for (const tc of toolCalls) {
-    if (mcpManager?.isMcpTool(tc.function.name)) {
-      if (mcpManager.isAutoApproved(tc.function.name)) {
-        nonInteractive.push(tc);
-      } else {
-        interactive.push(tc);
-      }
+    if (
+      mcpManager?.isMcpTool(tc.function.name) ||
+      tc.function.name.startsWith("mcp__")
+    ) {
+      nonInteractive.push(tc);
     } else {
       const tool = getTool(tc.function.name);
       if (tool && tool.interactive === false) {
@@ -144,7 +129,12 @@ export async function executeToolCalls(
     nonInteractive.length > 0
       ? await Promise.all(
           nonInteractive.map((tc) =>
-            executeSingleToolCall(tc, toolContext, mcpManager),
+            executeSingleToolCall(
+              tc,
+              toolContext,
+              mcpManager,
+              toolAvailability,
+            ),
           ),
         )
       : [];
@@ -156,7 +146,12 @@ export async function executeToolCalls(
       throw new DOMException("aborted", "AbortError");
     }
     sequentialResults.push(
-      await executeSingleToolCall(tc, toolContext, mcpManager),
+      await executeSingleToolCall(
+        tc,
+        toolContext,
+        mcpManager,
+        toolAvailability,
+      ),
     );
   }
 

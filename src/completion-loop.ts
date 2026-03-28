@@ -32,6 +32,8 @@ export interface CompletionLoopOptions {
   onUsage?: (usage: TokenUsage) => void;
   /** MCP manager for routing MCP tool calls. */
   mcpManager?: McpManager;
+  /** Tool availability map for checking disabled tools at execution time. */
+  toolAvailability?: Record<string, boolean>;
 }
 
 export interface CompletionLoopResult {
@@ -70,6 +72,7 @@ export async function runCompletionLoop(
     onToolActive,
     onUsage,
     mcpManager,
+    toolAvailability,
   } = options;
 
   let currentMessages = [...initialMessages];
@@ -165,6 +168,7 @@ export async function runCompletionLoop(
           signal,
           toolContext,
           mcpManager,
+          toolAvailability,
         );
       } catch (err) {
         onToolActive?.(false);

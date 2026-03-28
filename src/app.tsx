@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from "react";
 import { spawnSync } from "node:child_process";
 import chalk from "chalk";
 import { Box, Static, Text } from "ink";
+import { useEffect, useMemo } from "react";
 import "./commands";
 import { AgentIndicators } from "./components/agent-indicators";
 import { AssistantMessage } from "./components/assistant-message";
@@ -25,7 +25,7 @@ function getToolWarnings(): string[] {
   for (const tool of getAllTools()) {
     if (availability[tool.name] && tool.warning) {
       const msg = tool.warning();
-      if (msg) warnings.push(`${tool.name}: ${msg}`);
+      if (msg) warnings.push(`${tool.displayName ?? tool.name}: ${msg}`);
     }
   }
   return warnings;
@@ -105,9 +105,15 @@ export function App({ onRestart }: AppProps) {
       })),
     [startupWarnings],
   );
+  const mcpWarningItems: StaticItem[] = chat.mcpWarnings.map((text, i) => ({
+    type: "warning" as const,
+    id: `__mcp_warning_${i}__`,
+    text,
+  }));
   const staticItems: StaticItem[] = [
     headerItem,
     ...warningItems,
+    ...mcpWarningItems,
     ...chat.messages,
   ];
 

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import type { Command } from "./types";
+import { describe, expect, it, vi } from "vitest";
 import { getCommand } from "./registry";
+import type { Command } from "./types";
 import "./new";
 
 describe("/new command", () => {
@@ -29,6 +29,7 @@ describe("/new command", () => {
       maxTokens: 8192,
       tokenUsage: null,
       messageCount: 0,
+      mcpFailedServers: [],
     };
 
     const result = command.execute("", callbacks);

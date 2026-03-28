@@ -162,6 +162,81 @@ describe("McpManager", () => {
 
       expect(mockClient.initialize).toHaveBeenCalled();
     });
+
+    it("returns failed server names without blocking others", async () => {
+      let callCount = 0;
+      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
+      vi.mocked(McpClient).mockImplementation(function () {
+        callCount++;
+        const client = createMockClient();
+        if (callCount === 1) {
+          client.initialize.mockRejectedValue(new Error("connect failed"));
+        }
+        return client;
+      } as never);
+
+      const manager = new McpManager();
+      const failures = await manager.startAll({
+        broken: { transport: "stdio", command: "bad", args: [] },
+        working: { transport: "stdio", command: "good", args: [] },
+      });
+
+      expect(failures).toEqual(["broken"]);
+      expect(manager.getServerNames()).toEqual(["working"]);
+    });
+
+    it("returns empty array when all servers connect", async () => {
+      const manager = new McpManager();
+      const failures = await manager.startAll({
+        fs: { transport: "stdio", command: "cmd", args: [] },
+      });
+
+      expect(failures).toEqual([]);
+    });
+  });
+
+  describe("isServerFailed", () => {
+    it("returns true for servers that failed to connect", async () => {
+      const mockClient = createMockClient();
+      mockClient.initialize.mockRejectedValue(new Error("nope"));
+      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
+      vi.mocked(McpClient).mockImplementation(function () {
+        return mockClient;
+      } as never);
+
+      const manager = new McpManager();
+      await manager.startAll({
+        broken: { transport: "stdio", command: "bad", args: [] },
+      });
+
+      expect(manager.isServerFailed("broken")).toBe(true);
+    });
+
+    it("returns false for connected servers", async () => {
+      const manager = new McpManager();
+      await manager.startAll({
+        ok: { transport: "stdio", command: "cmd", args: [] },
+      });
+
+      expect(manager.isServerFailed("ok")).toBe(false);
+    });
+
+    it("returns false after shutdown", async () => {
+      const mockClient = createMockClient();
+      mockClient.initialize.mockRejectedValue(new Error("nope"));
+      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
+      vi.mocked(McpClient).mockImplementation(function () {
+        return mockClient;
+      } as never);
+
+      const manager = new McpManager();
+      await manager.startAll({
+        broken: { transport: "stdio", command: "bad", args: [] },
+      });
+      manager.shutdown();
+
+      expect(manager.isServerFailed("broken")).toBe(false);
+    });
   });
 
   describe("getToolDefinitions", () => {
@@ -366,6 +441,35 @@ describe("McpManager", () => {
     });
   });
 
+  describe("getServerNames", () => {
+    it("returns names of connected servers", async () => {
+      const manager = new McpManager();
+      await manager.startAll({
+        alpha: { transport: "stdio", command: "cmd1", args: [] },
+        beta: { transport: "stdio", command: "cmd2", args: [] },
+      });
+
+      const names = manager.getServerNames();
+      expect(names).toContain("alpha");
+      expect(names).toContain("beta");
+      expect(names).toHaveLength(2);
+    });
+
+    it("returns empty array when no servers", () => {
+      const manager = new McpManager();
+      expect(manager.getServerNames()).toEqual([]);
+    });
+
+    it("returns empty array after shutdown", async () => {
+      const manager = new McpManager();
+      await manager.startAll({
+        fs: { transport: "stdio", command: "cmd", args: [] },
+      });
+      manager.shutdown();
+      expect(manager.getServerNames()).toEqual([]);
+    });
+  });
+
   describe("shutdown", () => {
     it("closes all clients", async () => {
       const mockClient = createMockClient();
@@ -393,58 +497,6 @@ describe("McpManager", () => {
 
       const definitions = await manager.getToolDefinitions();
       expect(definitions).toHaveLength(0);
-    });
-
-    it("clears auto-approve settings after shutdown", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: {
-          transport: "stdio",
-          command: "cmd",
-          args: [],
-          autoApprove: true,
-        },
-      });
-
-      expect(manager.isAutoApproved("mcp__fs__tool")).toBe(true);
-      manager.shutdown();
-      expect(manager.isAutoApproved("mcp__fs__tool")).toBe(false);
-    });
-  });
-
-  describe("isAutoApproved", () => {
-    it("returns true for auto-approved servers", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        trusted: {
-          transport: "stdio",
-          command: "cmd",
-          args: [],
-          autoApprove: true,
-        },
-      });
-
-      expect(manager.isAutoApproved("mcp__trusted__any_tool")).toBe(true);
-    });
-
-    it("returns false for servers without autoApprove", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        untrusted: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      expect(manager.isAutoApproved("mcp__untrusted__any_tool")).toBe(false);
-    });
-
-    it("returns false for non-MCP tool names", () => {
-      const manager = new McpManager();
-      expect(manager.isAutoApproved("read_file")).toBe(false);
-    });
-
-    it("returns false for unknown servers", async () => {
-      const manager = new McpManager();
-      await manager.startAll({});
-      expect(manager.isAutoApproved("mcp__unknown__tool")).toBe(false);
     });
   });
 });

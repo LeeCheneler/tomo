@@ -41,29 +41,26 @@ export function decodeToolName(
  */
 export class McpManager {
   private clients = new Map<string, McpClient>();
-  private autoApproveServers = new Set<string>();
+  private failedServerNames = new Set<string>();
 
-  /** Start all configured MCP servers and perform initialize handshakes. */
-  async startAll(servers: Record<string, McpServerConfig>): Promise<void> {
+  /** Start all configured MCP servers independently. Returns names of servers that failed to connect. */
+  async startAll(servers: Record<string, McpServerConfig>): Promise<string[]> {
+    const failures: string[] = [];
     const entries = Object.entries(servers);
     await Promise.all(
       entries.map(async ([name, config]) => {
-        const transport = createTransport(config);
-        const client = new McpClient(transport);
-        await client.initialize();
-        this.clients.set(name, client);
-        if (config.autoApprove === true) {
-          this.autoApproveServers.add(name);
+        try {
+          const transport = createTransport(config);
+          const client = new McpClient(transport);
+          await client.initialize();
+          this.clients.set(name, client);
+        } catch {
+          failures.push(name);
+          this.failedServerNames.add(name);
         }
       }),
     );
-  }
-
-  /** Returns true if the server is configured to auto-approve tool calls. */
-  isAutoApproved(namespacedName: string): boolean {
-    const decoded = decodeToolName(namespacedName);
-    if (!decoded) return false;
-    return this.autoApproveServers.has(decoded.serverName);
+    return failures;
   }
 
   /** Get tool definitions from all servers, namespaced and in ToolDefinition format. */
@@ -106,6 +103,16 @@ export class McpManager {
       .join("\n");
   }
 
+  /** Returns true if the server failed to connect. */
+  isServerFailed(name: string): boolean {
+    return this.failedServerNames.has(name);
+  }
+
+  /** Returns the names of all connected servers. */
+  getServerNames(): string[] {
+    return [...this.clients.keys()];
+  }
+
   /** Check if a tool name is an MCP-namespaced tool. */
   isMcpTool(name: string): boolean {
     return decodeToolName(name) !== null;
@@ -117,6 +124,6 @@ export class McpManager {
       client.close();
     }
     this.clients.clear();
-    this.autoApproveServers.clear();
+    this.failedServerNames.clear();
   }
 }

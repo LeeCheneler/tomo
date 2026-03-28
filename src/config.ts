@@ -45,14 +45,14 @@ const mcpStdioServerSchema = z.object({
   command: z.string().min(1, "command is required"),
   args: z.array(z.string()).default([]),
   env: z.record(z.string(), z.string()).optional(),
-  autoApprove: z.boolean().optional(),
+  enabled: z.boolean().optional(),
 });
 
 const mcpHttpServerSchema = z.object({
   transport: z.literal("http"),
   url: z.string().url("url must be a valid URL"),
   headers: z.record(z.string(), z.string()).optional(),
-  autoApprove: z.boolean().optional(),
+  enabled: z.boolean().optional(),
 });
 
 const mcpServerSchema = z.discriminatedUnion("transport", [
@@ -96,14 +96,22 @@ export function getAgentsConfig(config: Config): AgentsConfig {
   return { ...DEFAULT_AGENTS_CONFIG, ...config.agents };
 }
 
-/** Returns MCP server configs with env vars substituted, or empty record if none configured. */
+/** Returns enabled MCP server configs with env vars substituted, or empty record if none configured. */
 export function getMcpServers(config: Config): Record<string, McpServerConfig> {
   if (!config.mcpServers) return {};
   const result: Record<string, McpServerConfig> = {};
   for (const [name, server] of Object.entries(config.mcpServers)) {
+    if (server.enabled === false) continue;
     result[name] = substituteEnvVarsDeep(server) as McpServerConfig;
   }
   return result;
+}
+
+/** Returns all MCP server configs (including disabled) without env var substitution. */
+export function getAllMcpServers(
+  config: Config,
+): Record<string, McpServerConfig> {
+  return config.mcpServers ?? {};
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -297,6 +305,36 @@ export function addAllowedCommand(command: string): void {
 export function updateLocalAllowedCommands(commands: string[]): void {
   updateConfigFile(localConfigPath(), (raw) => {
     raw.allowed_commands = commands;
+  });
+}
+
+/** Adds an MCP server to the global config. */
+export function addMcpServer(name: string, server: McpServerConfig): void {
+  updateConfigFile(globalConfigPath(), (raw) => {
+    const servers = (raw.mcpServers as Record<string, unknown>) ?? {};
+    servers[name] = server;
+    raw.mcpServers = servers;
+  });
+}
+
+/** Removes an MCP server from the global config. */
+export function removeMcpServer(name: string): void {
+  updateConfigFile(globalConfigPath(), (raw) => {
+    const servers = (raw.mcpServers as Record<string, unknown>) ?? {};
+    delete servers[name];
+    raw.mcpServers = servers;
+  });
+}
+
+/** Updates the enabled state of an MCP server in the global config. */
+export function updateMcpServerEnabled(name: string, enabled: boolean): void {
+  updateConfigFile(globalConfigPath(), (raw) => {
+    const servers =
+      (raw.mcpServers as Record<string, Record<string, unknown>>) ?? {};
+    if (servers[name]) {
+      servers[name].enabled = enabled;
+      raw.mcpServers = servers;
+    }
   });
 }
 

@@ -10,14 +10,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 import {
   addAllowedCommand,
+  addMcpServer,
   addProvider,
   type Config,
   getActiveProvider,
+  getAllMcpServers,
   getAllowedCommands,
   getMcpServers,
   loadConfig,
+  removeMcpServer,
   removeProvider,
   updateActiveModel,
+  updateMcpServerEnabled,
 } from "./config";
 
 const tmpDir = resolve(import.meta.dirname, "../.test-config-tmp");
@@ -507,47 +511,6 @@ mcpServers:
     }
   });
 
-  it("defaults autoApprove to undefined when not set", () => {
-    writeYaml(
-      globalPath,
-      `
-activeProvider: ""
-activeModel: ""
-maxTokens: 8192
-providers: []
-mcpServers:
-  simple:
-    transport: stdio
-    command: my-server
-`,
-    );
-    const config = loadConfig();
-    const server = config.mcpServers?.simple;
-    expect(server).toBeDefined();
-    expect(server?.autoApprove).toBeUndefined();
-  });
-
-  it("loads autoApprove when set to true", () => {
-    writeYaml(
-      globalPath,
-      `
-activeProvider: ""
-activeModel: ""
-maxTokens: 8192
-providers: []
-mcpServers:
-  trusted:
-    transport: stdio
-    command: my-server
-    autoApprove: true
-`,
-    );
-    const config = loadConfig();
-    const server = config.mcpServers?.trusted;
-    expect(server).toBeDefined();
-    expect(server?.autoApprove).toBe(true);
-  });
-
   it("loads stdio server with env vars", () => {
     writeYaml(
       globalPath,
@@ -830,5 +793,151 @@ describe("getMcpServers", () => {
       expect(servers.fs.args).toEqual(["-y", "server-fs", "/home/user/data"]);
     }
     delete process.env.TEST_MCP_PATH;
+  });
+
+  it("filters out disabled servers", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        enabled: {
+          transport: "stdio" as const,
+          command: "cmd1",
+          args: [],
+        },
+        disabled: {
+          transport: "stdio" as const,
+          command: "cmd2",
+          args: [],
+          enabled: false,
+        },
+      },
+    };
+    const servers = getMcpServers(config);
+    expect(Object.keys(servers)).toEqual(["enabled"]);
+  });
+});
+
+describe("getAllMcpServers", () => {
+  it("returns all servers including disabled", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+      mcpServers: {
+        enabled: {
+          transport: "stdio" as const,
+          command: "cmd1",
+          args: [],
+        },
+        disabled: {
+          transport: "stdio" as const,
+          command: "cmd2",
+          args: [],
+          enabled: false,
+        },
+      },
+    };
+    const servers = getAllMcpServers(config);
+    expect(Object.keys(servers)).toEqual(["enabled", "disabled"]);
+  });
+
+  it("returns empty record when no servers configured", () => {
+    const config: Config = {
+      activeProvider: "",
+      activeModel: "",
+      maxTokens: 8192,
+      providers: [],
+    };
+    expect(getAllMcpServers(config)).toEqual({});
+  });
+});
+
+describe("addMcpServer", () => {
+  it("adds a server to the global config", () => {
+    loadConfig(); // create default
+    addMcpServer("test-server", {
+      transport: "http",
+      url: "https://mcp.example.com",
+    });
+    const config = loadConfig();
+    expect(config.mcpServers?.["test-server"]).toBeDefined();
+    expect(config.mcpServers?.["test-server"]?.transport).toBe("http");
+  });
+});
+
+describe("removeMcpServer", () => {
+  it("removes a server from the global config", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  server1:
+    transport: stdio
+    command: cmd1
+  server2:
+    transport: stdio
+    command: cmd2
+`,
+    );
+    removeMcpServer("server1");
+    const config = loadConfig();
+    expect(config.mcpServers?.server1).toBeUndefined();
+    expect(config.mcpServers?.server2).toBeDefined();
+  });
+});
+
+describe("updateMcpServerEnabled", () => {
+  it("sets enabled to false", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  server1:
+    transport: stdio
+    command: cmd1
+`,
+    );
+    updateMcpServerEnabled("server1", false);
+    const config = loadConfig();
+    expect(config.mcpServers?.server1?.enabled).toBe(false);
+  });
+
+  it("sets enabled to true", () => {
+    writeYaml(
+      globalPath,
+      `
+activeProvider: ""
+activeModel: ""
+maxTokens: 8192
+providers: []
+mcpServers:
+  server1:
+    transport: stdio
+    command: cmd1
+    enabled: false
+`,
+    );
+    updateMcpServerEnabled("server1", true);
+    const config = loadConfig();
+    expect(config.mcpServers?.server1?.enabled).toBe(true);
+  });
+
+  it("is a no-op for unknown servers", () => {
+    loadConfig(); // create default
+    updateMcpServerEnabled("nonexistent", false);
+    const config = loadConfig();
+    expect(config.mcpServers).toBeUndefined();
   });
 });

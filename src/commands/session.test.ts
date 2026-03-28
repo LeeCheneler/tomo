@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import type { Command } from "./types";
+import { describe, expect, it, vi } from "vitest";
 import { getCommand } from "./registry";
+import type { Command } from "./types";
 import "./session";
 
 const mockCallbacks = () => ({
@@ -21,6 +21,7 @@ const mockCallbacks = () => ({
   maxTokens: 8192,
   tokenUsage: null,
   messageCount: 0,
+  mcpFailedServers: [],
 });
 
 describe("/session command", () => {
