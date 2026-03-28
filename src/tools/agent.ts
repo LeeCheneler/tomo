@@ -2,7 +2,7 @@ import { z } from "zod";
 import { runCompletionLoop } from "../completion-loop";
 import { type AgentsConfig, getAgentsConfig, loadConfig } from "../config";
 import { getErrorMessage } from "../errors";
-import { loadInstructions } from "../instructions";
+import { loadSubAgentInstructions } from "../instructions";
 import type { ChatMessage } from "../provider/client";
 import { addAgent, incrementToolCalls, removeAgent } from "./agent-tracker";
 import { getTool, registerTool } from "./registry";
@@ -15,8 +15,7 @@ const argsSchema = z.object({
 
 /** Builds the scoped system prompt for a sub-agent. */
 function buildSubAgentSystemPrompt(): string {
-  const base = loadInstructions() ?? "";
-  return `${base}\n\nYou are a sub-agent spawned to handle a specific task. Work autonomously using the tools available to you. When your task is complete, produce a clear, concise summary of your findings or results.`;
+  return loadSubAgentInstructions();
 }
 
 /** Builds tool definitions for the sub-agent from the configured allowlist. */
@@ -57,7 +56,16 @@ function buildDescription(): string {
   const mins = Math.round(agentsConfig.timeoutSeconds / 60);
   const timeoutLabel =
     mins >= 1 ? `${mins}-minute` : `${agentsConfig.timeoutSeconds}-second`;
-  return `Spawn a sub-agent to autonomously research, explore, or analyse. The sub-agent has access to read-only tools (read_file, glob, grep, web_search, skill) and returns a summary when done. For multi-faceted tasks, call this tool multiple times in the same response — each agent runs in parallel. For example, if asked to investigate tech, quality, and docs, spawn three separate agents, one per topic. Each agent has a default ${timeoutLabel} timeout which is sufficient for most tasks. Do NOT set a timeout unless you specifically need to cut an agent short (e.g. a quick check that should fail fast). Omit timeout to use the default.`;
+  return `Spawn a sub-agent that autonomously researches, explores, or analyses. The sub-agent has access to read-only tools (read_file, glob, grep, web_search, skill) and returns a text summary when done. It cannot edit files, write files, or run commands.
+
+When to use sub-agents vs direct tools:
+- For a single, targeted search (find a file, grep for a symbol) — use glob or grep directly, it's faster.
+- For broader exploration (understand a module, investigate an issue, map dependencies) — spawn a sub-agent.
+- For multi-faceted research — spawn multiple sub-agents in a single response. Each runs in parallel.
+
+Example: to investigate how auth, logging, and routing work, spawn three agents, one per topic, in the same response.
+
+Each agent has a default ${timeoutLabel} timeout which is sufficient for most tasks. Do NOT set a timeout unless you specifically need to cut an agent short. Omit timeout to use the default.`;
 }
 
 registerTool({

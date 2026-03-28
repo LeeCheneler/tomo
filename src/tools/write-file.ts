@@ -27,8 +27,12 @@ function performWrite(filePath: string, content: string): string {
 registerTool({
   name: "write_file",
   displayName: "Write File",
-  description:
-    "Write content to a file. Creates parent directories if needed. The user will be prompted to approve or deny before writing.",
+  description: `Write content to a file, creating it if it doesn't exist or overwriting it completely if it does. Parent directories are created automatically.
+
+- For modifying existing files, prefer edit_file — it is safer and only changes what needs to change.
+- Only use write_file for creating new files or when the changes are so extensive that edit_file would be impractical.
+- You MUST read an existing file before overwriting it, to understand what you are replacing.
+- Do not use shell commands like echo or cat heredocs to write files — use this tool instead.`,
   parameters: {
     type: "object",
     properties: {

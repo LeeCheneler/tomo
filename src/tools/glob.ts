@@ -19,8 +19,17 @@ const argsSchema = z.object({
 registerTool({
   name: "glob",
   displayName: "Glob",
-  description:
-    "Find files matching a glob pattern. Returns matching file paths, one per line. By default, gitignored files are excluded.",
+  description: `Find files matching a glob pattern. Returns matching file paths, one per line.
+
+Pattern examples:
+- "**/*.ts" — all TypeScript files recursively
+- "src/**/*.test.ts" — test files under src/
+- "*.json" — JSON files in the search directory
+- "src/**/index.ts" — all index files under src/
+
+Respects .gitignore by default (set gitignore to false to include ignored files). Returns "No files matched the pattern." when nothing matches.
+
+Use this tool instead of shell commands like find or ls. For searching file *contents* use grep instead.`,
   parameters: {
     type: "object",
     properties: {

@@ -27,8 +27,19 @@ function performEdit(filePath: string, content: string): string {
 registerTool({
   name: "edit_file",
   displayName: "Edit File",
-  description:
-    "Make an incremental edit to an existing file by replacing a specific string. The old_string must be unique within the file. The user will be prompted to approve or deny before writing.",
+  description: `Make a targeted edit to a file by replacing an exact string match. The old_string must appear exactly once in the file.
+
+CRITICAL — old_string must be an exact, character-for-character match:
+- Copy the text precisely from the file content you read — do not type it from memory.
+- Preserve all whitespace exactly: indentation (tabs vs spaces), trailing spaces, and blank lines.
+- Do NOT include line number prefixes (e.g. "  42 | ") from read_file output — those are not part of the file.
+- old_string and new_string must be different.
+
+If the edit fails:
+- "old_string not found" — Re-read the file and copy the exact text again. Do not retry from memory.
+- "old_string found N times" — Include more surrounding lines in old_string to make it unique.
+
+To delete text, set new_string to an empty string. Prefer this tool over write_file for modifications — only use write_file when creating new files or performing a complete rewrite.`,
   parameters: {
     type: "object",
     properties: {

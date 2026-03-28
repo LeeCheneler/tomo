@@ -12,8 +12,11 @@ const argsSchema = z.object({
 registerTool({
   name: "ask",
   displayName: "Ask",
-  description:
-    "Ask the user a multiple-choice question. Use this when you need clarification or want the user to choose between options.",
+  description: `Present the user with a multiple-choice question and return their selection.
+
+- Use sparingly — only when you genuinely need the user to choose between meaningfully different options.
+- Do not ask for confirmation on routine actions. Do not ask questions you can resolve by reading the codebase.
+- Provide clear, distinct options. The returned value is the exact option string the user selected.`,
   parameters: {
     type: "object",
     properties: {

@@ -11,8 +11,11 @@ const argsSchema = z.object({
 registerTool({
   name: "web_search",
   displayName: "Web Search",
-  description:
-    "Search the web for current information. Returns titles, URLs, and snippets from search results.",
+  description: `Search the web for current information. Returns up to 5 results with titles, URLs, and content snippets.
+
+- Use for information that is not available in the codebase: library documentation, API references, error messages, recent changes.
+- Do not use for questions answerable from the code itself — use grep or read_file instead.
+- Requires a TAVILY_API_KEY environment variable to be configured.`,
   parameters: {
     type: "object",
     properties: {

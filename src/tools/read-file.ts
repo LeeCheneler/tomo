@@ -67,7 +67,13 @@ function readFile(
 registerTool({
   name: "read_file",
   displayName: "Read File",
-  description: "Read the contents of a file. Returns the file content as text.",
+  description: `Read the contents of a file at the given path. Returns the file content with numbered lines in the format "  42 | content".
+
+- Files over ${MAX_LINES} lines are automatically truncated. Use startLine and endLine to read specific ranges of large files.
+- You MUST read a file before editing or overwriting it. Never edit a file you have not read in the current conversation.
+- Use this tool instead of shell commands like cat, head, or tail.
+- Cannot read directories — use glob to list directory contents instead.
+- The line number prefix (e.g. "  42 | ") is display formatting only and is NOT part of the actual file content. When using file content in other tools, strip the prefix.`,
   parameters: {
     type: "object",
     properties: {

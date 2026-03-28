@@ -19,8 +19,19 @@ const argsSchema = z.object({
 registerTool({
   name: "grep",
   displayName: "Grep",
-  description:
-    "Search file contents by pattern. Returns matching lines with file paths and line numbers. By default, gitignored files are excluded.",
+  description: `Search file contents using regex patterns. Returns matching lines in the format "file:line_number:content".
+
+- Supports full regex syntax (e.g. "TODO", "function\\s+\\w+", "import.*from").
+- Use the include parameter to filter by file type (e.g. "*.ts", "*.{ts,tsx}").
+- Respects .gitignore by default (set gitignore to false to include ignored files).
+- Returns "No matches found." when nothing matches.
+
+Use this tool instead of shell commands like grep or rg. For finding files by *name* use glob instead.
+
+Effective search patterns:
+- Find definitions: "function\\s+methodName", "class\\s+ClassName", "const\\s+varName"
+- Find imports: "import.*moduleName"
+- Find usages: "methodName\\("`,
   parameters: {
     type: "object",
     properties: {
