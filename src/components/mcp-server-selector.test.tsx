@@ -396,7 +396,7 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r"); // submit URL
       await flush();
-      stdin.write("\r"); // skip API key (empty)
+      stdin.write("\r"); // confirm headers (none)
       await flush();
       await flush(); // extra flush for async connect
       await flush();
@@ -439,7 +439,7 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r"); // submit URL
       await flush();
-      stdin.write("\r"); // skip API key
+      stdin.write("\r"); // confirm headers (none)
       await flush();
       await flush();
       await flush();
@@ -476,7 +476,7 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r"); // submit URL
       await flush();
-      stdin.write("\r"); // skip API key
+      stdin.write("\r"); // confirm headers (none)
       await flush();
       await flush();
       await flush();
@@ -517,7 +517,7 @@ describe("McpServerSelector", () => {
       });
     });
 
-    it("shows API key prompt after URL entry", async () => {
+    it("shows header configurator after URL entry", async () => {
       const { stdin, lastFrame } = renderMcp();
 
       stdin.write("\r"); // Add
@@ -530,13 +530,14 @@ describe("McpServerSelector", () => {
       await flush();
 
       const output = lastFrame() ?? "";
-      expect(output).toContain("Enter API key");
-      expect(output).toContain("leave empty to skip");
+      expect(output).toContain("Headers");
+      expect(output).toContain("a add");
+      expect(output).toContain("No headers configured");
       // biome-ignore lint/suspicious/noTemplateCurlyInString: testing literal output
       expect(output).toContain("${VAR}");
     });
 
-    it("masks API key input with asterisks", async () => {
+    it("adds a header via key/value prompts", async () => {
       const { stdin, lastFrame } = renderMcp();
 
       stdin.write("\r"); // Add
@@ -547,15 +548,28 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r"); // submit URL
       await flush();
-      stdin.write("secret123");
+      // Now on addHeaders — press 'a' to add
+      stdin.write("a");
+      await flush();
+      expect(lastFrame()).toContain("Enter header name");
+      stdin.write("Authorization");
+      await flush();
+      stdin.write("\r"); // submit key
+      await flush();
+      expect(lastFrame()).toContain("Enter value for Authorization");
+      stdin.write("Bearer my-secret");
+      await flush();
+      stdin.write("\r"); // submit value
       await flush();
 
+      // Back on addHeaders — should show the header
       const output = lastFrame() ?? "";
-      expect(output).toContain("*********");
-      expect(output).not.toContain("secret123");
+      expect(output).toContain("Authorization");
+      expect(output).not.toContain("Bearer my-secret");
+      expect(output).toContain("****************");
     });
 
-    it("stores API key as Authorization Bearer header", async () => {
+    it("stores headers from configurator", async () => {
       setupMockClient("auth-server", []);
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({ onUpdate });
@@ -568,9 +582,19 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r"); // submit URL
       await flush();
-      stdin.write("my-secret-key");
+      // Add a header
+      stdin.write("a");
       await flush();
-      stdin.write("\r"); // submit API key
+      stdin.write("X-API-Key");
+      await flush();
+      stdin.write("\r"); // submit key
+      await flush();
+      stdin.write("secret-123");
+      await flush();
+      stdin.write("\r"); // submit value
+      await flush();
+      // Confirm headers
+      stdin.write("\r");
       await flush();
       await flush();
       await flush();
@@ -580,13 +604,214 @@ describe("McpServerSelector", () => {
           "auth-server": expect.objectContaining({
             transport: "http",
             url: "https://mcp.example.com",
-            headers: { Authorization: "Bearer my-secret-key" },
+            headers: { "X-API-Key": "secret-123" },
           }),
         },
       });
     });
 
-    it("skips headers when API key is empty", async () => {
+    it("stores multiple headers", async () => {
+      setupMockClient("multi-header-server", []);
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({ onUpdate });
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\r"); // http
+      await flush();
+      stdin.write("mcp.example.com");
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+      // Add first header
+      stdin.write("a");
+      await flush();
+      stdin.write("Authorization");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      stdin.write("Bearer token1");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Add second header
+      stdin.write("a");
+      await flush();
+      stdin.write("X-Custom");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      stdin.write("custom-value");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Confirm
+      stdin.write("\r");
+      await flush();
+      await flush();
+      await flush();
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: {
+          "multi-header-server": expect.objectContaining({
+            headers: {
+              Authorization: "Bearer token1",
+              "X-Custom": "custom-value",
+            },
+          }),
+        },
+      });
+    });
+
+    it("deletes a header with d", async () => {
+      const { stdin, lastFrame } = renderMcp();
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\r"); // http
+      await flush();
+      stdin.write("mcp.example.com");
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+      // Add a header
+      stdin.write("a");
+      await flush();
+      stdin.write("Authorization");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      stdin.write("Bearer token");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(lastFrame()).toContain("Authorization");
+      // Delete it
+      stdin.write("d");
+      await flush();
+      expect(lastFrame()).toContain("No headers configured");
+    });
+
+    it("edits an existing header value with e", async () => {
+      const { stdin, lastFrame } = renderMcp();
+
+      stdin.write("\r"); // Add
+      await flush();
+      stdin.write("\r"); // http
+      await flush();
+      stdin.write("mcp.example.com");
+      await flush();
+      stdin.write("\r"); // submit URL
+      await flush();
+      // Add a header
+      stdin.write("a");
+      await flush();
+      stdin.write("Authorization");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      stdin.write("old-value");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      expect(lastFrame()).toContain("Authorization");
+      // Edit it — press e, clear old value, type new
+      stdin.write("e");
+      await flush();
+      expect(lastFrame()).toContain("Enter value for Authorization");
+      // Clear pre-filled value with backspace
+      for (let i = 0; i < "old-value".length; i++) {
+        stdin.write("\x7f");
+        await flush();
+      }
+      stdin.write("new-value");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Back on addHeaders — value length should match "new-value" (9 asterisks)
+      const output = lastFrame() ?? "";
+      expect(output).toContain("Authorization");
+      expect(output).toContain("*********");
+    });
+
+    it("edits headers on an existing server with e from server list", async () => {
+      const onUpdate = vi.fn();
+      const { stdin, lastFrame } = renderMcp({
+        mcpServers: {
+          "my-server": {
+            transport: "http",
+            url: "https://mcp.example.com",
+            headers: { Authorization: "Bearer old-token" },
+            tools: [{ name: "tool1", enabled: true }],
+          },
+        },
+        onUpdate,
+      });
+
+      // Press e to edit headers
+      stdin.write("e");
+      await flush();
+      expect(lastFrame()).toContain("Headers");
+      expect(lastFrame()).toContain("Authorization");
+      // Add a new header
+      stdin.write("a");
+      await flush();
+      stdin.write("X-Custom");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      stdin.write("custom-val");
+      await flush();
+      stdin.write("\r");
+      await flush();
+      // Confirm
+      stdin.write("\r");
+      await flush();
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: expect.objectContaining({
+          "my-server": expect.objectContaining({
+            transport: "http",
+            url: "https://mcp.example.com",
+            headers: {
+              Authorization: "Bearer old-token",
+              "X-Custom": "custom-val",
+            },
+          }),
+        }),
+      });
+    });
+
+    it("removes all headers from an existing server", async () => {
+      const onUpdate = vi.fn();
+      const { stdin } = renderMcp({
+        mcpServers: {
+          "my-server": {
+            transport: "http",
+            url: "https://mcp.example.com",
+            headers: { Authorization: "Bearer old-token" },
+          },
+        },
+        onUpdate,
+      });
+
+      // Press e to edit headers
+      stdin.write("e");
+      await flush();
+      // Delete the header
+      stdin.write("d");
+      await flush();
+      // Confirm (empty headers)
+      stdin.write("\r");
+      await flush();
+
+      const config = onUpdate.mock.calls[0][0].mcpServers["my-server"];
+      expect(config.headers).toBeUndefined();
+      // Ensure the key isn't present at all
+      expect("headers" in config).toBe(false);
+    });
+
+    it("skips headers when none are added", async () => {
       setupMockClient("no-auth-server", []);
       const onUpdate = vi.fn();
       const { stdin } = renderMcp({ onUpdate });
@@ -599,7 +824,7 @@ describe("McpServerSelector", () => {
       await flush();
       stdin.write("\r"); // submit URL
       await flush();
-      stdin.write("\r"); // skip API key (empty)
+      stdin.write("\r"); // confirm headers (none)
       await flush();
       await flush();
       await flush();
