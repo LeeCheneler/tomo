@@ -2,7 +2,7 @@ import { z } from "zod";
 import { runCompletionLoop } from "../completion-loop";
 import { type AgentsConfig, getAgentsConfig, loadConfig } from "../config";
 import { getErrorMessage } from "../errors";
-import { loadInstructions } from "../instructions";
+import { loadSubAgentInstructions } from "../instructions";
 import type { ChatMessage } from "../provider/client";
 import { addAgent, incrementToolCalls, removeAgent } from "./agent-tracker";
 import { getTool, registerTool } from "./registry";
@@ -15,8 +15,7 @@ const argsSchema = z.object({
 
 /** Builds the scoped system prompt for a sub-agent. */
 function buildSubAgentSystemPrompt(): string {
-  const base = loadInstructions() ?? "";
-  return `${base}\n\nYou are a sub-agent spawned to handle a specific task. Work autonomously using the tools available to you. When your task is complete, produce a clear, concise summary of your findings or results.`;
+  return loadSubAgentInstructions();
 }
 
 /** Builds tool definitions for the sub-agent from the configured allowlist. */

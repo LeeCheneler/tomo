@@ -130,14 +130,21 @@ export function loadInstructions(): string | null {
 
   const local = findAcrossDirs(localDirs);
 
+  const toolUsage = getToolUsageGuidance();
+
   if (local) {
     const root = findSpecificAcrossDirs(rootDirs, local.filename);
-    if (root) return `${header}\n\n${root}\n\n---\n\n${local.content}`;
-    return `${header}\n\n${local.content}`;
+    if (root)
+      return appendSkillsNotice(
+        `${header}\n\n${root}\n\n---\n\n${local.content}\n\n${toolUsage}`,
+      );
+    return appendSkillsNotice(`${header}\n\n${local.content}\n\n${toolUsage}`);
   }
 
   const root = findAcrossDirs(rootDirs);
-  const base = root ? `${header}\n\n${root.content}` : header;
+  const base = root
+    ? `${header}\n\n${root.content}\n\n${toolUsage}`
+    : `${header}\n\n${toolUsage}`;
 
   return appendSkillsNotice(base);
 }
@@ -149,4 +156,106 @@ function appendSkillsNotice(instructions: string): string {
 
   const list = skills.map((s) => `- ${s.name}: ${s.description}`).join("\n");
   return `${instructions}\n\n## Skills\n\nYou have access to skills — specialized instructions for common tasks. When the user's request matches an available skill, use the skill tool to load its instructions before starting work.\n\nAvailable skills:\n${list}`;
+}
+
+/** Returns tool usage guidance for the main agent system prompt. */
+function getToolUsageGuidance(): string {
+  return `## Using your tools
+
+You have access to tools for reading, writing, searching, and executing commands. Follow these rules to use them effectively.
+
+### Read before you write
+
+You MUST read a file before editing or overwriting it. Do not guess at file contents — read first, then modify. This applies to both edit_file and write_file.
+
+### Use dedicated tools, not shell commands
+
+Do NOT use run_command for tasks that have dedicated tools. Dedicated tools are faster, safer, and produce better-structured output.
+
+- Reading files → use read_file (not cat, head, tail, or less)
+- Editing files → use edit_file (not sed, awk, or perl)
+- Creating files → use write_file (not echo, printf, or cat heredocs)
+- Finding files by name → use glob (not find or ls)
+- Searching file contents → use grep (not grep, rg, or git grep)
+
+Reserve run_command for operations that have no dedicated tool: running tests, builds, linters, git commands, and package managers.
+
+### Parallel tool calls
+
+When you need to make multiple tool calls that are independent of each other, make them all in the same response. This runs them in parallel and is significantly faster.
+
+Good candidates for parallel calls:
+- Reading multiple files at once
+- Running glob and grep searches simultaneously
+- Spawning multiple sub-agents for different research topics
+
+Do NOT parallelise calls that depend on each other — if you need the result of one call to inform another, run them sequentially.
+
+### Codebase exploration
+
+Match your approach to the scope of the search:
+
+1. **Targeted search** (find a specific file, function, or string): Use glob or grep directly. This is fast and precise.
+2. **Scoped investigation** (understand how a module works, trace a data flow): Read a few key files. Use grep to find references, then read_file to understand context.
+3. **Broad exploration** (map an unfamiliar codebase, investigate a cross-cutting concern): Spawn one or more sub-agents. Each agent can independently explore a facet of the question using read-only tools.
+
+Start with the simplest approach. Only escalate to sub-agents when direct tool use would require too many sequential calls.
+
+### Making edits that succeed
+
+The edit_file tool requires old_string to exactly match text in the file. Most edit failures come from the model generating old_string from memory instead of from the file. To avoid this:
+
+1. Always read the file first with read_file.
+2. Copy the exact text from the read output — do not retype it.
+3. Strip line number prefixes (e.g. "  42 | ") — they are not part of the file.
+4. Preserve all whitespace exactly: indentation, tabs vs spaces, trailing spaces, blank lines.
+5. If an edit fails with "old_string not found", re-read the file and try again with the exact text. Do not retry the same string.`;
+}
+
+/**
+ * Builds a standalone system prompt for sub-agents.
+ * Sub-agents get system info and git context for awareness, but not user
+ * instruction files or skills — those contain write/workflow guidance that
+ * is irrelevant and potentially confusing for a read-only research agent.
+ */
+export function loadSubAgentInstructions(): string {
+  const systemInfo = getSystemInfo();
+  const gitContext = getGitContext();
+  const header = gitContext ? `${systemInfo}\n\n${gitContext}` : systemInfo;
+
+  return `${header}
+
+You are a read-only research sub-agent. Your job is to explore the codebase, gather information, and return a clear summary of your findings. You cannot modify files, run commands, or interact with the user.
+
+## Using your tools
+
+You have access to: read_file, glob, grep, web_search, and skill.
+
+### Exploration strategy
+
+Match your approach to what you need to find:
+
+1. **Find files by name or pattern**: Use glob with patterns like "**/*.ts" or "src/**/index.ts".
+2. **Find content in files**: Use grep with regex patterns like "functionName", "import.*module".
+3. **Read and understand files**: Use read_file. Files over 500 lines are truncated — use startLine and endLine for large files.
+4. **Look up external information**: Use web_search for documentation, API references, or error messages not found in the codebase.
+
+### Parallel tool calls
+
+When you need to make multiple tool calls that are independent of each other, make them all in the same response. This runs them in parallel and is significantly faster.
+
+Good candidates for parallel calls:
+- Reading multiple files at once
+- Running glob and grep searches simultaneously
+- Combining a glob search with a grep search to find files by name and content at the same time
+
+Do NOT parallelise calls that depend on each other — if you need the result of one call to inform another, run them sequentially.
+
+### Tips for efficient exploration
+
+- Start with glob or grep to locate relevant files, then read_file to understand them.
+- The line number prefix in read_file output (e.g. "  42 | ") is formatting only — not part of the file content.
+- grep returns results as "file:line_number:content" — use the line numbers to read specific ranges with read_file.
+
+When your task is complete, produce a clear, concise summary of your findings.`;
 }

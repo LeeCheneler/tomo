@@ -8,7 +8,8 @@ vi.mock("../completion-loop", () => ({
 }));
 
 vi.mock("../instructions", () => ({
-  loadInstructions: () => "System info here",
+  loadSubAgentInstructions: () =>
+    "System info here\n\nYou are a read-only research sub-agent.",
 }));
 
 vi.mock("../config", async (importOriginal) => {
@@ -156,7 +157,9 @@ describe("agent tool", () => {
     await tool.execute(JSON.stringify({ prompt: "test" }), makeContext());
 
     const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    expect(opts.systemMessage).toContain("You are a sub-agent");
+    expect(opts.systemMessage).toContain(
+      "You are a read-only research sub-agent",
+    );
   });
 
   it("passes only allowed tools to the sub-agent", async () => {
