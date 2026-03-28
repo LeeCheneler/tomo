@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { type CheckboxItem, CheckboxList } from "./checkbox-list";
+import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
 
 interface PermissionRow {
@@ -68,7 +69,13 @@ export function ToolPermissionsEditor({
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>{"  Tool Permissions (Space toggle, Esc back):"}</Text>
+      <HintBar
+        label="Tool Permissions"
+        hints={[
+          { key: "Space", action: "toggle" },
+          { key: "Esc", action: "back" },
+        ]}
+      />
       <Text>{""}</Text>
       <CheckboxList items={items} cursor={cursor} />
     </Box>

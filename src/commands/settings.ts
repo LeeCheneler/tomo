@@ -43,7 +43,7 @@ function saveSettings(state: SettingsState): void {
 
 const settings: Command = {
   name: "settings",
-  description: "Manage tools, permissions, and command patterns",
+  description: "Manage tools, permissions, commands, and MCP servers",
   execute: (_args, callbacks) => {
     const config = loadConfig();
 

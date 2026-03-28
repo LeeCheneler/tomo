@@ -82,6 +82,48 @@ describe("AllowedCommandsEditor", () => {
     });
   });
 
+  it("Enter on Add row starts add mode", async () => {
+    const onUpdate = vi.fn();
+    const { stdin } = renderEditor({ onUpdate });
+
+    // Navigate to Add row
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\r");
+    await flush();
+    stdin.write("cargo:*");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    expect(onUpdate).toHaveBeenCalledWith({
+      allowedCommands: ["git:*", "npm:*", "cargo:*"],
+    });
+  });
+
+  it("Space on Add row starts add mode", async () => {
+    const onUpdate = vi.fn();
+    const { stdin } = renderEditor({ onUpdate });
+
+    // Navigate to Add row
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write(" ");
+    await flush();
+    stdin.write("cargo:*");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    expect(onUpdate).toHaveBeenCalledWith({
+      allowedCommands: ["git:*", "npm:*", "cargo:*"],
+    });
+  });
+
   it("cancels add with Esc", async () => {
     const onUpdate = vi.fn();
     const onBack = vi.fn();

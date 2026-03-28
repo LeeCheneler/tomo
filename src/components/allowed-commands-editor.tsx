@@ -1,7 +1,9 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 import { useListNavigation } from "../hooks/use-list-navigation";
+import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
+import { TextInput } from "./text-input";
 
 export interface AllowedCommandsEditorProps {
   state: SettingsState;
@@ -40,13 +42,7 @@ export function AllowedCommandsEditor({
         setNewEntry("");
         return;
       }
-      if (key.backspace || key.delete) {
-        setNewEntry((prev) => prev.slice(0, -1));
-        return;
-      }
-      if (input && !key.ctrl && !key.meta) {
-        setNewEntry((prev) => prev + input);
-      }
+      // TextInput component handles text editing via its own useInput
       return;
     }
 
@@ -68,7 +64,11 @@ export function AllowedCommandsEditor({
       if (cursor >= itemCount - 1) {
         setCursor((c) => Math.max(0, c - 1));
       }
-    } else if (input === "a" || input === "A") {
+    } else if (
+      input === "a" ||
+      input === "A" ||
+      ((input === " " || key.return) && isOnAdd)
+    ) {
       setCursor(state.allowedCommands.length);
       setAdding(true);
     }
@@ -76,7 +76,14 @@ export function AllowedCommandsEditor({
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>{"  Allowed Commands (d delete, a add, Esc back):"}</Text>
+      <HintBar
+        label="Allowed Commands"
+        hints={[
+          { key: "d", action: "delete" },
+          { key: "a", action: "add" },
+          { key: "Esc", action: "back" },
+        ]}
+      />
       <Text dimColor>
         {"  Use exact commands (npm test) or prefixes (git:*)"}
       </Text>
@@ -94,11 +101,10 @@ export function AllowedCommandsEditor({
         const isCurrent = cursor === state.allowedCommands.length;
         if (adding) {
           return (
-            <Text color="green">
-              {"    ❯ [+] "}
-              {newEntry}
-              {"█"}
-            </Text>
+            <Box>
+              <Text color="green">{"    ❯ [+] "}</Text>
+              <TextInput value={newEntry} onChange={setNewEntry} />
+            </Box>
           );
         }
         return (

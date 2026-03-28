@@ -14,7 +14,7 @@ describe("/settings command", () => {
   it("has a description", () => {
     const command = getCommand("settings");
     expect(command?.description).toBe(
-      "Manage tools, permissions, and command patterns",
+      "Manage tools, permissions, commands, and MCP servers",
     );
   });
 });

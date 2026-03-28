@@ -1,25 +1,35 @@
 import { Box, Text, useInput } from "ink";
-import { useEffect, useState } from "react";
-import type { McpServerConfig } from "../config";
+import { useEffect, useRef, useState } from "react";
+import type { McpKvEntry, McpServerConfig, McpToolConfig } from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { McpClient } from "../mcp/client";
 import { HttpTransport } from "../mcp/http-transport";
 import { StdioTransport } from "../mcp/stdio-transport";
 import { type CheckboxItem, CheckboxList } from "./checkbox-list";
+import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
+import { TextInput } from "./text-input";
 
-type Step =
-  | "servers"
-  | "serverTools"
-  | "addType"
-  | "addUrl"
-  | "addHeaders"
-  | "addHeaderKey"
-  | "addHeaderValue"
-  | "addCommand"
-  | "connecting";
+type Step = "servers" | "serverForm" | "connecting";
 
-const TRANSPORT_TYPES = ["http", "stdio"] as const;
+type TransportType = "http" | "stdio";
+
+interface KvItem {
+  key: string;
+  value: string;
+  sensitive: boolean;
+}
+
+/** Row types for the unified server form. */
+type FormRow =
+  | { type: "transport" }
+  | { type: "connection" }
+  | { type: "kvSensitive"; index: number }
+  | { type: "kvKey"; index: number }
+  | { type: "kvValue"; index: number }
+  | { type: "kvAdd" }
+  | { type: "tool"; index: number }
+  | { type: "connectAction" };
 
 export interface McpServerSelectorProps {
   state: SettingsState;
@@ -28,7 +38,7 @@ export interface McpServerSelectorProps {
   onBack: () => void;
 }
 
-/** Dedicated MCP server management UI with per-server tool toggles. */
+/** Dedicated MCP server management UI with unified server form. */
 export function McpServerSelector({
   state,
   onUpdate,
@@ -38,38 +48,42 @@ export function McpServerSelector({
   const [step, setStep] = useState<Step>("servers");
   const serverNames = Object.keys(state.mcpServers);
   const [failed, setFailed] = useState<Set<string>>(failedServers ?? new Set());
-  const [textValue, setTextValue] = useState("");
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [pendingConfig, setPendingConfig] = useState<McpServerConfig | null>(
-    null,
-  );
   const [reconnectName, setReconnectName] = useState<string | null>(null);
+
+  // Active server being edited (null = new server form)
   const [activeServer, setActiveServer] = useState<string | null>(null);
-  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
-  const [pendingHeaders, setPendingHeaders] = useState<Record<string, string>>(
-    {},
-  );
-  const [pendingHeaderKey, setPendingHeaderKey] = useState<string | null>(null);
-  const [editingServerName, setEditingServerName] = useState<string | null>(
-    null,
-  );
 
-  const activeTools = activeServer
-    ? (state.mcpServers[activeServer]?.tools ?? [])
-    : [];
+  // Form state
+  const [formTransport, setFormTransport] = useState<TransportType>("http");
+  const [formConnection, setFormConnection] = useState("");
+  const [formKv, setFormKv] = useState<KvItem[]>([]);
+  const [formTools, setFormTools] = useState<McpToolConfig[]>([]);
+  const [formConnected, setFormConnected] = useState(false);
 
-  const headerKeys = Object.keys(pendingHeaders);
+  // Build form rows
+  const formRows: FormRow[] = [];
+  if (!activeServer) {
+    formRows.push({ type: "transport" });
+  }
+  formRows.push({ type: "connection" });
+  for (let i = 0; i < formKv.length; i++) {
+    formRows.push({ type: "kvSensitive", index: i });
+    formRows.push({ type: "kvKey", index: i });
+    formRows.push({ type: "kvValue", index: i });
+  }
+  formRows.push({ type: "kvAdd" });
+  for (let i = 0; i < formTools.length; i++) {
+    formRows.push({ type: "tool", index: i });
+  }
+  formRows.push({ type: "connectAction" });
 
   const itemCount = (() => {
     switch (step) {
       case "servers":
         return serverNames.length + 1;
-      case "serverTools":
-        return activeTools.length;
-      case "addType":
-        return TRANSPORT_TYPES.length;
-      case "addHeaders":
-        return headerKeys.length;
+      case "serverForm":
+        return formRows.length;
       default:
         return 0;
     }
@@ -78,31 +92,140 @@ export function McpServerSelector({
   const { cursor, setCursor, handleUp, handleDown } =
     useListNavigation(itemCount);
 
+  // Override cursor position after step change (e.g. jump to first tool after connect)
+  const pendingCursorRef = useRef<number | null>(null);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset cursor on step change
   useEffect(() => {
-    setCursor(0);
+    if (pendingCursorRef.current !== null) {
+      setCursor(pendingCursorRef.current);
+      pendingCursorRef.current = null;
+    } else {
+      setCursor(0);
+    }
   }, [step]);
 
-  // Connect to MCP server, discover name + tools
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger on step/config changes
+  /** Convert config kv entries to KvItem array. */
+  function configToKv(record: Record<string, McpKvEntry>): KvItem[] {
+    return Object.entries(record).map(([key, entry]) => ({
+      key,
+      value: entry.value,
+      sensitive: entry.sensitive ?? false,
+    }));
+  }
+
+  /** Convert KvItem array to config kv entries. */
+  function kvToConfig(items: KvItem[]): Record<string, McpKvEntry> | undefined {
+    const filtered = items.filter((item) => item.key.trim());
+    if (filtered.length === 0) return undefined;
+    const record: Record<string, McpKvEntry> = {};
+    for (const item of filtered) {
+      record[item.key] = {
+        value: item.value,
+        ...(item.sensitive ? { sensitive: true } : {}),
+      };
+    }
+    return record;
+  }
+
+  /** Extract plain string values from KvItem array for transport use. */
+  function kvToPlainRecord(
+    items: KvItem[],
+  ): Record<string, string> | undefined {
+    const filtered = items.filter((item) => item.key.trim());
+    if (filtered.length === 0) return undefined;
+    const record: Record<string, string> = {};
+    for (const item of filtered) {
+      record[item.key] = item.value;
+    }
+    return record;
+  }
+
+  /** Load form state from an existing server config. */
+  function loadFormFromServer(name: string) {
+    const server = state.mcpServers[name];
+    setFormTransport(server.transport as TransportType);
+    if (server.transport === "http") {
+      setFormConnection((server as { url: string }).url);
+      setFormKv(
+        configToKv(
+          (server as { headers?: Record<string, McpKvEntry> }).headers ?? {},
+        ),
+      );
+    } else {
+      const s = server as {
+        command: string;
+        args: string[];
+        env?: Record<string, McpKvEntry>;
+      };
+      setFormConnection([s.command, ...s.args].join(" "));
+      setFormKv(configToKv(s.env ?? {}));
+    }
+    setFormTools([...(server.tools ?? [])]);
+    setFormConnected(true);
+  }
+
+  /** Reset form state for a new server. */
+  function resetForm() {
+    setFormTransport("http");
+    setFormConnection("https://");
+    setFormKv([]);
+    setFormTools([]);
+    setFormConnected(false);
+    setConnectError(null);
+  }
+
+  /** Build a McpServerConfig from the current form state. */
+  function buildConfig(): McpServerConfig {
+    const kv = kvToConfig(formKv);
+    if (formTransport === "http") {
+      return {
+        transport: "http",
+        url: formConnection.trim(),
+        ...(kv ? { headers: kv } : {}),
+        ...(formTools.length > 0 ? { tools: formTools } : {}),
+      };
+    }
+    const parts = formConnection.trim().split(/\s+/);
+    return {
+      transport: "stdio",
+      command: parts[0] ?? "",
+      args: parts.slice(1),
+      ...(kv ? { env: kv } : {}),
+      ...(formTools.length > 0 ? { tools: formTools } : {}),
+    };
+  }
+
+  /** Save the current form to an existing server. */
+  function saveFormToServer() {
+    if (!activeServer) return;
+    onUpdate({
+      mcpServers: {
+        ...state.mcpServers,
+        [activeServer]: buildConfig(),
+      },
+    });
+  }
+
+  // Connect effect
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger on step changes
   useEffect(() => {
-    if (step !== "connecting" || !pendingConfig) return;
+    if (step !== "connecting") return;
     let cancelled = false;
 
     (async () => {
       let client: McpClient | null = null;
       try {
+        const config = buildConfig();
+        const plainKv = kvToPlainRecord(formKv);
         const transport =
-          pendingConfig.transport === "stdio"
+          config.transport === "stdio"
             ? new StdioTransport(
-                (pendingConfig as { command: string }).command,
-                (pendingConfig as { args: string[] }).args,
-                (pendingConfig as { env?: Record<string, string> }).env,
+                (config as { command: string }).command,
+                (config as { args: string[] }).args,
+                plainKv,
               )
-            : new HttpTransport(
-                (pendingConfig as { url: string }).url,
-                (pendingConfig as { headers?: Record<string, string> }).headers,
-              );
+            : new HttpTransport((config as { url: string }).url, plainKv);
 
         client = new McpClient(transport);
         const initResult = await client.initialize();
@@ -112,6 +235,16 @@ export function McpServerSelector({
 
         if (cancelled) return;
 
+        // Preserve enabled state for tools that existed before reload
+        const existingEnabled = new Map(
+          formTools.map((t) => [t.name, t.enabled]),
+        );
+        const discoveredTools: McpToolConfig[] = tools.map((t) => ({
+          name: t.name,
+          enabled: existingEnabled.get(t.name) ?? true,
+          description: t.description,
+        }));
+
         if (reconnectName) {
           setFailed((prev) => {
             const next = new Set(prev);
@@ -119,6 +252,17 @@ export function McpServerSelector({
             return next;
           });
           setReconnectName(null);
+          setStep("servers");
+        } else if (activeServer) {
+          // Reload — stay on connectAction (last row)
+          const totalRows =
+            1 + formKv.length * 3 + 1 + discoveredTools.length + 1;
+          pendingCursorRef.current = totalRows - 1;
+          setFormTools(discoveredTools);
+          setFormConnected(true);
+          setConnectError(null);
+          saveFormToServer();
+          setStep("serverForm");
         } else {
           let serverName = initResult.serverInfo.name;
           if (state.mcpServers[serverName]) {
@@ -129,66 +273,58 @@ export function McpServerSelector({
             serverName = `${serverName}-${suffix}`;
           }
 
-          const serverWithTools: McpServerConfig = {
-            ...pendingConfig,
-            tools: tools.map((t) => ({
-              name: t.name,
-              enabled: true,
-              description: t.description,
-            })),
-          };
-
+          const config = buildConfig();
           onUpdate({
             mcpServers: {
               ...state.mcpServers,
-              [serverName]: serverWithTools,
+              [serverName]: { ...config, tools: discoveredTools },
             },
           });
+          // New server — jump to first tool if any were discovered
+          const kvRows = formKv.length * 3;
+          // Rows: transport(1) + connection(1) + kvRows + kvAdd(1) = first tool index
+          const firstToolIdx = 1 + 1 + kvRows + 1;
+          if (discoveredTools.length > 0) {
+            pendingCursorRef.current = firstToolIdx;
+          }
+          setFormTools(discoveredTools);
+          setFormConnected(true);
+          setActiveServer(serverName);
+          setConnectError(null);
+          setStep("serverForm");
         }
-        setTextValue("");
-        setPendingConfig(null);
-        setStep("servers");
       } catch (err) {
         client?.close();
         if (cancelled) return;
         setConnectError(
           err instanceof Error ? err.message : "Connection failed",
         );
+        setStep("serverForm");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [step, pendingConfig]);
+  }, [step]);
 
-  const subSteps: Step[] = [
-    "addType",
-    "addUrl",
-    "addHeaders",
-    "addHeaderKey",
-    "addHeaderValue",
-    "addCommand",
-    "connecting",
-  ];
+  const isTextInputRow = (row: FormRow) =>
+    row.type === "connection" || row.type === "kvKey" || row.type === "kvValue";
 
   useInput((input, key) => {
     if (key.escape) {
       if (step === "servers") {
         onBack();
-      } else if (step === "serverTools") {
+      } else if (step === "serverForm") {
+        if (activeServer) {
+          saveFormToServer();
+        }
         setActiveServer(null);
-        setStep("servers");
-      } else if (subSteps.includes(step)) {
-        setTextValue("");
         setConnectError(null);
-        setPendingConfig(null);
-        setPendingUrl(null);
-        setPendingHeaders({});
-        setPendingHeaderKey(null);
-        setEditingServerName(null);
-        setReconnectName(null);
         setStep("servers");
+      } else if (step === "connecting") {
+        setConnectError(null);
+        setStep("serverForm");
       }
       return;
     }
@@ -212,8 +348,10 @@ export function McpServerSelector({
             },
           });
         } else if (key.return && !isOnAdd) {
-          setActiveServer(serverNames[cursor]);
-          setStep("serverTools");
+          const name = serverNames[cursor];
+          setActiveServer(name);
+          loadFormFromServer(name);
+          setStep("serverForm");
         } else if ((input === "d" || input === "D") && !isOnAdd) {
           const name = serverNames[cursor];
           const { [name]: _, ...rest } = state.mcpServers;
@@ -228,187 +366,97 @@ export function McpServerSelector({
         ) {
           const name = serverNames[cursor];
           setReconnectName(name);
-          setPendingConfig(state.mcpServers[name]);
           setConnectError(null);
           setStep("connecting");
-        } else if ((input === "e" || input === "E") && !isOnAdd) {
-          const name = serverNames[cursor];
-          const server = state.mcpServers[name];
-          const currentHeaders =
-            server.transport === "http"
-              ? ((server as { headers?: Record<string, string> }).headers ?? {})
-              : {};
-          setEditingServerName(name);
-          setPendingHeaders({ ...currentHeaders });
-          setStep("addHeaders");
-        } else if (input === "a" || input === "A") {
-          setTextValue("");
-          setConnectError(null);
-          setStep("addType");
+        } else if (
+          input === "a" ||
+          input === "A" ||
+          ((input === " " || key.return) && isOnAdd)
+        ) {
+          setActiveServer(null);
+          resetForm();
+          setStep("serverForm");
         }
         break;
       }
 
-      case "serverTools": {
+      case "serverForm": {
+        const row = formRows[cursor];
+        if (!row) break;
+
+        // TextInput rows handle their own key events when focused.
+        // Only intercept navigation — no shortcut keys.
+        if (isTextInputRow(row)) {
+          if (key.upArrow) {
+            handleUp();
+          } else if (key.downArrow) {
+            handleDown();
+          }
+          break;
+        }
+
         if (key.upArrow) {
           handleUp();
         } else if (key.downArrow) {
           handleDown();
-        } else if (input === " " && activeServer) {
-          const tool = activeTools[cursor];
-          if (!tool) break;
-          const updated = activeTools.map((t) =>
-            t.name === tool.name ? { ...t, enabled: !t.enabled } : t,
-          );
-          onUpdate({
-            mcpServers: {
-              ...state.mcpServers,
-              [activeServer]: {
-                ...state.mcpServers[activeServer],
-                tools: updated,
-              },
-            },
-          });
-        }
-        break;
-      }
-
-      case "addType": {
-        if (key.upArrow) {
-          handleUp();
-        } else if (key.downArrow) {
-          handleDown();
-        } else if (key.return) {
-          const type = TRANSPORT_TYPES[cursor];
-          setTextValue(type === "http" ? "https://" : "");
-          setStep(type === "http" ? "addUrl" : "addCommand");
-        }
-        break;
-      }
-
-      case "addUrl": {
-        if (key.return) {
-          const url = textValue.trim();
-          if (!url) return;
-          setPendingUrl(url);
-          setTextValue("");
-          setPendingHeaders({});
-          setStep("addHeaders");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
-        }
-        break;
-      }
-
-      case "addHeaders": {
-        if (key.upArrow) {
-          handleUp();
-        } else if (key.downArrow) {
-          handleDown();
-        } else if (key.return) {
-          if (editingServerName) {
-            // Editing headers on an existing server — update config directly.
-            // Destructure to strip old headers, then only add back if non-empty.
-            const { headers: _oldHeaders, ...serverWithoutHeaders } = state
-              .mcpServers[editingServerName] as McpServerConfig & {
-              headers?: Record<string, string>;
-            };
-            const headers =
-              headerKeys.length > 0 ? { ...pendingHeaders } : undefined;
-            onUpdate({
-              mcpServers: {
-                ...state.mcpServers,
-                [editingServerName]: {
-                  ...serverWithoutHeaders,
-                  ...(headers ? { headers } : {}),
-                },
-              },
-            });
-            setEditingServerName(null);
-            setPendingHeaders({});
-            setStep("servers");
-          } else {
-            // Add flow — proceed to connecting
-            const headers =
-              headerKeys.length > 0 ? { ...pendingHeaders } : undefined;
-            setPendingConfig({
-              transport: "http",
-              url: pendingUrl ?? "",
-              ...(headers ? { headers } : {}),
-            });
+        } else if (row.type === "transport") {
+          if (key.leftArrow || key.rightArrow || input === " ") {
+            const newType = formTransport === "http" ? "stdio" : "http";
+            setFormTransport(newType);
+            setFormConnection(newType === "http" ? "https://" : "");
+            setFormKv([]);
+            setFormTools([]);
+            setFormConnected(false);
             setConnectError(null);
-            setPendingUrl(null);
-            setPendingHeaders({});
+          }
+        } else if (row.type === "kvSensitive") {
+          if (input === " ") {
+            setFormKv((prev) =>
+              prev.map((item, i) =>
+                i === row.index
+                  ? { ...item, sensitive: !item.sensitive }
+                  : item,
+              ),
+            );
+          } else if (input === "d" || input === "D") {
+            setFormKv((prev) => prev.filter((_, i) => i !== row.index));
+          }
+        } else if (row.type === "kvAdd") {
+          if (input === "a" || input === "A" || input === " " || key.return) {
+            setFormKv((prev) => [
+              ...prev,
+              { key: "", value: "", sensitive: false },
+            ]);
+            // Cursor stays at current position — the new item's sensitive
+            // row takes the slot where kvAdd was, pushing kvAdd down.
+            setCursor(cursor);
+          }
+        } else if (row.type === "tool") {
+          if (input === " ") {
+            const tool = formTools[row.index];
+            if (tool) {
+              const updated = formTools.map((t, i) =>
+                i === row.index ? { ...t, enabled: !t.enabled } : t,
+              );
+              setFormTools(updated);
+              if (activeServer) {
+                onUpdate({
+                  mcpServers: {
+                    ...state.mcpServers,
+                    [activeServer]: {
+                      ...state.mcpServers[activeServer],
+                      tools: updated,
+                    },
+                  },
+                });
+              }
+            }
+          }
+        } else if (row.type === "connectAction") {
+          if (input === " " || key.return) {
+            setConnectError(null);
             setStep("connecting");
           }
-        } else if (input === "a" || input === "A") {
-          setTextValue("");
-          setStep("addHeaderKey");
-        } else if ((input === "e" || input === "E") && headerKeys.length > 0) {
-          const keyToEdit = headerKeys[cursor];
-          setPendingHeaderKey(keyToEdit);
-          setTextValue(pendingHeaders[keyToEdit]);
-          setStep("addHeaderValue");
-        } else if ((input === "d" || input === "D") && headerKeys.length > 0) {
-          const keyToRemove = headerKeys[cursor];
-          const { [keyToRemove]: _, ...rest } = pendingHeaders;
-          setPendingHeaders(rest);
-          if (cursor >= headerKeys.length - 1) {
-            setCursor((c) => Math.max(0, c - 1));
-          }
-        }
-        break;
-      }
-
-      case "addHeaderKey": {
-        if (key.return) {
-          const headerKey = textValue.trim();
-          if (!headerKey) return;
-          setPendingHeaderKey(headerKey);
-          setTextValue("");
-          setStep("addHeaderValue");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
-        }
-        break;
-      }
-
-      case "addHeaderValue": {
-        if (key.return) {
-          const headerValue = textValue.trim();
-          if (!headerValue) return;
-          setPendingHeaders((prev) => ({
-            ...prev,
-            [pendingHeaderKey!]: headerValue,
-          }));
-          setPendingHeaderKey(null);
-          setTextValue("");
-          setStep("addHeaders");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
-        }
-        break;
-      }
-
-      case "addCommand": {
-        if (key.return) {
-          const parts = textValue.trim().split(/\s+/);
-          const command = parts[0];
-          if (!command) return;
-          const args = parts.slice(1);
-          setPendingConfig({ transport: "stdio", command, args });
-          setConnectError(null);
-          setStep("connecting");
-        } else if (key.backspace || key.delete) {
-          setTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setTextValue((v) => v + input);
         }
         break;
       }
@@ -417,6 +465,8 @@ export function McpServerSelector({
         break;
     }
   });
+
+  // ─── Rendering ───
 
   switch (step) {
     case "servers": {
@@ -440,11 +490,17 @@ export function McpServerSelector({
       });
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {
-              "  MCP Servers (Space toggle, Enter tools, a add, e headers, d delete, r reconnect, Esc back):"
-            }
-          </Text>
+          <HintBar
+            label="MCP Servers"
+            hints={[
+              { key: "Space", action: "toggle" },
+              { key: "Enter", action: "open" },
+              { key: "a", action: "add" },
+              { key: "d", action: "delete" },
+              { key: "r", action: "reconnect" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
           <Text>{""}</Text>
           <CheckboxList items={items} cursor={cursor} />
           {(() => {
@@ -460,148 +516,217 @@ export function McpServerSelector({
       );
     }
 
-    case "serverTools": {
-      const items: CheckboxItem[] = activeTools.map((tool) => ({
-        key: tool.name,
-        label: tool.name,
-        description: tool.description,
-        checked: tool.enabled,
-      }));
+    case "serverForm": {
+      const title = activeServer ?? "New Server";
+      const kvLabel =
+        formTransport === "http" ? "Headers" : "Environment Variables";
+
       return (
         <Box flexDirection="column">
-          <Text dimColor>
-            {`  ${activeServer} — Tools (Space toggle, Esc back):`}
-          </Text>
-          <Text>{""}</Text>
-          {items.length === 0 ? (
-            <Text dimColor>{"    No tools discovered."}</Text>
-          ) : (
-            <CheckboxList items={items} cursor={cursor} />
+          <HintBar
+            label={title}
+            hints={[
+              { key: "Space", action: "toggle" },
+              { key: "d", action: "delete" },
+              { key: "Esc", action: "back" },
+            ]}
+          />
+          {!activeServer && !formConnected && (
+            <Text dimColor color="yellow">
+              {"  ⚠ Leave without connecting to discard"}
+            </Text>
           )}
+          <Text>{""}</Text>
+
+          {formRows.map((row, i) => {
+            const isCurrent = i === cursor;
+            const prefix = `    ${isCurrent ? "❯" : " "} `;
+
+            switch (row.type) {
+              case "transport":
+                return (
+                  <Text key="transport" color={isCurrent ? "cyan" : undefined}>
+                    {prefix}Type:{" "}
+                    {formTransport === "http" ? (
+                      <Text>
+                        <Text bold color="cyan">
+                          http
+                        </Text>
+                        {" / "}
+                        <Text dimColor>stdio</Text>
+                      </Text>
+                    ) : (
+                      <Text>
+                        <Text dimColor>http</Text>
+                        {" / "}
+                        <Text bold color="cyan">
+                          stdio
+                        </Text>
+                      </Text>
+                    )}
+                  </Text>
+                );
+
+              case "connection":
+                return (
+                  <Box key="connection">
+                    <Text color={isCurrent ? "cyan" : undefined}>
+                      {prefix}
+                      {formTransport === "http" ? "URL" : "Command"}:{" "}
+                    </Text>
+                    <TextInput
+                      value={formConnection}
+                      onChange={setFormConnection}
+                      active={isCurrent}
+                    />
+                  </Box>
+                );
+
+              case "kvSensitive": {
+                const item = formKv[row.index];
+                const isFirstOfGroup = !formRows.some(
+                  (r, ri) =>
+                    ri < i &&
+                    (r.type === "kvSensitive" ||
+                      r.type === "kvKey" ||
+                      r.type === "kvValue"),
+                );
+                return (
+                  <Box key={`kv-s-${row.index}`} flexDirection="column">
+                    {isFirstOfGroup && (
+                      <Text dimColor>{`\n    ── ${kvLabel} ──`}</Text>
+                    )}
+                    {row.index > 0 && <Text> </Text>}
+                    <Text color={isCurrent ? "cyan" : undefined}>
+                      {"    "}
+                      <Text color={isCurrent ? "cyan" : undefined}>
+                        {isCurrent ? "❯" : " "}
+                      </Text>{" "}
+                      {item.sensitive ? (
+                        <Text color="green">[✔]</Text>
+                      ) : (
+                        <Text dimColor>[ ]</Text>
+                      )}{" "}
+                      Sensitive
+                    </Text>
+                  </Box>
+                );
+              }
+
+              case "kvKey": {
+                const item = formKv[row.index];
+                return (
+                  <Box key={`kv-k-${row.index}`}>
+                    <Text color={isCurrent ? "cyan" : undefined}>
+                      {prefix}Name:{" "}
+                    </Text>
+                    <TextInput
+                      value={item.key}
+                      onChange={(v) =>
+                        setFormKv((prev) =>
+                          prev.map((it, idx) =>
+                            idx === row.index ? { ...it, key: v } : it,
+                          ),
+                        )
+                      }
+                      active={isCurrent}
+                    />
+                  </Box>
+                );
+              }
+
+              case "kvValue": {
+                const item = formKv[row.index];
+                return (
+                  <Box key={`kv-v-${row.index}`}>
+                    <Text color={isCurrent ? "cyan" : undefined}>
+                      {prefix}Value:{" "}
+                    </Text>
+                    <TextInput
+                      value={item.value}
+                      onChange={(v) =>
+                        setFormKv((prev) =>
+                          prev.map((it, idx) =>
+                            idx === row.index ? { ...it, value: v } : it,
+                          ),
+                        )
+                      }
+                      active={isCurrent}
+                      masked={item.sensitive}
+                    />
+                  </Box>
+                );
+              }
+
+              case "kvAdd": {
+                const hasKv = formKv.length > 0;
+                return (
+                  <Box key="kv-add" flexDirection="column">
+                    {!hasKv && <Text dimColor>{`\n    ── ${kvLabel} ──`}</Text>}
+                    {hasKv && <Text> </Text>}
+                    <Text color={isCurrent ? "cyan" : "dim"}>
+                      {prefix}[+] Add...
+                    </Text>
+                  </Box>
+                );
+              }
+
+              case "tool": {
+                const tool = formTools[row.index];
+                const isFirst = row.index === 0;
+                return (
+                  <Box key={`tool-${tool.name}`} flexDirection="column">
+                    {isFirst && <Text dimColor>{"\n    ── Tools ──"}</Text>}
+                    <Text>
+                      {"    "}
+                      <Text color={isCurrent ? "cyan" : undefined}>
+                        {isCurrent ? "❯" : " "}
+                      </Text>{" "}
+                      {tool.enabled ? (
+                        <Text color="green">[✔]</Text>
+                      ) : (
+                        <Text dimColor>[ ]</Text>
+                      )}{" "}
+                      <Text color="cyan">{tool.name}</Text>
+                      {tool.description && (
+                        <Text color="cyan" dimColor>
+                          {"  "}
+                          {tool.description}
+                        </Text>
+                      )}
+                    </Text>
+                  </Box>
+                );
+              }
+
+              case "connectAction": {
+                const hasTools = formTools.length > 0;
+                const label = hasTools ? "[+] Reload tools" : "[+] Connect";
+                return (
+                  <Box key="connect" flexDirection="column">
+                    {!hasTools && <Text dimColor>{"\n    ── Tools ──"}</Text>}
+                    <Text color={isCurrent ? "cyan" : "dim"}>
+                      {prefix}
+                      {label}
+                    </Text>
+                    {connectError && (
+                      <Text color="red">
+                        {"        ⚠ "}
+                        {connectError}
+                      </Text>
+                    )}
+                  </Box>
+                );
+              }
+              default:
+                return null;
+            }
+          })}
         </Box>
       );
     }
 
-    case "addType":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Select transport type (↑↓ navigate, Enter select, Esc back):"}
-          </Text>
-          <Text>{""}</Text>
-          {TRANSPORT_TYPES.map((type, i) => {
-            const isCurrent = i === cursor;
-            return (
-              <Text key={type} color={isCurrent ? "cyan" : undefined}>
-                {"    "}
-                {isCurrent ? "❯" : " "} {type}
-              </Text>
-            );
-          })}
-        </Box>
-      );
-
-    case "addUrl":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Enter server URL (Enter confirm, Esc back):"}
-          </Text>
-          <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {textValue}
-            <Text dimColor>█</Text>
-          </Text>
-        </Box>
-      );
-
-    case "addHeaders":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Headers (a add, e edit, d delete, Enter confirm, Esc back):"}
-          </Text>
-          <Text dimColor>
-            {"  Tip: use ${VAR} to reference environment variables"}
-          </Text>
-          <Text>{""}</Text>
-          {headerKeys.length === 0 ? (
-            <Text dimColor>{"    No headers configured."}</Text>
-          ) : (
-            headerKeys.map((k, i) => {
-              const isCurrent = i === cursor;
-              return (
-                <Text key={k} color={isCurrent ? "cyan" : undefined}>
-                  {"    "}
-                  {isCurrent ? "❯" : " "} {k}:{" "}
-                  {"*".repeat(pendingHeaders[k].length)}
-                </Text>
-              );
-            })
-          )}
-        </Box>
-      );
-
-    case "addHeaderKey":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Enter header name (Enter confirm, Esc back):"}
-          </Text>
-          <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {textValue}
-            <Text dimColor>█</Text>
-          </Text>
-        </Box>
-      );
-
-    case "addHeaderValue":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {`  Enter value for ${pendingHeaderKey} (Enter confirm, Esc back):`}
-          </Text>
-          <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {"*".repeat(textValue.length)}
-            <Text dimColor>█</Text>
-          </Text>
-        </Box>
-      );
-
-    case "addCommand":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {
-              "  Enter command and args to start the server (Enter confirm, Esc back):"
-            }
-          </Text>
-          <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {textValue}
-            <Text dimColor>█</Text>
-          </Text>
-        </Box>
-      );
-
     case "connecting":
-      if (connectError) {
-        return (
-          <Box flexDirection="column">
-            <Text color="red">
-              {"  Failed to connect: "}
-              {connectError}
-            </Text>
-            <Text dimColor>{"  Press Esc to go back."}</Text>
-          </Box>
-        );
-      }
       return <Text dimColor>{"  Connecting to MCP server..."}</Text>;
   }
 }

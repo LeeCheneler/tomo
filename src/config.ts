@@ -46,11 +46,18 @@ const mcpToolSchema = z.object({
   description: z.string().optional(),
 });
 
+const mcpKvEntrySchema = z.object({
+  value: z.string(),
+  sensitive: z.boolean().optional(),
+});
+
+export type McpKvEntry = z.infer<typeof mcpKvEntrySchema>;
+
 const mcpStdioServerSchema = z.object({
   transport: z.literal("stdio"),
   command: z.string().min(1, "command is required"),
   args: z.array(z.string()).default([]),
-  env: z.record(z.string(), z.string()).optional(),
+  env: z.record(z.string(), mcpKvEntrySchema).optional(),
   enabled: z.boolean().optional(),
   tools: z.array(mcpToolSchema).optional(),
 });
@@ -58,7 +65,7 @@ const mcpStdioServerSchema = z.object({
 const mcpHttpServerSchema = z.object({
   transport: z.literal("http"),
   url: z.string().url("url must be a valid URL"),
-  headers: z.record(z.string(), z.string()).optional(),
+  headers: z.record(z.string(), mcpKvEntrySchema).optional(),
   enabled: z.boolean().optional(),
   tools: z.array(mcpToolSchema).optional(),
 });
