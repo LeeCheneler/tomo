@@ -1,11 +1,12 @@
 import { Box, Text, useInput } from "ink";
 import { useEffect, useState } from "react";
-import type { McpServerConfig, McpToolConfig } from "../config";
+import type { McpServerConfig } from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { McpClient } from "../mcp/client";
 import { HttpTransport } from "../mcp/http-transport";
 import { StdioTransport } from "../mcp/stdio-transport";
 import { type CheckboxItem, CheckboxList } from "./checkbox-list";
+import type { SettingsState } from "./settings-selector";
 
 type Step =
   | "servers"
@@ -18,28 +19,21 @@ type Step =
 const TRANSPORT_TYPES = ["http", "stdio"] as const;
 
 export interface McpServerSelectorProps {
-  servers: Record<string, McpServerConfig>;
+  state: SettingsState;
+  onUpdate: (partial: Partial<SettingsState>) => void;
   failedServers?: Set<string>;
-  onAddServer: (name: string, server: McpServerConfig) => void;
-  onRemoveServer: (name: string) => void;
-  onToggleServer: (name: string, enabled: boolean) => void;
-  onUpdateTools: (serverName: string, tools: McpToolConfig[]) => void;
   onBack: () => void;
 }
 
 /** Dedicated MCP server management UI with per-server tool toggles. */
 export function McpServerSelector({
-  servers,
+  state,
+  onUpdate,
   failedServers,
-  onAddServer,
-  onRemoveServer,
-  onToggleServer,
-  onUpdateTools,
   onBack,
 }: McpServerSelectorProps) {
   const [step, setStep] = useState<Step>("servers");
-  const [serverList, setServerList] = useState(servers);
-  const serverNames = Object.keys(serverList);
+  const serverNames = Object.keys(state.mcpServers);
   const [failed, setFailed] = useState<Set<string>>(failedServers ?? new Set());
   const [textValue, setTextValue] = useState("");
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -50,7 +44,7 @@ export function McpServerSelector({
   const [activeServer, setActiveServer] = useState<string | null>(null);
 
   const activeTools = activeServer
-    ? (serverList[activeServer]?.tools ?? [])
+    ? (state.mcpServers[activeServer]?.tools ?? [])
     : [];
 
   const itemCount = (() => {
@@ -112,28 +106,29 @@ export function McpServerSelector({
           setReconnectName(null);
         } else {
           let serverName = initResult.serverInfo.name;
-          if (serverList[serverName]) {
+          if (state.mcpServers[serverName]) {
             let suffix = 2;
-            while (serverList[`${serverName}-${suffix}`]) {
+            while (state.mcpServers[`${serverName}-${suffix}`]) {
               suffix++;
             }
             serverName = `${serverName}-${suffix}`;
           }
 
-          const serverWithTools = {
+          const serverWithTools: McpServerConfig = {
             ...pendingConfig,
             tools: tools.map((t) => ({
               name: t.name,
-              enabled: false,
+              enabled: true,
               description: t.description,
             })),
           };
 
-          onAddServer(serverName, serverWithTools);
-          setServerList((prev) => ({
-            ...prev,
-            [serverName]: serverWithTools,
-          }));
+          onUpdate({
+            mcpServers: {
+              ...state.mcpServers,
+              [serverName]: serverWithTools,
+            },
+          });
         }
         setTextValue("");
         setPendingConfig(null);
@@ -197,25 +192,21 @@ export function McpServerSelector({
           handleDown();
         } else if (input === " " && !isOnAdd) {
           const name = serverNames[cursor];
-          const server = serverList[name];
+          const server = state.mcpServers[name];
           const currentEnabled = server.enabled !== false;
-          onToggleServer(name, !currentEnabled);
-          setServerList((prev) => ({
-            ...prev,
-            [name]: { ...prev[name], enabled: !currentEnabled },
-          }));
+          onUpdate({
+            mcpServers: {
+              ...state.mcpServers,
+              [name]: { ...server, enabled: !currentEnabled },
+            },
+          });
         } else if (key.return && !isOnAdd) {
-          const name = serverNames[cursor];
-          setActiveServer(name);
+          setActiveServer(serverNames[cursor]);
           setStep("serverTools");
         } else if ((input === "d" || input === "D") && !isOnAdd) {
           const name = serverNames[cursor];
-          onRemoveServer(name);
-          setServerList((prev) => {
-            const next = { ...prev };
-            delete next[name];
-            return next;
-          });
+          const { [name]: _, ...rest } = state.mcpServers;
+          onUpdate({ mcpServers: rest });
           if (cursor >= serverNames.length - 1) {
             setCursor((c) => Math.max(0, c - 1));
           }
@@ -225,9 +216,8 @@ export function McpServerSelector({
           failed.has(serverNames[cursor])
         ) {
           const name = serverNames[cursor];
-          const server = serverList[name];
           setReconnectName(name);
-          setPendingConfig(server);
+          setPendingConfig(state.mcpServers[name]);
           setConnectError(null);
           setStep("connecting");
         } else if (
@@ -253,11 +243,15 @@ export function McpServerSelector({
           const updated = activeTools.map((t) =>
             t.name === tool.name ? { ...t, enabled: !t.enabled } : t,
           );
-          onUpdateTools(activeServer, updated);
-          setServerList((prev) => ({
-            ...prev,
-            [activeServer]: { ...prev[activeServer], tools: updated },
-          }));
+          onUpdate({
+            mcpServers: {
+              ...state.mcpServers,
+              [activeServer]: {
+                ...state.mcpServers[activeServer],
+                tools: updated,
+              },
+            },
+          });
         }
         break;
       }
@@ -315,7 +309,7 @@ export function McpServerSelector({
   switch (step) {
     case "servers": {
       const items: CheckboxItem[] = serverNames.map((name) => {
-        const server = serverList[name];
+        const server = state.mcpServers[name];
         const transport =
           server.transport === "http"
             ? (server as { url: string }).url

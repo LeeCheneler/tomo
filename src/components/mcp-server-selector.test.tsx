@@ -2,38 +2,45 @@ import { render } from "ink-testing-library";
 import { describe, expect, it, vi } from "vitest";
 import type { McpServerConfig } from "../config";
 import { McpServerSelector } from "./mcp-server-selector";
+import type { SettingsState } from "./settings-selector";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
+const defaultState: SettingsState = {
+  toolAvailability: {},
+  permissions: {},
+  allowedCommands: [],
+  mcpServers: {},
+};
+
 function renderMcp(overrides?: {
-  servers?: Record<string, McpServerConfig>;
+  mcpServers?: Record<string, McpServerConfig>;
   failedServers?: Set<string>;
-  onAddServer?: (...args: unknown[]) => void;
-  onRemoveServer?: (...args: unknown[]) => void;
-  onToggleServer?: (...args: unknown[]) => void;
-  onUpdateTools?: (...args: unknown[]) => void;
+  onUpdate?: (partial: Partial<SettingsState>) => void;
   onBack?: () => void;
 }) {
+  const onUpdate = overrides?.onUpdate ?? vi.fn();
   const onBack = overrides?.onBack ?? vi.fn();
+  const state = {
+    ...defaultState,
+    mcpServers: overrides?.mcpServers ?? {},
+  };
   const result = render(
     <McpServerSelector
-      servers={overrides?.servers ?? {}}
+      state={state}
+      onUpdate={onUpdate}
       failedServers={overrides?.failedServers}
-      onAddServer={overrides?.onAddServer ?? vi.fn()}
-      onRemoveServer={overrides?.onRemoveServer ?? vi.fn()}
-      onToggleServer={overrides?.onToggleServer ?? vi.fn()}
-      onUpdateTools={overrides?.onUpdateTools ?? vi.fn()}
       onBack={onBack}
     />,
   );
-  return { ...result, onBack };
+  return { ...result, onUpdate, onBack };
 }
 
 describe("McpServerSelector", () => {
   describe("server list", () => {
     it("renders server list with Add option", () => {
       const { lastFrame } = renderMcp({
-        servers: {
+        mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
@@ -52,7 +59,7 @@ describe("McpServerSelector", () => {
       expect(output).toContain("Add...");
     });
 
-    it("calls onBack on Esc from server list", async () => {
+    it("calls onBack on Esc", async () => {
       const onBack = vi.fn();
       const { stdin } = renderMcp({ onBack });
 
@@ -62,7 +69,7 @@ describe("McpServerSelector", () => {
       expect(onBack).toHaveBeenCalled();
     });
 
-    it("calls onBack on q from server list", async () => {
+    it("calls onBack on q", async () => {
       const onBack = vi.fn();
       const { stdin } = renderMcp({ onBack });
 
@@ -73,44 +80,50 @@ describe("McpServerSelector", () => {
     });
 
     it("toggles server enabled with Space", async () => {
-      const onToggle = vi.fn();
+      const onUpdate = vi.fn();
       const { stdin } = renderMcp({
-        servers: {
+        mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
           },
         },
-        onToggleServer: onToggle,
+        onUpdate,
       });
 
       stdin.write(" ");
       await flush();
 
-      expect(onToggle).toHaveBeenCalledWith("my-server", false);
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: expect.objectContaining({
+          "my-server": expect.objectContaining({ enabled: false }),
+        }),
+      });
     });
 
     it("removes server with d", async () => {
-      const onRemove = vi.fn();
+      const onUpdate = vi.fn();
       const { stdin } = renderMcp({
-        servers: {
+        mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
           },
         },
-        onRemoveServer: onRemove,
+        onUpdate,
       });
 
       stdin.write("d");
       await flush();
 
-      expect(onRemove).toHaveBeenCalledWith("my-server");
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: {},
+      });
     });
 
     it("shows failed warning for disconnected servers", () => {
       const { lastFrame } = renderMcp({
-        servers: {
+        mcpServers: {
           broken: {
             transport: "http",
             url: "https://broken.example.com",
@@ -125,7 +138,7 @@ describe("McpServerSelector", () => {
 
     it("shows transport info in server description", () => {
       const { lastFrame } = renderMcp({
-        servers: {
+        mcpServers: {
           "http-server": {
             transport: "http",
             url: "https://mcp.example.com",
@@ -142,7 +155,7 @@ describe("McpServerSelector", () => {
   describe("server tools", () => {
     it("shows tool list on Enter", async () => {
       const { stdin, lastFrame } = renderMcp({
-        servers: {
+        mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
@@ -165,7 +178,7 @@ describe("McpServerSelector", () => {
 
     it("shows tool descriptions when available", async () => {
       const { stdin, lastFrame } = renderMcp({
-        servers: {
+        mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
@@ -188,34 +201,35 @@ describe("McpServerSelector", () => {
     });
 
     it("toggles tool enabled with Space", async () => {
-      const onUpdateTools = vi.fn();
+      const onUpdate = vi.fn();
       const { stdin } = renderMcp({
-        servers: {
+        mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
             tools: [{ name: "get_weather", enabled: true }],
           },
         },
-        onUpdateTools,
+        onUpdate,
       });
 
-      // Enter to open tools
       stdin.write("\r");
       await flush();
-
-      // Space to toggle
       stdin.write(" ");
       await flush();
 
-      expect(onUpdateTools).toHaveBeenCalledWith("my-server", [
-        { name: "get_weather", enabled: false },
-      ]);
+      expect(onUpdate).toHaveBeenCalledWith({
+        mcpServers: expect.objectContaining({
+          "my-server": expect.objectContaining({
+            tools: [{ name: "get_weather", enabled: false }],
+          }),
+        }),
+      });
     });
 
     it("returns to server list on Esc", async () => {
       const { stdin, lastFrame } = renderMcp({
-        servers: {
+        mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
@@ -224,12 +238,10 @@ describe("McpServerSelector", () => {
         },
       });
 
-      // Enter to open tools
       stdin.write("\r");
       await flush();
       expect(lastFrame()).toContain("get_weather");
 
-      // Esc to go back
       stdin.write("\x1B");
       await flush();
       expect(lastFrame()).toContain("my-server");
@@ -238,7 +250,7 @@ describe("McpServerSelector", () => {
 
     it("shows empty message when no tools", async () => {
       const { stdin, lastFrame } = renderMcp({
-        servers: {
+        mcpServers: {
           "my-server": {
             transport: "http",
             url: "https://mcp.example.com",
@@ -259,7 +271,6 @@ describe("McpServerSelector", () => {
     it("navigates to transport type selection on Add", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      // Cursor starts on Add (only item)
       stdin.write("\r");
       await flush();
 
@@ -273,8 +284,6 @@ describe("McpServerSelector", () => {
 
       stdin.write("\r");
       await flush();
-
-      // Select http (first option)
       stdin.write("\r");
       await flush();
 
@@ -287,8 +296,6 @@ describe("McpServerSelector", () => {
 
       stdin.write("\r");
       await flush();
-
-      // Down to stdio, Enter
       stdin.write("\x1B[B");
       await flush();
       stdin.write("\r");
@@ -301,12 +308,10 @@ describe("McpServerSelector", () => {
     it("returns to server list on Esc from add steps", async () => {
       const { stdin, lastFrame } = renderMcp();
 
-      // Go to add type
       stdin.write("\r");
       await flush();
       expect(lastFrame()).toContain("http");
 
-      // Esc back
       stdin.write("\x1B");
       await flush();
       expect(lastFrame()).toContain("Add...");
@@ -316,7 +321,7 @@ describe("McpServerSelector", () => {
   describe("navigation", () => {
     it("navigates between servers with arrow keys", async () => {
       const { stdin, lastFrame } = renderMcp({
-        servers: {
+        mcpServers: {
           "server-a": {
             transport: "http",
             url: "https://a.example.com",
@@ -328,11 +333,9 @@ describe("McpServerSelector", () => {
         },
       });
 
-      // First server should be highlighted
       let output = lastFrame() ?? "";
       expect(output).toContain("❯");
 
-      // Down to second
       stdin.write("\x1B[B");
       await flush();
 

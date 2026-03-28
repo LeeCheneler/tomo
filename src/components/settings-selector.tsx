@@ -1,28 +1,27 @@
 import { Box, Text, useInput } from "ink";
 import { useEffect, useState } from "react";
-import type { McpServerConfig, McpToolConfig } from "../config";
+import type { McpServerConfig } from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
-import { type CheckboxItem, CheckboxList } from "./checkbox-list";
+import { AllowedCommandsEditor } from "./allowed-commands-editor";
 import { McpServerSelector } from "./mcp-server-selector";
+import { ToolAvailabilityEditor } from "./tool-availability-editor";
+import { ToolPermissionsEditor } from "./tool-permissions-editor";
 
-interface PermissionRow {
-  key: string;
-  displayName: string;
-  description: string;
+/** The full settings state owned by the root component. */
+export interface SettingsState {
+  toolAvailability: Record<string, boolean>;
+  permissions: Record<string, boolean>;
+  allowedCommands: string[];
+  mcpServers: Record<string, McpServerConfig>;
 }
 
-const PERMISSION_ROWS: PermissionRow[] = [
-  {
-    key: "read_file",
-    displayName: "Read File",
-    description: "Read files in current directory (Tomo only)",
-  },
-  {
-    key: "write_file",
-    displayName: "Write File",
-    description: "Write and edit files in current directory (Tomo only)",
-  },
-];
+/** Static tool metadata that doesn't change during the settings session. */
+export interface ToolMeta {
+  names: string[];
+  displayNames: Record<string, string>;
+  descriptions: Record<string, string>;
+  warnings: Record<string, string>;
+}
 
 type Step = "menu" | "tools" | "permissions" | "allowed" | "mcpServers";
 
@@ -33,201 +32,63 @@ const MENU_OPTIONS = [
   "MCP Servers",
 ];
 
+const MENU_STEPS: Step[] = ["tools", "permissions", "allowed", "mcpServers"];
+
 export interface SettingsSelectorProps {
-  tools: string[];
-  toolDisplayNames?: Record<string, string>;
-  toolDescriptions?: Record<string, string>;
-  currentToolAvailability: Record<string, boolean>;
-  toolWarnings?: Record<string, string>;
-  currentPermissions: Record<string, boolean>;
-  currentAllowedCommands: string[];
-  mcpServers: Record<string, McpServerConfig>;
+  initialState: SettingsState;
+  toolMeta: ToolMeta;
   mcpFailedServers?: Set<string>;
-  onSave: (
-    toolAvailability: Record<string, boolean>,
-    permissions: Record<string, boolean>,
-    allowedCommands: string[],
-  ) => void;
-  onAddMcpServer: (name: string, server: McpServerConfig) => void;
-  onRemoveMcpServer: (name: string) => void;
-  onToggleMcpServer: (name: string, enabled: boolean) => void;
-  onUpdateMcpTools: (serverName: string, tools: McpToolConfig[]) => void;
+  onSave: (state: SettingsState) => void;
   onCancel: () => void;
 }
 
-/** Interactive multi-step settings UI for tools, permissions, allowed commands, and MCP servers. */
+/** Settings root. Owns a single config state; sub-components read/update it; saves on final Esc. */
 export function SettingsSelector({
-  tools,
-  toolDisplayNames,
-  toolDescriptions,
-  currentToolAvailability,
-  toolWarnings,
-  currentPermissions,
-  currentAllowedCommands,
-  mcpServers,
+  initialState,
+  toolMeta,
   mcpFailedServers,
   onSave,
-  onAddMcpServer,
-  onRemoveMcpServer,
-  onToggleMcpServer,
-  onUpdateMcpTools,
   onCancel,
 }: SettingsSelectorProps) {
+  const [state, setState] = useState<SettingsState>({ ...initialState });
   const [step, setStep] = useState<Step>("menu");
-  const [toolAvailability, setToolAvailability] = useState({
-    ...currentToolAvailability,
-  });
-  const [permissions, setPermissions] = useState({ ...currentPermissions });
-  const [allowedCommands, setAllowedCommands] = useState<string[]>([
-    ...currentAllowedCommands,
-  ]);
-  const [adding, setAdding] = useState(false);
-  const [newEntry, setNewEntry] = useState("");
 
-  const itemCount = (() => {
-    switch (step) {
-      case "menu":
-        return MENU_OPTIONS.length;
-      case "tools":
-        return tools.length;
-      case "permissions":
-        return PERMISSION_ROWS.length;
-      case "allowed":
-        return allowedCommands.length + 1;
-      default:
-        return 0;
-    }
-  })();
+  const update = (partial: Partial<SettingsState>) => {
+    setState((prev) => ({ ...prev, ...partial }));
+  };
 
-  const { cursor, setCursor, handleUp, handleDown } =
-    useListNavigation(itemCount);
+  const { cursor, setCursor, handleUp, handleDown } = useListNavigation(
+    MENU_OPTIONS.length,
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset cursor on step change
   useEffect(() => {
     setCursor(0);
   }, [step]);
 
-  const save = () => {
-    onSave(toolAvailability, permissions, allowedCommands);
-  };
-
   useInput((input, key) => {
-    // Delegate to MCP component when on that step
-    if (step === "mcpServers") return;
-
-    if (adding) {
-      if (key.escape) {
-        setAdding(false);
-        setNewEntry("");
-        return;
-      }
-      if (key.return) {
-        const trimmed = newEntry.trim();
-        if (trimmed && !allowedCommands.includes(trimmed)) {
-          setAllowedCommands((prev) => [...prev, trimmed]);
-        }
-        setAdding(false);
-        setNewEntry("");
-        return;
-      }
-      if (key.backspace || key.delete) {
-        setNewEntry((prev) => prev.slice(0, -1));
-        return;
-      }
-      if (input && !key.ctrl && !key.meta) {
-        setNewEntry((prev) => prev + input);
-      }
-      return;
-    }
+    if (step !== "menu") return;
 
     if (key.escape) {
-      if (step === "menu") {
-        save();
-      } else {
-        setStep("menu");
-      }
+      onSave(state);
       return;
     }
 
     if (input === "q" || input === "Q") {
-      if (step === "menu") {
-        onCancel();
-      } else {
-        setStep("menu");
-      }
+      onCancel();
       return;
     }
 
-    switch (step) {
-      case "menu": {
-        if (key.upArrow) {
-          handleUp();
-        } else if (key.downArrow) {
-          handleDown();
-        } else if (key.return) {
-          const steps: Step[] = [
-            "tools",
-            "permissions",
-            "allowed",
-            "mcpServers",
-          ];
-          setStep(steps[cursor]);
-        }
-        break;
-      }
-
-      case "tools": {
-        if (key.upArrow) {
-          handleUp();
-        } else if (key.downArrow) {
-          handleDown();
-        } else if (input === " " || key.return) {
-          const name = tools[cursor];
-          setToolAvailability((prev) => ({
-            ...prev,
-            [name]: !prev[name],
-          }));
-        }
-        break;
-      }
-
-      case "permissions": {
-        if (key.upArrow) {
-          handleUp();
-        } else if (key.downArrow) {
-          handleDown();
-        } else if (input === " " || key.return) {
-          const row = PERMISSION_ROWS[cursor];
-          setPermissions((prev) => ({
-            ...prev,
-            [row.key]: !prev[row.key],
-          }));
-        }
-        break;
-      }
-
-      case "allowed": {
-        const isOnAdd = cursor === allowedCommands.length;
-
-        if (key.upArrow) {
-          handleUp();
-        } else if (key.downArrow) {
-          handleDown();
-        } else if ((input === "d" || input === "D") && !isOnAdd) {
-          setAllowedCommands((prev) => prev.filter((_, i) => i !== cursor));
-          if (cursor >= itemCount - 1) {
-            setCursor((c) => Math.max(0, c - 1));
-          }
-        } else if (input === "a" || input === "A") {
-          setCursor(allowedCommands.length);
-          setAdding(true);
-        } else if ((input === " " || key.return) && isOnAdd) {
-          setAdding(true);
-        }
-        break;
-      }
+    if (key.upArrow) {
+      handleUp();
+    } else if (key.downArrow) {
+      handleDown();
+    } else if (key.return) {
+      setStep(MENU_STEPS[cursor]);
     }
   });
+
+  const goBack = () => setStep("menu");
 
   switch (step) {
     case "menu":
@@ -249,94 +110,41 @@ export function SettingsSelector({
         </Box>
       );
 
-    case "tools": {
-      const items: CheckboxItem[] = tools.map((name) => ({
-        key: name,
-        label: toolDisplayNames?.[name] ?? name,
-        description: toolDescriptions?.[name],
-        checked: toolAvailability[name] ?? true,
-        warning:
-          (toolAvailability[name] ?? true) ? toolWarnings?.[name] : undefined,
-      }));
+    case "tools":
       return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Tool Availability (Space/Enter toggle, Esc back):"}
-          </Text>
-          <Text>{""}</Text>
-          <CheckboxList items={items} cursor={cursor} />
-        </Box>
+        <ToolAvailabilityEditor
+          state={state}
+          toolMeta={toolMeta}
+          onUpdate={update}
+          onBack={goBack}
+        />
       );
-    }
 
-    case "permissions": {
-      const items: CheckboxItem[] = PERMISSION_ROWS.map((perm) => ({
-        key: perm.key,
-        label: perm.displayName,
-        description: perm.description,
-        checked: permissions[perm.key] ?? false,
-      }));
+    case "permissions":
       return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Tool Permissions (Space/Enter toggle, Esc back):"}
-          </Text>
-          <Text>{""}</Text>
-          <CheckboxList items={items} cursor={cursor} />
-        </Box>
+        <ToolPermissionsEditor
+          state={state}
+          onUpdate={update}
+          onBack={goBack}
+        />
       );
-    }
 
     case "allowed":
       return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Allowed Commands (d delete, a add, Esc back):"}
-          </Text>
-          <Text dimColor>
-            {"  Use exact commands (npm test) or prefixes (git:*)"}
-          </Text>
-          <Text>{""}</Text>
-          {allowedCommands.map((cmd, i) => {
-            const isCurrent = i === cursor;
-            return (
-              <Text key={cmd} color={isCurrent ? "cyan" : undefined}>
-                {"    "}
-                {isCurrent ? "❯" : " "} {cmd}
-              </Text>
-            );
-          })}
-          {(() => {
-            const isCurrent = cursor === allowedCommands.length;
-            if (adding) {
-              return (
-                <Text color="green">
-                  {"    ❯ [+] "}
-                  {newEntry}
-                  {"█"}
-                </Text>
-              );
-            }
-            return (
-              <Text color={isCurrent ? "cyan" : "dim"}>
-                {"    "}
-                {isCurrent ? "❯" : " "} [+] Add...
-              </Text>
-            );
-          })()}
-        </Box>
+        <AllowedCommandsEditor
+          state={state}
+          onUpdate={update}
+          onBack={goBack}
+        />
       );
 
     case "mcpServers":
       return (
         <McpServerSelector
-          servers={mcpServers}
+          state={state}
+          onUpdate={update}
           failedServers={mcpFailedServers}
-          onAddServer={onAddMcpServer}
-          onRemoveServer={onRemoveMcpServer}
-          onToggleServer={onToggleMcpServer}
-          onUpdateTools={onUpdateMcpTools}
-          onBack={() => setStep("menu")}
+          onBack={goBack}
         />
       );
   }

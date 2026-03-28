@@ -1,5 +1,9 @@
 import { createElement } from "react";
-import { SettingsSelector } from "../components/settings-selector";
+import {
+  SettingsSelector,
+  type SettingsState,
+  type ToolMeta,
+} from "../components/settings-selector";
 import {
   addMcpServer,
   getAllMcpServers,
@@ -17,13 +21,40 @@ import { getAllTools, resolveToolAvailability } from "../tools";
 import { register } from "./registry";
 import type { Command } from "./types";
 
+function saveSettings(state: SettingsState): void {
+  // Local config: tools, permissions, allowed commands
+  updateLocalToolConfig(state.toolAvailability);
+  updateLocalPermissions(state.permissions);
+  updateLocalAllowedCommands(state.allowedCommands);
+
+  // Global config: MCP servers
+  const currentConfig = loadConfig();
+  const existingServers = getAllMcpServers(currentConfig);
+
+  for (const name of Object.keys(existingServers)) {
+    if (!state.mcpServers[name]) {
+      removeMcpServer(name);
+    }
+  }
+
+  for (const [name, server] of Object.entries(state.mcpServers)) {
+    if (!existingServers[name]) {
+      addMcpServer(name, server);
+    } else {
+      updateMcpServerEnabled(name, server.enabled !== false);
+      if (server.tools) {
+        updateMcpServerTools(name, server.tools);
+      }
+    }
+  }
+}
+
 const settings: Command = {
   name: "settings",
   description: "Manage tools, permissions, and command patterns",
   execute: (_args, callbacks) => {
     const config = loadConfig();
 
-    // Tool availability (built-in tools only)
     const allTools = getAllTools();
     const toolAvailability = resolveToolAvailability(config.tools);
     const toolWarnings: Record<string, string> = {};
@@ -38,37 +69,29 @@ const settings: Command = {
         desc.charAt(0).toUpperCase() + desc.slice(1);
     }
 
-    // Permissions
-    const permissions = resolvePermissions(config.permissions);
+    const toolMeta: ToolMeta = {
+      names: allTools.map((t) => t.name),
+      displayNames: toolDisplayNames,
+      descriptions: toolDescriptions,
+      warnings: toolWarnings,
+    };
 
-    const allowedCommands = getAllowedCommands(config);
-    const mcpServers = getAllMcpServers(config);
+    const initialState: SettingsState = {
+      toolAvailability,
+      permissions: resolvePermissions(config.permissions),
+      allowedCommands: getAllowedCommands(config),
+      mcpServers: getAllMcpServers(config),
+    };
 
     return {
       interactive: createElement(SettingsSelector, {
-        tools: allTools.map((t) => t.name),
-        toolDisplayNames,
-        toolDescriptions,
-        currentToolAvailability: toolAvailability,
-        toolWarnings,
-        currentPermissions: permissions,
-        currentAllowedCommands: allowedCommands,
-        mcpServers,
+        initialState,
+        toolMeta,
         mcpFailedServers: new Set(callbacks.mcpFailedServers),
-        onSave: (
-          updatedToolAvailability: Record<string, boolean>,
-          updatedPermissions: Record<string, boolean>,
-          updatedAllowedCommands: string[],
-        ) => {
-          updateLocalToolConfig(updatedToolAvailability);
-          updateLocalPermissions(updatedPermissions);
-          updateLocalAllowedCommands(updatedAllowedCommands);
+        onSave: (state: SettingsState) => {
+          saveSettings(state);
           callbacks.onComplete({ output: "Settings updated." });
         },
-        onAddMcpServer: addMcpServer,
-        onRemoveMcpServer: removeMcpServer,
-        onToggleMcpServer: updateMcpServerEnabled,
-        onUpdateMcpTools: updateMcpServerTools,
         onCancel: callbacks.onCancel,
       }),
     };

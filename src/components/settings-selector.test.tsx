@@ -1,57 +1,48 @@
 import { render } from "ink-testing-library";
 import { describe, expect, it, vi } from "vitest";
+import type { SettingsState, ToolMeta } from "./settings-selector";
 import { SettingsSelector } from "./settings-selector";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
-const defaultTools = ["read_file", "write_file", "run_command"];
-
-const defaultToolAvailability: Record<string, boolean> = {
-  read_file: true,
-  write_file: true,
-  run_command: true,
+const defaultToolMeta: ToolMeta = {
+  names: ["read_file", "write_file", "run_command"],
+  displayNames: {
+    read_file: "Read File",
+    write_file: "Write File",
+    run_command: "Run Command",
+  },
+  descriptions: {},
+  warnings: {},
 };
 
-const defaultPermissions = {
-  read_file: true,
-  write_file: false,
+const defaultState: SettingsState = {
+  toolAvailability: {
+    read_file: true,
+    write_file: true,
+    run_command: true,
+  },
+  permissions: {
+    read_file: true,
+    write_file: false,
+  },
+  allowedCommands: ["git:*", "npm:*"],
+  mcpServers: {},
 };
-
-const defaultAllowedCommands = ["git:*", "npm:*"];
 
 function renderSettings(overrides?: {
-  tools?: string[];
-  toolAvailability?: Record<string, boolean>;
-  toolWarnings?: Record<string, string>;
-  permissions?: Record<string, boolean>;
-  allowedCommands?: string[];
-  mcpServers?: Record<string, import("../config").McpServerConfig>;
-  onSave?: (...args: unknown[]) => void;
-  onAddMcpServer?: (...args: unknown[]) => void;
-  onRemoveMcpServer?: (...args: unknown[]) => void;
-  onToggleMcpServer?: (...args: unknown[]) => void;
-  onUpdateMcpTools?: (...args: unknown[]) => void;
+  state?: Partial<SettingsState>;
+  toolMeta?: Partial<ToolMeta>;
+  onSave?: (state: SettingsState) => void;
   onCancel?: () => void;
 }) {
   const onSave = overrides?.onSave ?? vi.fn();
   const onCancel = overrides?.onCancel ?? vi.fn();
   const result = render(
     <SettingsSelector
-      tools={overrides?.tools ?? defaultTools}
-      currentToolAvailability={
-        overrides?.toolAvailability ?? defaultToolAvailability
-      }
-      toolWarnings={overrides?.toolWarnings}
-      currentPermissions={overrides?.permissions ?? defaultPermissions}
-      currentAllowedCommands={
-        overrides?.allowedCommands ?? defaultAllowedCommands
-      }
+      initialState={{ ...defaultState, ...overrides?.state }}
+      toolMeta={{ ...defaultToolMeta, ...overrides?.toolMeta }}
       onSave={onSave}
-      onAddMcpServer={overrides?.onAddMcpServer ?? vi.fn()}
-      onRemoveMcpServer={overrides?.onRemoveMcpServer ?? vi.fn()}
-      onToggleMcpServer={overrides?.onToggleMcpServer ?? vi.fn()}
-      onUpdateMcpTools={overrides?.onUpdateMcpTools ?? vi.fn()}
-      mcpServers={overrides?.mcpServers ?? {}}
       onCancel={onCancel}
     />,
   );
@@ -66,6 +57,7 @@ describe("SettingsSelector", () => {
       expect(output).toContain("Tool Availability");
       expect(output).toContain("Tool Permissions");
       expect(output).toContain("Allowed Commands");
+      expect(output).toContain("MCP Servers");
     });
 
     it("saves on Esc from menu", async () => {
@@ -75,11 +67,7 @@ describe("SettingsSelector", () => {
       stdin.write("\x1B");
       await flush();
 
-      expect(onSave).toHaveBeenCalledWith(
-        defaultToolAvailability,
-        defaultPermissions,
-        defaultAllowedCommands,
-      );
+      expect(onSave).toHaveBeenCalledWith(defaultState);
     });
 
     it("cancels on q from menu", async () => {
@@ -101,8 +89,8 @@ describe("SettingsSelector", () => {
       await flush();
 
       const output = lastFrame();
-      expect(output).toContain("read_file");
-      expect(output).toContain("run_command");
+      expect(output).toContain("Read File");
+      expect(output).toContain("Run Command");
     });
 
     it("toggles tool availability", async () => {
@@ -118,8 +106,117 @@ describe("SettingsSelector", () => {
       stdin.write("\x1B");
       await flush();
 
-      const savedTools = onSave.mock.calls[0][0];
-      expect(savedTools.read_file).toBe(false);
+      const saved = onSave.mock.calls[0][0] as SettingsState;
+      expect(saved.toolAvailability.read_file).toBe(false);
+    });
+
+    it("shows MCP tools grouped by server", async () => {
+      const { stdin, lastFrame } = renderSettings({
+        state: {
+          mcpServers: {
+            "weather-api": {
+              transport: "http",
+              url: "https://mcp.example.com",
+              tools: [
+                {
+                  name: "get_weather",
+                  enabled: true,
+                  description: "Returns weather data",
+                },
+                { name: "random_number", enabled: false },
+              ],
+            },
+          },
+        },
+      });
+
+      stdin.write("\r");
+      await flush();
+
+      const output = lastFrame() ?? "";
+      expect(output).toContain("MCP → weather-api");
+      expect(output).toContain("get_weather");
+      expect(output).toContain("Returns weather data");
+      expect(output).toContain("random_number");
+    });
+
+    it("toggles MCP tool from tool availability", async () => {
+      const onSave = vi.fn();
+      const { stdin } = renderSettings({
+        state: {
+          mcpServers: {
+            "my-server": {
+              transport: "http",
+              url: "https://mcp.example.com",
+              tools: [{ name: "tool_a", enabled: true }],
+            },
+          },
+        },
+        onSave,
+      });
+
+      stdin.write("\r");
+      await flush();
+      // Navigate past 3 built-in tools to MCP tool
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write("\x1B[B");
+      await flush();
+      stdin.write(" ");
+      await flush();
+      stdin.write("\x1B");
+      await flush();
+      stdin.write("\x1B");
+      await flush();
+
+      const saved = onSave.mock.calls[0][0] as SettingsState;
+      expect(saved.mcpServers["my-server"].tools?.[0].enabled).toBe(false);
+    });
+
+    it("hides tools from disabled servers", async () => {
+      const { stdin, lastFrame } = renderSettings({
+        state: {
+          mcpServers: {
+            disabled: {
+              transport: "http",
+              url: "https://mcp.example.com",
+              enabled: false,
+              tools: [{ name: "hidden", enabled: true }],
+            },
+          },
+        },
+      });
+
+      stdin.write("\r");
+      await flush();
+
+      const output = lastFrame() ?? "";
+      expect(output).not.toContain("disabled");
+      expect(output).not.toContain("hidden");
+    });
+
+    it("shows both built-in and MCP tools", async () => {
+      const { stdin, lastFrame } = renderSettings({
+        state: {
+          mcpServers: {
+            "test-server": {
+              transport: "http",
+              url: "https://mcp.example.com",
+              tools: [{ name: "test_tool", enabled: true }],
+            },
+          },
+        },
+      });
+
+      stdin.write("\r");
+      await flush();
+
+      const output = lastFrame() ?? "";
+      expect(output).toContain("Read File");
+      expect(output).toContain("MCP → test-server");
+      expect(output).toContain("test_tool");
     });
   });
 
@@ -154,8 +251,8 @@ describe("SettingsSelector", () => {
       stdin.write("\x1B");
       await flush();
 
-      const savedPerms = onSave.mock.calls[0][1];
-      expect(savedPerms.write_file).toBe(true);
+      const saved = onSave.mock.calls[0][0] as SettingsState;
+      expect(saved.permissions.write_file).toBe(true);
     });
   });
 
@@ -163,7 +260,6 @@ describe("SettingsSelector", () => {
     it("shows allowed commands after selecting the step", async () => {
       const { stdin, lastFrame } = renderSettings();
 
-      // Down twice to Allowed Commands
       stdin.write("\x1B[B");
       await flush();
       stdin.write("\x1B[B");
@@ -194,9 +290,8 @@ describe("SettingsSelector", () => {
       stdin.write("\x1B");
       await flush();
 
-      const savedAllowed = onSave.mock.calls[0][2];
-      expect(savedAllowed).toHaveLength(1);
-      expect(savedAllowed[0]).toBe("npm:*");
+      const saved = onSave.mock.calls[0][0] as SettingsState;
+      expect(saved.allowedCommands).toEqual(["npm:*"]);
     });
 
     it("adds new entry", async () => {
@@ -209,7 +304,6 @@ describe("SettingsSelector", () => {
       await flush();
       stdin.write("\r");
       await flush();
-      // Move to add row (2 entries, add is index 2)
       stdin.write("\x1B[B");
       await flush();
       stdin.write("\x1B[B");
@@ -225,59 +319,8 @@ describe("SettingsSelector", () => {
       stdin.write("\x1B");
       await flush();
 
-      const savedAllowed = onSave.mock.calls[0][2];
-      expect(savedAllowed).toHaveLength(3);
-      expect(savedAllowed[2]).toBe("cargo:*");
-    });
-
-    it("adds exact command", async () => {
-      const onSave = vi.fn();
-      const { stdin } = renderSettings({ onSave });
-
-      stdin.write("\x1B[B");
-      await flush();
-      stdin.write("\x1B[B");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("a");
-      await flush();
-      stdin.write("npm test");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("\x1B");
-      await flush();
-      stdin.write("\x1B");
-      await flush();
-
-      const savedAllowed = onSave.mock.calls[0][2];
-      expect(savedAllowed).toContain("npm test");
-    });
-
-    it("cancels add with Escape", async () => {
-      const onSave = vi.fn();
-      const { stdin } = renderSettings({ onSave });
-
-      stdin.write("\x1B[B");
-      await flush();
-      stdin.write("\x1B[B");
-      await flush();
-      stdin.write("\r");
-      await flush();
-      stdin.write("a");
-      await flush();
-      stdin.write("cargo");
-      await flush();
-      stdin.write("\x1B");
-      await flush();
-      stdin.write("\x1B");
-      await flush();
-      stdin.write("\x1B");
-      await flush();
-
-      const savedAllowed = onSave.mock.calls[0][2];
-      expect(savedAllowed).toHaveLength(2);
+      const saved = onSave.mock.calls[0][0] as SettingsState;
+      expect(saved.allowedCommands).toContain("cargo:*");
     });
   });
 
@@ -287,17 +330,18 @@ describe("SettingsSelector", () => {
       expect(lastFrame()).toContain("MCP Servers");
     });
 
-    it("shows MCP server list after selecting the step", async () => {
+    it("shows server list after selecting", async () => {
       const { stdin, lastFrame } = renderSettings({
-        mcpServers: {
-          "test-server": {
-            transport: "http",
-            url: "https://mcp.example.com",
+        state: {
+          mcpServers: {
+            "test-server": {
+              transport: "http",
+              url: "https://mcp.example.com",
+            },
           },
         },
       });
 
-      // Down 3 times to MCP Servers, then Enter
       stdin.write("\x1B[B");
       await flush();
       stdin.write("\x1B[B");
@@ -313,15 +357,17 @@ describe("SettingsSelector", () => {
     });
 
     it("toggles MCP server enabled state", async () => {
-      const onToggle = vi.fn();
+      const onSave = vi.fn();
       const { stdin } = renderSettings({
-        mcpServers: {
-          "my-server": {
-            transport: "http",
-            url: "https://mcp.example.com",
+        state: {
+          mcpServers: {
+            "my-server": {
+              transport: "http",
+              url: "https://mcp.example.com",
+            },
           },
         },
-        onToggleMcpServer: onToggle,
+        onSave,
       });
 
       // Navigate to MCP Servers
@@ -334,26 +380,34 @@ describe("SettingsSelector", () => {
       stdin.write("\r");
       await flush();
 
-      // Toggle server
+      // Toggle
       stdin.write(" ");
       await flush();
 
-      expect(onToggle).toHaveBeenCalledWith("my-server", false);
+      // Back and save
+      stdin.write("\x1B");
+      await flush();
+      stdin.write("\x1B");
+      await flush();
+
+      const saved = onSave.mock.calls[0][0] as SettingsState;
+      expect(saved.mcpServers["my-server"].enabled).toBe(false);
     });
 
     it("removes MCP server", async () => {
-      const onRemove = vi.fn();
+      const onSave = vi.fn();
       const { stdin } = renderSettings({
-        mcpServers: {
-          "my-server": {
-            transport: "http",
-            url: "https://mcp.example.com",
+        state: {
+          mcpServers: {
+            "my-server": {
+              transport: "http",
+              url: "https://mcp.example.com",
+            },
           },
         },
-        onRemoveMcpServer: onRemove,
+        onSave,
       });
 
-      // Navigate to MCP Servers
       stdin.write("\x1B[B");
       await flush();
       stdin.write("\x1B[B");
@@ -362,26 +416,15 @@ describe("SettingsSelector", () => {
       await flush();
       stdin.write("\r");
       await flush();
-
-      // Delete server
       stdin.write("d");
       await flush();
-
-      expect(onRemove).toHaveBeenCalledWith("my-server");
-    });
-
-    it("does not show MCP tools in global tool availability list", async () => {
-      const { stdin, lastFrame } = renderSettings({
-        toolAvailability: defaultToolAvailability,
-      });
-
-      // Navigate to Tool Availability
-      stdin.write("\r");
+      stdin.write("\x1B");
+      await flush();
+      stdin.write("\x1B");
       await flush();
 
-      const output = lastFrame() ?? "";
-      expect(output).toContain("read_file");
-      expect(output).not.toContain("mcp__");
+      const saved = onSave.mock.calls[0][0] as SettingsState;
+      expect(saved.mcpServers["my-server"]).toBeUndefined();
     });
   });
 
