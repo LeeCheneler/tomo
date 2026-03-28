@@ -43,6 +43,7 @@ const agentsSchema = z
 const mcpToolSchema = z.object({
   name: z.string().min(1),
   enabled: z.boolean(),
+  description: z.string().optional(),
 });
 
 const mcpStdioServerSchema = z.object({

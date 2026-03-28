@@ -65,18 +65,7 @@ const settings: Command = {
           updateLocalAllowedCommands(updatedAllowedCommands);
           callbacks.onComplete({ output: "Settings updated." });
         },
-        onAddMcpServer: (
-          name: string,
-          server: import("../config").McpServerConfig,
-          toolNames: string[],
-        ) => {
-          // Save server with all tools disabled by default
-          const serverWithTools = {
-            ...server,
-            tools: toolNames.map((t) => ({ name: t, enabled: false })),
-          };
-          addMcpServer(name, serverWithTools);
-        },
+        onAddMcpServer: addMcpServer,
         onRemoveMcpServer: removeMcpServer,
         onToggleMcpServer: updateMcpServerEnabled,
         onUpdateMcpTools: updateMcpServerTools,

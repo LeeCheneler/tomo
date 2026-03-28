@@ -1,11 +1,9 @@
 import { Box, Text, useInput } from "ink";
 import { useEffect, useState } from "react";
-import type { McpServerConfig } from "../config";
+import type { McpServerConfig, McpToolConfig } from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
-import { McpClient } from "../mcp/client";
-import { HttpTransport } from "../mcp/http-transport";
-import { StdioTransport } from "../mcp/stdio-transport";
 import { type CheckboxItem, CheckboxList } from "./checkbox-list";
+import { McpServerSelector } from "./mcp-server-selector";
 
 interface PermissionRow {
   key: string;
@@ -26,16 +24,7 @@ const PERMISSION_ROWS: PermissionRow[] = [
   },
 ];
 
-type Step =
-  | "menu"
-  | "tools"
-  | "permissions"
-  | "allowed"
-  | "mcpServers"
-  | "mcpAddType"
-  | "mcpAddUrl"
-  | "mcpAddCommand"
-  | "mcpConnecting";
+type Step = "menu" | "tools" | "permissions" | "allowed" | "mcpServers";
 
 const MENU_OPTIONS = [
   "Tool Availability",
@@ -43,8 +32,6 @@ const MENU_OPTIONS = [
   "Allowed Commands",
   "MCP Servers",
 ];
-
-const MCP_TRANSPORT_TYPES = ["http", "stdio"] as const;
 
 export interface SettingsSelectorProps {
   tools: string[];
@@ -61,21 +48,14 @@ export interface SettingsSelectorProps {
     permissions: Record<string, boolean>,
     allowedCommands: string[],
   ) => void;
-  onAddMcpServer: (
-    name: string,
-    server: McpServerConfig,
-    toolNames: string[],
-  ) => void;
+  onAddMcpServer: (name: string, server: McpServerConfig) => void;
   onRemoveMcpServer: (name: string) => void;
   onToggleMcpServer: (name: string, enabled: boolean) => void;
-  onUpdateMcpTools: (
-    serverName: string,
-    tools: import("../config").McpToolConfig[],
-  ) => void;
+  onUpdateMcpTools: (serverName: string, tools: McpToolConfig[]) => void;
   onCancel: () => void;
 }
 
-/** Interactive multi-step settings UI for tools, permissions, and allowed commands. */
+/** Interactive multi-step settings UI for tools, permissions, allowed commands, and MCP servers. */
 export function SettingsSelector({
   tools,
   toolDisplayNames,
@@ -90,7 +70,7 @@ export function SettingsSelector({
   onAddMcpServer,
   onRemoveMcpServer,
   onToggleMcpServer,
-  onUpdateMcpTools: _onUpdateMcpTools,
+  onUpdateMcpTools,
   onCancel,
 }: SettingsSelectorProps) {
   const [step, setStep] = useState<Step>("menu");
@@ -104,19 +84,6 @@ export function SettingsSelector({
   const [adding, setAdding] = useState(false);
   const [newEntry, setNewEntry] = useState("");
 
-  // MCP server state
-  const [mcpServerList, setMcpServerList] = useState(mcpServers);
-  const mcpServerNames = Object.keys(mcpServerList);
-  const [mcpFailed, setMcpFailed] = useState<Set<string>>(
-    mcpFailedServers ?? new Set(),
-  );
-  const [mcpTextValue, setMcpTextValue] = useState("");
-  const [mcpConnectError, setMcpConnectError] = useState<string | null>(null);
-  const [mcpPendingConfig, setMcpPendingConfig] =
-    useState<McpServerConfig | null>(null);
-  const [mcpReconnectName, setMcpReconnectName] = useState<string | null>(null);
-
-  // Compute item count based on current step
   const itemCount = (() => {
     switch (step) {
       case "menu":
@@ -126,11 +93,7 @@ export function SettingsSelector({
       case "permissions":
         return PERMISSION_ROWS.length;
       case "allowed":
-        return allowedCommands.length + 1; // +1 for "Add..." row
-      case "mcpServers":
-        return mcpServerNames.length + 1; // +1 for "Add..." row
-      case "mcpAddType":
-        return MCP_TRANSPORT_TYPES.length;
+        return allowedCommands.length + 1;
       default:
         return 0;
     }
@@ -139,97 +102,19 @@ export function SettingsSelector({
   const { cursor, setCursor, handleUp, handleDown } =
     useListNavigation(itemCount);
 
-  // Reset cursor when step changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset cursor on step change
   useEffect(() => {
     setCursor(0);
   }, [step]);
-
-  // Connect to MCP server, discover name + tools, save config
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on step/config changes
-  useEffect(() => {
-    if (step !== "mcpConnecting" || !mcpPendingConfig) return;
-    let cancelled = false;
-
-    (async () => {
-      let client: McpClient | null = null;
-      try {
-        const transport =
-          mcpPendingConfig.transport === "stdio"
-            ? new StdioTransport(
-                (mcpPendingConfig as { command: string }).command,
-                (mcpPendingConfig as { args: string[] }).args,
-                (mcpPendingConfig as { env?: Record<string, string> }).env,
-              )
-            : new HttpTransport(
-                (mcpPendingConfig as { url: string }).url,
-                (mcpPendingConfig as { headers?: Record<string, string> })
-                  .headers,
-              );
-
-        client = new McpClient(transport);
-        const initResult = await client.initialize();
-        const tools = await client.listTools();
-        client.close();
-        client = null;
-
-        if (cancelled) return;
-
-        if (mcpReconnectName) {
-          // Reconnect: clear the failure, don't re-add
-          setMcpFailed((prev) => {
-            const next = new Set(prev);
-            next.delete(mcpReconnectName);
-            return next;
-          });
-          setMcpReconnectName(null);
-        } else {
-          // New server: use server-provided name, dedup if needed
-          let serverName = initResult.serverInfo.name;
-          if (mcpServerList[serverName]) {
-            let suffix = 2;
-            while (mcpServerList[`${serverName}-${suffix}`]) {
-              suffix++;
-            }
-            serverName = `${serverName}-${suffix}`;
-          }
-
-          // Save with all tools disabled by default
-          const toolNames = tools.map((t) => t.name);
-          const serverWithTools = {
-            ...mcpPendingConfig,
-            tools: toolNames.map((t) => ({ name: t, enabled: false })),
-          };
-
-          onAddMcpServer(serverName, mcpPendingConfig, toolNames);
-          setMcpServerList((prev) => ({
-            ...prev,
-            [serverName]: serverWithTools,
-          }));
-        }
-        setMcpTextValue("");
-        setMcpPendingConfig(null);
-        setStep("mcpServers");
-      } catch (err) {
-        client?.close();
-        if (cancelled) return;
-        setMcpConnectError(
-          err instanceof Error ? err.message : "Connection failed",
-        );
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [step, mcpPendingConfig]);
 
   const save = () => {
     onSave(toolAvailability, permissions, allowedCommands);
   };
 
   useInput((input, key) => {
-    // Text input mode for adding an entry
+    // Delegate to MCP component when on that step
+    if (step === "mcpServers") return;
+
     if (adding) {
       if (key.escape) {
         setAdding(false);
@@ -255,22 +140,9 @@ export function SettingsSelector({
       return;
     }
 
-    const mcpSubSteps: Step[] = [
-      "mcpAddType",
-      "mcpAddUrl",
-      "mcpAddCommand",
-      "mcpConnecting",
-    ];
-
     if (key.escape) {
       if (step === "menu") {
         save();
-      } else if (mcpSubSteps.includes(step)) {
-        setMcpTextValue("");
-        setMcpConnectError(null);
-        setMcpPendingConfig(null);
-        setMcpReconnectName(null);
-        setStep("mcpServers");
       } else {
         setStep("menu");
       }
@@ -280,12 +152,6 @@ export function SettingsSelector({
     if (input === "q" || input === "Q") {
       if (step === "menu") {
         onCancel();
-      } else if (mcpSubSteps.includes(step)) {
-        setMcpTextValue("");
-        setMcpConnectError(null);
-        setMcpPendingConfig(null);
-        setMcpReconnectName(null);
-        setStep("mcpServers");
       } else {
         setStep("menu");
       }
@@ -358,106 +224,6 @@ export function SettingsSelector({
         } else if ((input === " " || key.return) && isOnAdd) {
           setAdding(true);
         }
-        break;
-      }
-
-      case "mcpServers": {
-        const isOnAdd = cursor === mcpServerNames.length;
-
-        if (key.upArrow) {
-          handleUp();
-        } else if (key.downArrow) {
-          handleDown();
-        } else if ((input === " " || key.return) && !isOnAdd) {
-          const name = mcpServerNames[cursor];
-          const server = mcpServerList[name];
-          const currentEnabled = server.enabled !== false;
-          onToggleMcpServer(name, !currentEnabled);
-          setMcpServerList((prev) => ({
-            ...prev,
-            [name]: { ...prev[name], enabled: !currentEnabled },
-          }));
-        } else if ((input === "d" || input === "D") && !isOnAdd) {
-          const name = mcpServerNames[cursor];
-          onRemoveMcpServer(name);
-          setMcpServerList((prev) => {
-            const next = { ...prev };
-            delete next[name];
-            return next;
-          });
-          if (cursor >= mcpServerNames.length - 1) {
-            setCursor((c) => Math.max(0, c - 1));
-          }
-        } else if (
-          (input === "r" || input === "R") &&
-          !isOnAdd &&
-          mcpFailed.has(mcpServerNames[cursor])
-        ) {
-          const name = mcpServerNames[cursor];
-          const server = mcpServerList[name];
-          setMcpReconnectName(name);
-          setMcpPendingConfig(server);
-          setMcpConnectError(null);
-          setStep("mcpConnecting");
-        } else if (
-          input === "a" ||
-          input === "A" ||
-          ((input === " " || key.return) && isOnAdd)
-        ) {
-          setMcpTextValue("");
-          setMcpConnectError(null);
-          setStep("mcpAddType");
-        }
-        break;
-      }
-
-      case "mcpAddType": {
-        if (key.upArrow) {
-          handleUp();
-        } else if (key.downArrow) {
-          handleDown();
-        } else if (key.return) {
-          const type = MCP_TRANSPORT_TYPES[cursor];
-          setMcpTextValue(type === "http" ? "https://" : "");
-          setStep(type === "http" ? "mcpAddUrl" : "mcpAddCommand");
-        }
-        break;
-      }
-
-      case "mcpAddUrl": {
-        if (key.return) {
-          const url = mcpTextValue.trim();
-          if (!url) return;
-          setMcpPendingConfig({ transport: "http", url });
-          setMcpConnectError(null);
-          setStep("mcpConnecting");
-        } else if (key.backspace || key.delete) {
-          setMcpTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setMcpTextValue((v) => v + input);
-        }
-        break;
-      }
-
-      case "mcpAddCommand": {
-        if (key.return) {
-          const parts = mcpTextValue.trim().split(/\s+/);
-          const command = parts[0];
-          if (!command) return;
-          const args = parts.slice(1);
-          setMcpPendingConfig({ transport: "stdio", command, args });
-          setMcpConnectError(null);
-          setStep("mcpConnecting");
-        } else if (key.backspace || key.delete) {
-          setMcpTextValue((v) => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setMcpTextValue((v) => v + input);
-        }
-        break;
-      }
-
-      case "mcpConnecting": {
-        // No input during connect
         break;
       }
     }
@@ -561,110 +327,17 @@ export function SettingsSelector({
         </Box>
       );
 
-    case "mcpServers": {
-      const mcpItems: CheckboxItem[] = mcpServerNames.map((name) => {
-        const server = mcpServerList[name];
-        const transport =
-          server.transport === "http"
-            ? (server as { url: string }).url
-            : (server as { command: string }).command;
-        const failed = mcpFailed.has(name);
-        return {
-          key: name,
-          label: name,
-          description: `${server.transport} — ${transport}`,
-          checked: server.enabled !== false,
-          warning:
-            failed && server.enabled !== false
-              ? "Failed to connect"
-              : undefined,
-        };
-      });
+    case "mcpServers":
       return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {
-              "  MCP Servers (Space/Enter toggle, d delete, a add, r reconnect, Esc back):"
-            }
-          </Text>
-          <Text>{""}</Text>
-          <CheckboxList items={mcpItems} cursor={cursor} />
-          {(() => {
-            const isCurrent = cursor === mcpServerNames.length;
-            return (
-              <Text color={isCurrent ? "cyan" : "dim"}>
-                {"    "}
-                {isCurrent ? "❯" : " "} [+] Add...
-              </Text>
-            );
-          })()}
-        </Box>
+        <McpServerSelector
+          servers={mcpServers}
+          failedServers={mcpFailedServers}
+          onAddServer={onAddMcpServer}
+          onRemoveServer={onRemoveMcpServer}
+          onToggleServer={onToggleMcpServer}
+          onUpdateTools={onUpdateMcpTools}
+          onBack={() => setStep("menu")}
+        />
       );
-    }
-
-    case "mcpAddType":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Select transport type (↑↓ navigate, Enter select, Esc back):"}
-          </Text>
-          <Text>{""}</Text>
-          {MCP_TRANSPORT_TYPES.map((type, i) => {
-            const isCurrent = i === cursor;
-            return (
-              <Text key={type} color={isCurrent ? "cyan" : undefined}>
-                {"    "}
-                {isCurrent ? "❯" : " "} {type}
-              </Text>
-            );
-          })}
-        </Box>
-      );
-
-    case "mcpAddUrl":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {"  Enter server URL (Enter confirm, Esc back):"}
-          </Text>
-          <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {mcpTextValue}
-            <Text dimColor>█</Text>
-          </Text>
-        </Box>
-      );
-
-    case "mcpAddCommand":
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>
-            {
-              "  Enter command and args to start the server (Enter confirm, Esc back):"
-            }
-          </Text>
-          <Text>{""}</Text>
-          <Text>
-            {"    "}
-            {mcpTextValue}
-            <Text dimColor>█</Text>
-          </Text>
-        </Box>
-      );
-
-    case "mcpConnecting":
-      if (mcpConnectError) {
-        return (
-          <Box flexDirection="column">
-            <Text color="red">
-              {"  Failed to connect: "}
-              {mcpConnectError}
-            </Text>
-            <Text dimColor>{"  Press Esc to go back."}</Text>
-          </Box>
-        );
-      }
-      return <Text dimColor>{"  Connecting to MCP server..."}</Text>;
   }
 }
