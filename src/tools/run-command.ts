@@ -103,8 +103,16 @@ async function promptAndRun(
 registerTool({
   name: "run_command",
   displayName: "Run Command",
-  description:
-    "Run a CLI command. Commands may be auto-approved via patterns or allow lists, or may prompt for approval.",
+  description: `Execute a shell command via /bin/sh. Returns the exit code, stdout, and stderr.
+
+- Commands time out after ${DEFAULT_TIMEOUT_MS / 1000} seconds.
+- Do NOT use this for tasks that have dedicated tools:
+  - Reading files → use read_file
+  - Writing/editing files → use write_file or edit_file
+  - Searching file names → use glob
+  - Searching file contents → use grep
+- Use this for: running tests, builds, linters, git commands, package managers, and other CLI operations.
+- Commands may require user approval depending on the configured allow list.`,
   parameters: {
     type: "object",
     properties: {

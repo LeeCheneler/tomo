@@ -10,10 +10,12 @@ const argsSchema = z.object({
 function buildDescription(): string {
   const skills = getAllSkills();
   if (skills.length === 0) {
-    return "Load a skill to get specialized instructions for a task. No skills are currently available.";
+    return "Load a skill to receive specialised instructions for a specific type of task. No skills are currently available.";
   }
   const list = skills.map((s) => `- ${s.name}: ${s.description}`).join("\n");
-  return `Load a skill to get specialized instructions for a task. Before starting work, check if the user's request matches an available skill and load it first. Available skills:\n${list}`;
+  return `Load a skill to receive specialised instructions for a specific type of task. Skills provide expert-level guidance for workflows like committing, creating PRs, creating issues, and more.
+
+Before starting work on a user request, check if an available skill matches the task and load it first — skill instructions take priority. Available skills:\n${list}`;
 }
 
 registerTool({
