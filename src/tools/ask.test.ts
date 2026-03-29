@@ -23,18 +23,19 @@ describe("ask tool", () => {
         options: {
           type: "array",
           items: { type: "string" },
-          description: "The available choices (2 or more)",
+          description: "The available choices (0 or more; omit to enable free-text input only)",
         },
       },
-      required: ["question", "options"],
+      required: ["question"],
     });
   });
 
-  it("throws when no options provided", async () => {
+  it("supports text-only input when no options provided", async () => {
     const tool = getTool("ask");
+    const renderFactory = vi.fn().mockResolvedValue("custom answer");
     const context = {
-      renderInteractive: vi.fn(),
       reportProgress: vi.fn(),
+      renderInteractive: renderFactory,
       permissions: {},
       signal: new AbortController().signal,
       depth: 0,
@@ -49,10 +50,13 @@ describe("ask tool", () => {
       allowedCommands: [],
     };
 
-    await expect(
-      tool?.execute(JSON.stringify({ question: "pick", options: [] }), context),
-    ).rejects.toThrow("no options provided");
-    expect(context.renderInteractive).not.toHaveBeenCalled();
+    const result = await tool?.execute(
+      JSON.stringify({ question: "What would you like to do?", options: [] }),
+      context,
+    );
+
+    expect(renderFactory).toHaveBeenCalledTimes(1);
+    expect(result).toBe("custom answer");
   });
 
   it("uses default question when none provided", async () => {

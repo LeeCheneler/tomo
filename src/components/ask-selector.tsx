@@ -11,7 +11,7 @@ interface AskSelectorProps {
 /** Interactive multiple-choice selector with a free-text input as the last option. */
 export function AskSelector({
   question,
-  options,
+  options = [],
   onSelect,
   onCancel,
 }: AskSelectorProps) {
