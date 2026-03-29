@@ -44,7 +44,7 @@ export function AskSelector({
         setCustomValue((v) => v.slice(0, -1));
         return;
       }
-      if (key.upArrow) {
+      if (key.upArrow && textInputIndex > 0) {
         setCursor(textInputIndex - 1);
         return;
       }
