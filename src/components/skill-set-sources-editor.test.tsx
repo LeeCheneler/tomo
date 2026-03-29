@@ -1,7 +1,15 @@
 import { render } from "ink-testing-library";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsState } from "./settings-selector";
 import { SkillSetSourcesEditor } from "./skill-set-sources-editor";
+
+vi.mock("../skill-sets/sources", () => ({
+  removeSource: vi.fn(),
+}));
+
+import { removeSource } from "../skill-sets/sources";
+
+const mockRemoveSource = vi.mocked(removeSource);
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
@@ -35,6 +43,10 @@ function renderEditor(overrides?: {
 }
 
 describe("SkillSetSourcesEditor", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("shows sources and Add option", () => {
     const { lastFrame } = renderEditor();
     const output = lastFrame() ?? "";
@@ -43,15 +55,29 @@ describe("SkillSetSourcesEditor", () => {
     expect(output).toContain("Add...");
   });
 
-  it("deletes source with d", async () => {
+  it("deletes source with d, removes cached repo, and cleans enabled sets", async () => {
     const onUpdate = vi.fn();
-    const { stdin } = renderEditor({ onUpdate });
+    const { stdin } = renderEditor({
+      state: {
+        enabledSkillSets: [
+          { sourceUrl: "https://github.com/org/skills-a.git", name: "dev" },
+          { sourceUrl: "https://github.com/org/skills-b.git", name: "ops" },
+        ],
+      },
+      onUpdate,
+    });
 
     stdin.write("d");
     await flush();
 
+    expect(mockRemoveSource).toHaveBeenCalledWith(
+      "https://github.com/org/skills-a.git",
+    );
     expect(onUpdate).toHaveBeenCalledWith({
       skillSetSources: [{ url: "https://github.com/org/skills-b.git" }],
+      enabledSkillSets: [
+        { sourceUrl: "https://github.com/org/skills-b.git", name: "ops" },
+      ],
     });
   });
 
