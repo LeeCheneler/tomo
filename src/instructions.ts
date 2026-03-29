@@ -119,6 +119,13 @@ Do NOT use run_command for tasks that have dedicated tools. Dedicated tools are 
 
 Reserve run_command for operations that have no dedicated tool: running tests, builds, linters, git commands, and package managers.
 
+Prefer single commands over compound commands: Use separate \`run_command\` calls instead of chaining commands with \`&&\`, \`;\`, \`||\`, etc. Single commands are more likely to match allowed command patterns (like \`git:*\`) and run without user approval, whereas compound commands often require approval because they don't match predefined patterns. Single commands can also run in parallel when independent.
+
+Example: Instead of \`git status && git log --oneline -1\` (one compound command), use two separate calls:
+- \`git status\` 
+- \`git log --oneline -1\`
+These can run in parallel and each matches \`git:*\` in allowed commands.
+
 ### Parallel tool calls
 
 When you need to make multiple tool calls that are independent of each other, make them all in the same response. This runs them in parallel and is significantly faster.
