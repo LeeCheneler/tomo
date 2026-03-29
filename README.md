@@ -187,7 +187,12 @@ All fields are optional — sensible defaults apply if the section is omitted en
 
 ## Instruction Files
 
-Tomo loads instruction files as system messages. It checks `.tomo/`, `.claude/`, and the current directory for `claude.md` or `agents.md`. Both global (`~/`) and local (`./`) files are combined.
+Tomo loads instruction files as system messages from two locations:
+
+- **Global:** `~/tomo.md`
+- **Local:** `.tomo/tomo.md`
+
+When both exist, they are combined with a separator. Global instructions load first, then local instructions.
 
 ## Skills
 
