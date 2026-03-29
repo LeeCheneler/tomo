@@ -10,6 +10,7 @@ const baseState: SettingsState = {
   permissions: { read_file: true, write_file: false },
   allowedCommands: [],
   mcpServers: {},
+  skillSetSources: [],
 };
 
 function renderEditor(overrides?: {
