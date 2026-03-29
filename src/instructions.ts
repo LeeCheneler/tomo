@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { arch, homedir, platform, release, userInfo } from "node:os";
 import { resolve } from "node:path";
 import { env } from "./env";
@@ -13,68 +13,21 @@ import {
 } from "./git";
 import { getAllSkills } from "./skills";
 
-const FILENAMES = ["claude.md", "agents.md"];
-
-const SEARCH_DIRS = (base: string) => [
-  resolve(base, ".tomo"),
-  resolve(base, ".claude"),
-  base,
-];
-
-/** Case-insensitive search for a specific filename in a directory. */
-function findFile(dir: string, target: string): string | null {
-  if (!existsSync(dir)) return null;
-  const entries = readdirSync(dir);
-  const match = entries.find((e) => e.toLowerCase() === target);
-  return match ? resolve(dir, match) : null;
+/** Returns the global instruction file path (~/tomo.md). */
+function globalInstructionPath(): string {
+  return resolve(homedir(), "tomo.md");
 }
 
-/** Case-insensitive search for any instruction file in a directory. */
-function findInstructionFile(
-  dir: string,
-): { path: string; filename: string } | null {
-  if (!existsSync(dir)) return null;
-  const entries = readdirSync(dir);
-  for (const target of FILENAMES) {
-    const match = entries.find((e) => e.toLowerCase() === target);
-    if (match) return { path: resolve(dir, match), filename: target };
-  }
-  return null;
+/** Returns the local instruction file path (.tomo/tomo.md). */
+function localInstructionPath(): string {
+  return resolve(process.cwd(), ".tomo", "tomo.md");
 }
 
-/** Reads file content, returns null if empty. */
+/** Reads file content, returns null if file doesn't exist or is empty. */
 function readContent(path: string): string | null {
+  if (!existsSync(path)) return null;
   const content = readFileSync(path, "utf-8").trim();
   return content || null;
-}
-
-/** Searches directories in order for any instruction file. */
-function findAcrossDirs(
-  dirs: string[],
-): { content: string; filename: string } | null {
-  for (const dir of dirs) {
-    const found = findInstructionFile(dir);
-    if (found) {
-      const content = readContent(found.path);
-      if (content) return { content, filename: found.filename };
-    }
-  }
-  return null;
-}
-
-/** Searches directories in order for a specific filename only. */
-function findSpecificAcrossDirs(
-  dirs: string[],
-  filename: string,
-): string | null {
-  for (const dir of dirs) {
-    const path = findFile(dir, filename);
-    if (path) {
-      const content = readContent(path);
-      if (content) return content;
-    }
-  }
-  return null;
 }
 
 /** Builds a system info header with OS, shell, and architecture. */
@@ -113,40 +66,26 @@ export function getGitContext(): string | null {
 }
 
 /**
- * Loads and combines instruction files from root and local locations.
- * If a local file is found, only its matching filename is searched at root.
- * If no local file exists, root is searched with full preference order.
+ * Loads and combines instruction files from global (~/tomo.md) and local (.tomo/tomo.md).
+ * Both are included when present, separated by a divider.
  * Prepends system info header to the result.
  */
 export function loadInstructions(): string | null {
   const systemInfo = getSystemInfo();
   const gitContext = getGitContext();
   const header = gitContext ? `${systemInfo}\n\n${gitContext}` : systemInfo;
-  const home = homedir();
-  const cwd = process.cwd();
 
-  const rootDirs = SEARCH_DIRS(home);
-  const localDirs = SEARCH_DIRS(cwd);
-
-  const local = findAcrossDirs(localDirs);
-
+  const global = readContent(globalInstructionPath());
+  const local = readContent(localInstructionPath());
   const toolUsage = getToolUsageGuidance();
 
-  if (local) {
-    const root = findSpecificAcrossDirs(rootDirs, local.filename);
-    if (root)
-      return appendSkillsNotice(
-        `${header}\n\n${root}\n\n---\n\n${local.content}\n\n${toolUsage}`,
-      );
-    return appendSkillsNotice(`${header}\n\n${local.content}\n\n${toolUsage}`);
-  }
+  const parts = [header];
+  if (global) parts.push(global);
+  if (global && local) parts.push("---");
+  if (local) parts.push(local);
+  parts.push(toolUsage);
 
-  const root = findAcrossDirs(rootDirs);
-  const base = root
-    ? `${header}\n\n${root.content}\n\n${toolUsage}`
-    : `${header}\n\n${toolUsage}`;
-
-  return appendSkillsNotice(base);
+  return appendSkillsNotice(parts.join("\n\n"));
 }
 
 /** Appends a skills notice to the system instructions if any skills are available. */

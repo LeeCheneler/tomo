@@ -4,7 +4,7 @@ Date: 2026-03-20
 
 ## Status
 
-Accepted
+Superseded
 
 ## Context
 
@@ -12,7 +12,7 @@ Tomo supports loading instruction files (system prompts) from disk to customise 
 
 The search needs to support both global (user-wide) and local (project-specific) instructions, combining them when both exist.
 
-## Decision
+## Decision (original)
 
 Search three directory types per location, in preference order:
 
@@ -22,19 +22,18 @@ Search three directory types per location, in preference order:
 
 Within each directory, filenames are searched case-insensitively in order: `claude.md` then `agents.md`. First match wins per location.
 
-**Root locations:** `~/.tomo/`, `~/.claude/`, `~/`
-**Local locations:** `./.tomo/`, `./.claude/`, `./`
+## Superseded by
 
-When a local file is found, the root search is constrained to the **same filename** only. For example, a local `agents.md` will only pair with a root `agents.md` — it won't combine with a root `claude.md`. This prevents accidental cross-contamination between instruction files meant for different tools.
+As of 2026-03-29, instruction files use two fixed paths only:
 
-When no local file exists, the root search uses the full preference order.
+- **Global:** `~/tomo.md`
+- **Local:** `.tomo/tomo.md`
 
-Combined content is sent as a system message: root first, then local, separated by `---`.
+Support for `claude.md`, `agents.md`, `.claude/`, and bare directory search was removed. The multi-path search added complexity with no real benefit — tomo should use its own convention rather than piggyback on other tools' file layouts. See issue #222.
 
 ## Consequences
 
-- Users can reuse existing `claude.md` or `agents.md` files without creating tomo-specific copies
-- The `.tomo/` directory takes precedence, so tomo-specific overrides always win
-- Filename anchoring prevents surprising combinations (e.g. a Claude Code `claude.md` mixing with an unrelated `agents.md`)
-- Adding support for new conventions only requires extending the directory and filename lists
-- Files are read once at startup — changes require restarting tomo
+- Users must rename existing `claude.md` or `agents.md` files to the new paths
+- No case-insensitive search needed — paths are fixed
+- No filename anchoring logic — both locations always pair
+- Simpler instruction loading code with fewer edge cases
