@@ -2,14 +2,7 @@ import chalk from "chalk";
 import { highlight } from "cli-highlight";
 import { Text } from "ink";
 import { Marked } from "marked";
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape codes requires control characters
-const ANSI_REGEX = /\x1b\[[0-9;]*m/g;
-
-/** Strips ANSI escape codes to get the visible character length. */
-function stripAnsi(str: string): string {
-  return str.replace(ANSI_REGEX, "");
-}
+import { stripAnsi } from "../strip-ansi";
 
 /** Pads a string to a visible width, accounting for ANSI codes. */
 function padEnd(str: string, width: number): string {

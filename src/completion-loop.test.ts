@@ -241,6 +241,33 @@ describe("runCompletionLoop", () => {
     });
   });
 
+  it("strips ANSI escape codes from tool results sent to the LLM", async () => {
+    const toolCall: ToolCall = {
+      id: "tc_1",
+      type: "function",
+      function: { name: "run_command", arguments: "{}" },
+    };
+
+    mockStream.mockResolvedValueOnce(mockCompletion([], [toolCall]));
+    mockStream.mockResolvedValueOnce(mockCompletion(["done"]));
+
+    mockExecuteTools.mockResolvedValueOnce([
+      {
+        id: "msg_1",
+        role: "tool",
+        content: "\x1b[1m\x1b[33mRun Command\x1b[39m\x1b[22m\nExit code: 0",
+        tool_call_id: "tc_1",
+      },
+    ]);
+
+    const result = await runCompletionLoop(baseOptions());
+
+    const toolMsg = result.messages.find((m) => m.role === "tool");
+    expect(toolMsg?.content).toBe("Run Command\nExit code: 0");
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: asserting ANSI codes are absent
+    expect(toolMsg?.content).not.toMatch(/\x1b/);
+  });
+
   it("propagates non-abort errors", async () => {
     mockStream.mockRejectedValueOnce(new Error("connection failed"));
 
