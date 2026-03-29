@@ -193,13 +193,21 @@ Do NOT parallelise calls that depend on each other — if you need the result of
 
 ### Codebase exploration
 
-Match your approach to the scope of the search:
+Choose your approach based on how many files you will need to examine:
 
-1. **Targeted search** (find a specific file, function, or string): Use glob or grep directly. This is fast and precise.
-2. **Scoped investigation** (understand how a module works, trace a data flow): Read a few key files. Use grep to find references, then read_file to understand context.
-3. **Broad exploration** (map an unfamiliar codebase, investigate a cross-cutting concern): Spawn one or more sub-agents. Each agent can independently explore a facet of the question using read-only tools.
+1. **Targeted search** (1-3 files): Use glob or grep directly, then read_file. This is fast and precise.
+2. **Broad exploration** (more than 3 files, or you don't know what you need yet): You MUST spawn sub-agents using the agent tool. Do NOT attempt broad exploration with sequential tool calls — it is too slow and fills context.
 
-Start with the simplest approach. Only escalate to sub-agents when direct tool use would require too many sequential calls.
+**When to spawn sub-agents:**
+- The user asks to explore, investigate, describe, review, or understand a codebase or large area of code
+- The task requires reading more than 3 files to answer
+- The task has multiple independent facets that can be researched in parallel
+- You don't yet know which files are relevant and need to search broadly
+
+**How to use sub-agents effectively:**
+- Break the task into independent research questions and spawn one agent per question in a single response — they run in parallel.
+- Give each agent a clear, focused prompt describing exactly what to find and report back.
+- Example: if asked "describe this codebase", spawn agents for: project structure and entry points, core features and functionality, testing approach and coverage, configuration and build system.
 
 ### Making edits that succeed
 

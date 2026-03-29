@@ -58,12 +58,16 @@ function buildDescription(): string {
     mins >= 1 ? `${mins}-minute` : `${agentsConfig.timeoutSeconds}-second`;
   return `Spawn a sub-agent that autonomously researches, explores, or analyses. The sub-agent has access to read-only tools (read_file, glob, grep, web_search, skill) and returns a text summary when done. It cannot edit files, write files, or run commands.
 
-When to use sub-agents vs direct tools:
-- For a single, targeted search (find a file, grep for a symbol) — use glob or grep directly, it's faster.
-- For broader exploration (understand a module, investigate an issue, map dependencies) — spawn a sub-agent.
-- For multi-faceted research — spawn multiple sub-agents in a single response. Each runs in parallel.
+You MUST use this tool when:
+- The user asks to explore, investigate, describe, review, or understand a codebase or large area of code.
+- The task requires reading more than 3 files.
+- The task has multiple independent facets that can be researched in parallel.
 
-Example: to investigate how auth, logging, and routing work, spawn three agents, one per topic, in the same response.
+Only use glob or grep directly for targeted searches involving 1-3 known files. For everything else, spawn sub-agents.
+
+For multi-faceted tasks, call this tool multiple times in the same response — each agent runs in parallel. Break the task into focused research questions, one per agent.
+
+Example: if asked "describe this codebase", spawn agents for: project structure, core features, testing approach, and build/config — four agents in one response.
 
 Each agent has a default ${timeoutLabel} timeout which is sufficient for most tasks. Do NOT set a timeout unless you specifically need to cut an agent short. Omit timeout to use the default.`;
 }
