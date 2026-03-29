@@ -40,7 +40,7 @@ Type `/` to see available commands with autocomplete suggestions.
 | `/session <id>` | Load a session by ID                            |
 | `/model`        | Switch the active model                         |
 | `/provider`     | Manage providers (add/remove)                   |
-| `/settings`     | Manage tools, permissions, allowed commands, and MCP servers |
+| `/settings`     | Manage tools, permissions, allowed commands, MCP servers, and skill sets |
 | `/context`      | Show context window usage stats                 |
 | `/skills`       | List available skills                           |
 | `/help`         | List available commands                         |
@@ -212,6 +212,55 @@ Instruction content loaded as context when the skill is invoked.
 ```
 
 Use `/skills` to list available skills. The model will automatically load relevant skills when appropriate, or you can ask it to use a specific skill.
+
+## Skill Sets
+
+Skill sets are collections of skills shared via git repos. A single repo can contain multiple skill sets, each marked by a `tomo-skills.json` file.
+
+### Repo Structure
+
+```
+my-skills-repo/
+  dev/
+    tomo-skills.json        # { "name": "dev", "description": "Dev tools" }
+    commit/
+      SKILL.md
+    pr/
+      SKILL.md
+  design/
+    tomo-skills.json        # { "name": "design" }
+    web/
+      SKILL.md
+```
+
+The `tomo-skills.json` file marks a directory as a skill set. It requires a `name` field; `description` is optional.
+
+### Managing Skill Sets
+
+Use `/settings` → **Skill Sets** to:
+
+- **Toggle skill sets** on/off — skill sets are off by default, you opt in per set
+- **Update Sources** — pull latest changes from all connected repos
+- **Manage Sources** — add/remove git repo URLs
+
+Sources are cloned to `~/.tomo/skill-set-sources/` on first connection.
+
+### Namespacing
+
+Skills from skill sets are namespaced as `setName:skillName` (e.g. `dev:commit`, `dev:pr`). This avoids conflicts with global/local skills and makes the source clear in `/skills` output.
+
+### Config
+
+Skill set sources and enabled sets are stored in the global config (`~/.tomo/config.yaml`):
+
+```yaml
+skillSetSources:
+  - url: "git@github.com:org/my-skills.git"
+
+enabledSkillSets:
+  - sourceUrl: "git@github.com:org/my-skills.git"
+    name: dev
+```
 
 ## Images
 
