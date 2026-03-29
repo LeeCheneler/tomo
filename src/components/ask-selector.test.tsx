@@ -208,6 +208,42 @@ describe("AskSelector", () => {
     expect(onSelect).toHaveBeenCalledWith("B");
   });
 
+  it("renders text-only input when no options provided", () => {
+    const { lastFrame } = render(
+      <AskSelector
+        question="What do you think?"
+        options={[]}
+        onSelect={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const output = lastFrame();
+    expect(output).toContain("What do you think?");
+    // Cursor starts on the text input immediately (typing mode active)
+    expect(output).toContain("❯");
+  });
+
+  it("allows typing immediately with no options", async () => {
+    const onSelect = vi.fn();
+    const { stdin } = render(
+      <AskSelector
+        question="What do you think?"
+        options={[]}
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Cursor starts on text input — type immediately
+    stdin.write("my answer");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    expect(onSelect).toHaveBeenCalledWith("my answer");
+  });
+
   it("preserves typed text when navigating away and back", async () => {
     const { stdin, lastFrame } = render(
       <AskSelector
