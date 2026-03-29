@@ -112,15 +112,6 @@ describe("ChatInput", () => {
     expect(output).toContain("help");
   });
 
-  it("shows ghost text for the top match", async () => {
-    const { lastFrame, stdin } = render(<ChatInput onSubmit={vi.fn()} />);
-    stdin.write("/he");
-    await flush();
-    const output = lastFrame() ?? "";
-    // Should show "lp" as ghost text after "/he"
-    expect(output).toContain("lp");
-  });
-
   it("submits the full command on Enter with partial input", async () => {
     const onSubmit = vi.fn();
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);

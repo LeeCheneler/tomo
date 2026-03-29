@@ -102,15 +102,8 @@ export function ChatInput({
 
   const totalImages = clipboardImages.length;
 
-  const autocomplete = useAutocomplete(defaultProviders, value, cursor);
-  const {
-    active: isAutocomplete,
-    ghost,
-    showGhost: rawShowGhost,
-  } = autocomplete;
-  // Suppress ghost text while browsing input history — autocomplete should
-  // only activate when the user is actively typing, not replaying history.
-  const showGhost = rawShowGhost && historyIndexRef.current < 0;
+  const autocomplete = useAutocomplete(defaultProviders, value);
+  const { active: isAutocomplete } = autocomplete;
 
   useInput(
     (input, key) => {
@@ -323,12 +316,6 @@ export function ChatInput({
         return;
       }
       if (key.rightArrow) {
-        if (isAutocomplete && autocomplete.submitValue && showGhost) {
-          const accepted = `${autocomplete.submitValue} `;
-          setValue(accepted);
-          setCursor(accepted.length);
-          return;
-        }
         setCursor((c) => Math.min(value.length, c + 1));
         return;
       }
@@ -451,13 +438,8 @@ export function ChatInput({
         ? `${chalk.inverse(" ")}\n`
         : charAtCursor !== null
           ? chalk.inverse(charAtCursor)
-          : showGhost
-            ? chalk.inverse(ghost[0])
-            : chalk.inverse(" ");
+          : chalk.inverse(" ");
     inputDisplay = before + cursorStr + after;
-    if (showGhost) {
-      inputDisplay += chalk.dim(ghost.slice(1));
-    }
   }
 
   const hasContext = contextPercent != null;
