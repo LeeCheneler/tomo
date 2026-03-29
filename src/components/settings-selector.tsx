@@ -1,11 +1,15 @@
 import { Box, Text, useInput } from "ink";
 import { useEffect, useState } from "react";
-import type { McpServerConfig, SkillSetSource } from "../config";
+import type {
+  EnabledSkillSet,
+  McpServerConfig,
+  SkillSetSource,
+} from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { AllowedCommandsEditor } from "./allowed-commands-editor";
 import { HintBar } from "./hint-bar";
 import { McpServerSelector } from "./mcp-server-selector";
-import { SkillSetSourcesEditor } from "./skill-set-sources-editor";
+import { SkillSetsManager } from "./skill-sets-manager";
 import { ToolAvailabilityEditor } from "./tool-availability-editor";
 import { ToolPermissionsEditor } from "./tool-permissions-editor";
 
@@ -16,6 +20,7 @@ export interface SettingsState {
   allowedCommands: string[];
   mcpServers: Record<string, McpServerConfig>;
   skillSetSources: SkillSetSource[];
+  enabledSkillSets: EnabledSkillSet[];
 }
 
 /** Static tool metadata that doesn't change during the settings session. */
@@ -164,11 +169,7 @@ export function SettingsSelector({
 
     case "skillSetSources":
       return (
-        <SkillSetSourcesEditor
-          state={state}
-          onUpdate={update}
-          onBack={goBack}
-        />
+        <SkillSetsManager state={state} onUpdate={update} onBack={goBack} />
       );
   }
 }

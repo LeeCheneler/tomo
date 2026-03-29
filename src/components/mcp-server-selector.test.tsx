@@ -23,6 +23,7 @@ const defaultState: SettingsState = {
   allowedCommands: [],
   mcpServers: {},
   skillSetSources: [],
+  enabledSkillSets: [],
 };
 
 function renderMcp(overrides?: {

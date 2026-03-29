@@ -8,9 +8,11 @@ import {
   addMcpServer,
   getAllMcpServers,
   getAllowedCommands,
+  getEnabledSkillSets,
   getSkillSetSources,
   loadConfig,
   removeMcpServer,
+  updateEnabledSkillSets,
   updateLocalAllowedCommands,
   updateLocalPermissions,
   updateLocalToolConfig,
@@ -27,8 +29,9 @@ function saveSettings(state: SettingsState): void {
   updateLocalPermissions(state.permissions);
   updateLocalAllowedCommands(state.allowedCommands);
 
-  // Global config: skill set sources
+  // Global config: skill set sources and enabled sets
   updateSkillSetSources(state.skillSetSources);
+  updateEnabledSkillSets(state.enabledSkillSets);
 
   // Global config: MCP servers
   const currentConfig = loadConfig();
@@ -79,6 +82,7 @@ const settings: Command = {
       allowedCommands: getAllowedCommands(config),
       mcpServers: getAllMcpServers(config),
       skillSetSources: getSkillSetSources(config),
+      enabledSkillSets: getEnabledSkillSets(config),
     };
 
     return {

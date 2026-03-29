@@ -29,6 +29,7 @@ const defaultState: SettingsState = {
   allowedCommands: ["git:*", "npm:*"],
   mcpServers: {},
   skillSetSources: [],
+  enabledSkillSets: [],
 };
 
 function renderSettings(overrides?: {

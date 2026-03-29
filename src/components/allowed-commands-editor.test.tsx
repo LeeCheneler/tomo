@@ -11,6 +11,7 @@ const baseState: SettingsState = {
   allowedCommands: ["git:*", "npm:*"],
   mcpServers: {},
   skillSetSources: [],
+  enabledSkillSets: [],
 };
 
 function renderEditor(overrides?: {
