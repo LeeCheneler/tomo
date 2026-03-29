@@ -4,7 +4,9 @@ import {
   cloneSource,
   type DiscoveredSkillSet,
   discoverSkillSets,
+  pullSource,
 } from "../skill-sets/sources";
+import { reloadSkills } from "../skills";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
@@ -18,6 +20,12 @@ export interface SkillSetsManagerProps {
 
 type Step = "list" | "sources";
 
+interface UpdateResult {
+  url: string;
+  ok: boolean;
+  error?: string;
+}
+
 /** Skill sets manager with toggle list and source management sub-menu. */
 export function SkillSetsManager({
   state,
@@ -28,6 +36,9 @@ export function SkillSetsManager({
   const [discovered, setDiscovered] = useState<DiscoveredSkillSet[]>([]);
   const [failedSources, setFailedSources] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updateResults, setUpdateResults] = useState<UpdateResult[] | null>(
+    null,
+  );
 
   // Clone sources and discover skill sets on mount / when sources change.
   useEffect(() => {
@@ -49,8 +60,40 @@ export function SkillSetsManager({
     setLoading(false);
   }, [state.skillSetSources]);
 
-  // +1 for "Manage Sources" row at the bottom.
-  const itemCount = discovered.length + 1;
+  const refreshDiscovered = () => {
+    const allSets: DiscoveredSkillSet[] = [];
+    for (const source of state.skillSetSources) {
+      try {
+        allSets.push(...discoverSkillSets(source.url));
+      } catch {
+        // already handled by failedSources
+      }
+    }
+    setDiscovered(allSets);
+    reloadSkills();
+  };
+
+  const handleUpdateSources = () => {
+    const results: UpdateResult[] = [];
+    for (const source of state.skillSetSources) {
+      try {
+        pullSource(source.url);
+        results.push({ url: source.url, ok: true });
+      } catch (e) {
+        results.push({
+          url: source.url,
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+    setUpdateResults(results);
+    refreshDiscovered();
+  };
+
+  // +2 for "Update Sources" and "Manage Sources" rows at the bottom.
+  const actionRows = 2;
+  const itemCount = discovered.length + actionRows;
   const { cursor, handleUp, handleDown } = useListNavigation(itemCount);
 
   const isEnabled = (set: DiscoveredSkillSet) =>
@@ -75,6 +118,9 @@ export function SkillSetsManager({
     }
   };
 
+  const isOnUpdateSources = cursor === discovered.length;
+  const isOnManageSources = cursor === discovered.length + 1;
+
   useInput(
     (input, key) => {
       if (step !== "list") return;
@@ -84,14 +130,14 @@ export function SkillSetsManager({
         return;
       }
 
-      const isOnManageSources = cursor === discovered.length;
-
       if (key.upArrow) {
         handleUp();
       } else if (key.downArrow) {
         handleDown();
-      } else if (input === " " && !isOnManageSources) {
+      } else if (input === " " && !isOnUpdateSources && !isOnManageSources) {
         toggleSet(discovered[cursor]);
+      } else if (key.return && isOnUpdateSources) {
+        handleUpdateSources();
       } else if (key.return && isOnManageSources) {
         setStep("sources");
       }
@@ -164,15 +210,24 @@ export function SkillSetsManager({
         );
       })}
       <Text>{""}</Text>
-      {(() => {
-        const isCurrent = cursor === discovered.length;
-        return (
-          <Text color={isCurrent ? "cyan" : "dim"}>
-            {"    "}
-            {isCurrent ? "❯" : " "} Manage Sources...
-          </Text>
-        );
-      })()}
+      <Text color={isOnUpdateSources ? "cyan" : "dim"}>
+        {"    "}
+        {isOnUpdateSources ? "❯" : " "} Update Sources...
+      </Text>
+      <Text color={isOnManageSources ? "cyan" : "dim"}>
+        {"    "}
+        {isOnManageSources ? "❯" : " "} Manage Sources...
+      </Text>
+      {updateResults && (
+        <Box flexDirection="column" marginTop={1}>
+          {updateResults.map((r) => (
+            <Text key={r.url} color={r.ok ? "green" : "red"}>
+              {"    "}
+              {r.ok ? "✔" : "✗"} {r.url}
+            </Text>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }
