@@ -38,12 +38,10 @@ function Harness({
   controls: HarnessControls;
 }) {
   const [value, setValue] = useState("");
-  const [cursor, setCursor] = useState(0);
-  const state = useAutocomplete(providers, value, cursor);
+  const state = useAutocomplete(providers, value);
   controls.state = state;
   controls.setValue = (v: string) => {
     setValue(v);
-    setCursor(v.length);
   };
 
   return <Text>{JSON.stringify({ active: state.active })}</Text>;
@@ -99,6 +97,30 @@ describe("useAutocomplete", () => {
     expect(c.state?.visibleEntries.every((e) => e.matched)).toBe(true);
   });
 
+  it("matches items containing the partial anywhere, sorted by index", async () => {
+    const includesProviders: AutocompleteProvider[] = [
+      {
+        prefix: "/",
+        items: () => [
+          { name: "dev:pr", description: "Dev PR" },
+          { name: "pr", description: "Create PR" },
+          { name: "approve", description: "Approve PR" },
+          { name: "other", description: "Other" },
+        ],
+      },
+    ];
+    const c = setup(includesProviders);
+    c.setValue("/pr");
+    await flush();
+
+    const matched = c.state?.visibleEntries.filter((e) => e.matched) ?? [];
+    // "pr" matches at index 0, "dev:pr" at index 4, "approve" at index 2
+    expect(matched).toHaveLength(3);
+    expect(matched[0].name).toBe("pr");
+    expect(matched[1].name).toBe("approve");
+    expect(matched[2].name).toBe("dev:pr");
+  });
+
   it("shows no entries when nothing matches", async () => {
     const c = setup();
     c.setValue("/zzz");
@@ -106,36 +128,6 @@ describe("useAutocomplete", () => {
     expect(c.state?.active).toBe(true);
     expect(c.state?.visibleEntries).toHaveLength(0);
     expect(c.state?.submitValue).toBeNull();
-  });
-
-  it("computes ghost text from the selected match", async () => {
-    const c = setup();
-    c.setValue("/he");
-    await flush();
-    expect(c.state?.ghost).toBe("lp");
-    expect(c.state?.showGhost).toBe(true);
-  });
-
-  it("shows full name as ghost when only prefix is typed", async () => {
-    const c = setup();
-    c.setValue("/");
-    await flush();
-    expect(c.state?.ghost).toBe("context");
-  });
-
-  it("clears ghost text when a non-match is selected", async () => {
-    const c = setup();
-    c.setValue("/he");
-    await flush();
-    // Navigate past the 2 matches into non-matches
-    c.state?.moveDown();
-    await flush();
-    c.state?.moveDown();
-    await flush();
-    expect(c.state?.visibleEntries[c.state.visibleSelectedIndex].matched).toBe(
-      false,
-    );
-    expect(c.state?.ghost).toBe("");
   });
 
   it("returns submitValue with prefix + selected name", async () => {
@@ -255,17 +247,6 @@ describe("useAutocomplete", () => {
     // Should be back at the top
     expect(c.state?.visibleSelectedIndex).toBe(0);
     expect(c.state?.visibleEntries[0].name).toBe("context");
-  });
-
-  it("ghost text reflects the selected matched item after navigation", async () => {
-    const c = setup();
-    c.setValue("/h");
-    await flush();
-    expect(c.state?.ghost).toBe("elp");
-
-    c.state?.moveDown();
-    await flush();
-    expect(c.state?.ghost).toBe("istory");
   });
 
   it("matches the longest prefix first", async () => {

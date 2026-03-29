@@ -217,4 +217,127 @@ Review body.`,
     const skills = loadSkills(globalDir, localDir);
     expect(skills).toHaveLength(0);
   });
+
+  it("namespaces skill set skills as setName:skillName", () => {
+    const setDir = join(testDir, "skill-set");
+    writeSkill(
+      setDir,
+      "deploy",
+      `---
+name: deploy
+description: Deploy app
+---
+
+Deploy instructions.`,
+    );
+
+    const skills = loadSkills(globalDir, localDir, [
+      { name: "ops", path: setDir },
+    ]);
+    expect(skills).toHaveLength(1);
+    expect(skills[0].name).toBe("ops:deploy");
+    expect(skills[0].local).toBe(false);
+    expect(skills[0].skillSet).toBe("ops");
+  });
+
+  it("skill set skills coexist with global skills of same base name", () => {
+    const setDir = join(testDir, "skill-set");
+    writeSkill(
+      setDir,
+      "commit",
+      `---
+name: commit
+description: Set commit
+---
+
+Set body.`,
+    );
+    writeSkill(
+      globalDir,
+      "commit",
+      `---
+name: commit
+description: Global commit
+---
+
+Global body.`,
+    );
+
+    const skills = loadSkills(globalDir, localDir, [
+      { name: "dev", path: setDir },
+    ]);
+    expect(skills).toHaveLength(2);
+    expect(skills.find((s) => s.name === "dev:commit")?.skillSet).toBe("dev");
+    expect(skills.find((s) => s.name === "commit")?.skillSet).toBeUndefined();
+  });
+
+  it("loads skills from multiple skill set directories", () => {
+    const setDir1 = join(testDir, "set-a");
+    const setDir2 = join(testDir, "set-b");
+    writeSkill(
+      setDir1,
+      "deploy",
+      `---
+name: deploy
+description: Deploy
+---
+
+Deploy.`,
+    );
+    writeSkill(
+      setDir2,
+      "migrate",
+      `---
+name: migrate
+description: Migrate
+---
+
+Migrate.`,
+    );
+
+    const skills = loadSkills(globalDir, localDir, [
+      { name: "ops", path: setDir1 },
+      { name: "db", path: setDir2 },
+    ]);
+    expect(skills).toHaveLength(2);
+    expect(skills.map((s) => s.name).sort()).toEqual([
+      "db:migrate",
+      "ops:deploy",
+    ]);
+    expect(skills.find((s) => s.name === "ops:deploy")?.skillSet).toBe("ops");
+    expect(skills.find((s) => s.name === "db:migrate")?.skillSet).toBe("db");
+  });
+
+  it("later skill set with same namespaced name wins", () => {
+    const setDir1 = join(testDir, "set-a");
+    const setDir2 = join(testDir, "set-b");
+    writeSkill(
+      setDir1,
+      "deploy",
+      `---
+name: deploy
+description: From set A
+---
+
+A body.`,
+    );
+    writeSkill(
+      setDir2,
+      "deploy",
+      `---
+name: deploy
+description: From set B
+---
+
+B body.`,
+    );
+
+    const skills = loadSkills(globalDir, localDir, [
+      { name: "ops", path: setDir1 },
+      { name: "ops", path: setDir2 },
+    ]);
+    expect(skills).toHaveLength(1);
+    expect(skills[0].name).toBe("ops:deploy");
+    expect(skills[0].description).toBe("From set B");
+  });
 });

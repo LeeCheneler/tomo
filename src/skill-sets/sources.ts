@@ -119,3 +119,13 @@ export function discoverSkillSets(url: string): DiscoveredSkillSet[] {
   if (!existsSync(dir)) return [];
   return findSkillSets(dir, url);
 }
+
+/** Returns the absolute path of a specific skill set within a cloned source, or null if not found. */
+export function getSkillSetPath(
+  sourceUrl: string,
+  setName: string,
+): string | null {
+  const sets = discoverSkillSets(sourceUrl);
+  const match = sets.find((s) => s.name === setName);
+  return match?.path ?? null;
+}

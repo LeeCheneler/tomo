@@ -8,4 +8,6 @@ export interface Skill {
   body: string;
   /** Whether this skill was loaded from the local project directory. */
   local: boolean;
+  /** The skill set name this skill was loaded from, if any. */
+  skillSet?: string;
 }

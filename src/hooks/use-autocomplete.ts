@@ -23,10 +23,6 @@ export interface AutocompleteState {
   visibleEntries: AutocompleteEntry[];
   /** Index of the selected entry within visibleEntries. */
   visibleSelectedIndex: number;
-  /** Ghost text to append after the input. */
-  ghost: string;
-  /** Whether the ghost text should be displayed. */
-  showGhost: boolean;
   /** The full string to submit (prefix + selected name), or null if no match. */
   submitValue: string | null;
   /** Move the selection up (wraps around). */
@@ -48,7 +44,6 @@ const MAX_VISIBLE = 5;
 export function useAutocomplete(
   providers: AutocompleteProvider[],
   value: string,
-  cursor: number,
 ): AutocompleteState {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const prevValueRef = useRef(value);
@@ -79,15 +74,19 @@ export function useAutocomplete(
   const partial = active ? value.slice(prefix.length) : "";
   const allItems = active ? (activeProvider?.items() ?? []) : [];
 
-  // Matches first, then non-matches. Only show non-matches when there are matches.
-  const matched = allItems.filter((item) => item.name.startsWith(partial));
-  const unmatched =
-    matched.length > 0
-      ? allItems.filter((item) => !item.name.startsWith(partial))
-      : [];
+  // Score items by earliest indexOf match, sorted closest-to-0 first.
+  // Items that don't contain the partial are unmatched and shown after matches.
+  const scored = allItems.map((item) => {
+    const index = partial ? item.name.indexOf(partial) : 0;
+    return { item, index, matched: index >= 0 };
+  });
+  const matched = scored
+    .filter((s) => s.matched)
+    .sort((a, b) => a.index - b.index);
+  const unmatched = matched.length > 0 ? scored.filter((s) => !s.matched) : [];
   const entries: AutocompleteEntry[] = [
-    ...matched.map((item) => ({ ...item, matched: true })),
-    ...unmatched.map((item) => ({ ...item, matched: false })),
+    ...matched.map((s) => ({ ...s.item, matched: true })),
+    ...unmatched.map((s) => ({ ...s.item, matched: false })),
   ];
 
   // Clamp index so it never exceeds the entry list.
@@ -113,14 +112,6 @@ export function useAutocomplete(
   );
   const visibleSelectedIndex = clamped - visibleStart;
 
-  // Ghost text only for matched entries.
-  const ghost =
-    selectedEntry?.matched && partial.length > 0
-      ? selectedEntry.name.slice(partial.length)
-      : selectedEntry?.matched
-        ? selectedEntry.name
-        : "";
-  const showGhost = active && !!ghost && cursor === value.length;
   const submitValue = selectedEntry ? `${prefix}${selectedEntry.name}` : null;
 
   const moveUp = () => {
@@ -136,8 +127,6 @@ export function useAutocomplete(
     prefix,
     visibleEntries,
     visibleSelectedIndex,
-    ghost,
-    showGhost,
     submitValue,
     moveUp,
     moveDown,

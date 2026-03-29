@@ -64,26 +64,52 @@ function loadFromDir(dir: string, local: boolean): Skill[] {
   return skills;
 }
 
+/** A skill set directory with its name for tagging loaded skills. */
+export interface SkillSetDir {
+  name: string;
+  path: string;
+}
+
 /**
- * Discovers and loads all skills from global and local directories.
- * Local skills shadow global skills with the same name.
+ * Discovers and loads all skills from skill set directories, global, and local directories.
+ * Precedence (later wins): skill sets → global → local.
  * Local skills have "(local)" prefixed to their description.
  */
-export function loadSkills(globalDir?: string, localDir?: string): Skill[] {
+export function loadSkills(
+  globalDir?: string,
+  localDir?: string,
+  skillSetDirs?: SkillSetDir[],
+): Skill[] {
+  const byName = new Map<string, Skill>();
+
+  // Skill set skills are namespaced as setName:skillName.
+  if (skillSetDirs) {
+    for (const setDir of skillSetDirs) {
+      const skills = loadFromDir(setDir.path, false);
+      for (const skill of skills) {
+        const namespacedName = `${setDir.name}:${skill.name}`;
+        byName.set(namespacedName, {
+          ...skill,
+          name: namespacedName,
+          skillSet: setDir.name,
+        });
+      }
+    }
+  }
+
+  // Global skills override skill set skills.
   const globalSkills = loadFromDir(globalDir ?? globalSkillsDir(), false);
+  for (const skill of globalSkills) {
+    byName.set(skill.name, skill);
+  }
+
+  // Local skills override everything.
   const localSkills = loadFromDir(localDir ?? localSkillsDir(), true).map(
     (skill) => ({
       ...skill,
       description: `(local) ${skill.description}`,
     }),
   );
-
-  const byName = new Map<string, Skill>();
-
-  for (const skill of globalSkills) {
-    byName.set(skill.name, skill);
-  }
-  // Local skills overwrite global with same name.
   for (const skill of localSkills) {
     byName.set(skill.name, skill);
   }

@@ -19,6 +19,7 @@ import {
   updateSkillSetSources,
 } from "../config";
 import { resolvePermissions } from "../permissions";
+import { reloadSkills } from "../skills";
 import { getAllTools, resolveToolAvailability } from "../tools";
 import { register } from "./registry";
 import type { Command } from "./types";
@@ -92,6 +93,7 @@ const settings: Command = {
         mcpFailedServers: new Set(callbacks.mcpFailedServers),
         onSave: (state: SettingsState) => {
           saveSettings(state);
+          reloadSkills();
           callbacks.onComplete({ output: "Settings updated." });
         },
       }),
