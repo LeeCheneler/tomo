@@ -216,6 +216,33 @@ describe("grep tool", () => {
     expect(result).toBe("The user denied this search.");
   });
 
+  it("searches a single file when path points to a file", async () => {
+    setupGitRepo();
+    const tool = getTool("grep");
+    const filePath = resolve(tmpDir, "src/index.ts");
+    const result = await tool?.execute(
+      JSON.stringify({ pattern: "hello", path: filePath }),
+      mockContext,
+    );
+
+    expect(result).toContain("hello");
+    // Should not include results from other files
+    expect(result).not.toContain("utils.ts");
+    expect(result).not.toContain("app.tsx");
+  });
+
+  it("returns no matches for file path with no hits", async () => {
+    setupGitRepo();
+    const tool = getTool("grep");
+    const filePath = resolve(tmpDir, "src/index.ts");
+    const result = await tool?.execute(
+      JSON.stringify({ pattern: "nonexistent_xyz", path: filePath }),
+      mockContext,
+    );
+
+    expect(result).toBe("No matches found.");
+  });
+
   it("prompts for paths outside cwd even with permission granted", async () => {
     setupGitRepo();
     const tool = getTool("grep");

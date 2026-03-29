@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
-import { resolve } from "node:path";
+import { statSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { createElement } from "react";
 import { z } from "zod";
 import { FileAccessConfirm } from "../components/file-access-confirm";
@@ -62,13 +63,19 @@ Effective search patterns:
   async execute(args: string, context: ToolContext): Promise<string> {
     const parsed = parseToolArgs(argsSchema, args);
     const { pattern, include, gitignore } = parsed;
-    const searchDir = parsed.path ? resolve(parsed.path) : process.cwd();
+    const resolved = parsed.path ? resolve(parsed.path) : process.cwd();
+    const isFile = parsed.path
+      ? statSync(resolved, { throwIfNoEntry: false })?.isFile()
+      : false;
+    const searchDir = isFile ? dirname(resolved) : resolved;
+    const searchTarget = isFile ? resolved : undefined;
 
     return withFilePermission({
       context,
       permission: "read_file",
       filePath: searchDir,
-      execute: () => runGrep(pattern, searchDir, include, gitignore),
+      execute: () =>
+        runGrep(pattern, searchDir, include, gitignore, searchTarget),
       renderConfirm: () =>
         context.renderInteractive((onResult) =>
           createElement(FileAccessConfirm, {
@@ -88,12 +95,19 @@ function runGrep(
   cwd: string,
   include: string | undefined,
   gitignore: boolean,
+  file?: string,
 ): string {
   try {
     const useGit = gitignore && isGitRepo(cwd);
     let output: string;
 
-    if (useGit) {
+    if (file) {
+      // Search a single file directly.
+      output = execSync(
+        `grep -n -E ${JSON.stringify(pattern)} ${JSON.stringify(file)}`,
+        { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+      );
+    } else if (useGit) {
       // Auto-prepend **/ so bare globs like *.ts match in subdirectories
       const globInclude = include?.includes("/") ? include : `**/${include}`;
       const includeArgs = include
