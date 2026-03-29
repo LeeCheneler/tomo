@@ -187,12 +187,18 @@ export async function runCompletionLoop(
 
       for (const dm of toolResultDisplayMessages) {
         if (dm.role !== "tool") continue;
-        const toolMsg: ChatMessage = {
+        // API messages use ANSI-stripped content; display/session keeps rich content.
+        const apiMsg: ChatMessage = {
           role: "tool",
           content: stripAnsi(dm.content),
           tool_call_id: dm.tool_call_id,
         };
-        addMessage(toolMsg);
+        currentMessages = [...currentMessages, apiMsg];
+        onMessage?.({
+          role: "tool",
+          content: dm.content,
+          tool_call_id: dm.tool_call_id,
+        });
       }
 
       onContent?.("");
