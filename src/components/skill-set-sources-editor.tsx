@@ -1,5 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
+import { removeSource } from "../skill-sets/sources";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { HintBar } from "./hint-bar";
 import type { SettingsState } from "./settings-selector";
@@ -57,8 +58,13 @@ export function SkillSetSourcesEditor({
     } else if (key.downArrow) {
       handleDown();
     } else if ((input === "d" || input === "D") && !isOnAdd) {
+      const deletedUrl = state.skillSetSources[cursor].url;
+      removeSource(deletedUrl);
       onUpdate({
         skillSetSources: state.skillSetSources.filter((_, i) => i !== cursor),
+        enabledSkillSets: state.enabledSkillSets.filter(
+          (s) => s.sourceUrl !== deletedUrl,
+        ),
       });
       if (cursor >= itemCount - 1) {
         setCursor((c) => Math.max(0, c - 1));

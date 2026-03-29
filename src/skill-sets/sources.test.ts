@@ -1,8 +1,13 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { sourceSlug, findSkillSets } from "./sources";
+import {
+  sourceSlug,
+  findSkillSets,
+  removeSource,
+  sourceCacheDir,
+} from "./sources";
 
 describe("sourceSlug", () => {
   it("generates a stable slug for a git SSH URL", () => {
@@ -24,6 +29,32 @@ describe("sourceSlug", () => {
   it("generates same slug for same URL", () => {
     const url = "git@github.com:org/repo.git";
     expect(sourceSlug(url)).toBe(sourceSlug(url));
+  });
+});
+
+describe("removeSource", () => {
+  const testUrl = "git@github.com:org/test-remove.git";
+
+  afterEach(() => {
+    // Clean up in case test left the dir
+    const dir = join(sourceCacheDir(), sourceSlug(testUrl));
+    if (existsSync(dir)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("removes an existing cached directory", () => {
+    const dir = join(sourceCacheDir(), sourceSlug(testUrl));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "marker"), "test");
+
+    expect(existsSync(dir)).toBe(true);
+    removeSource(testUrl);
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  it("does nothing for non-existent source", () => {
+    removeSource("git@github.com:nonexistent/repo.git");
   });
 });
 

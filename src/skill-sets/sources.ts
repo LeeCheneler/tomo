@@ -43,6 +43,14 @@ export function cloneSource(url: string): string {
   return dir;
 }
 
+/** Removes the cloned cache directory for a source. */
+export function removeSource(url: string): void {
+  const dir = join(sourceCacheDir(), sourceSlug(url));
+  if (existsSync(dir)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /** Pulls latest changes for a cloned source. */
 export function pullSource(url: string): void {
   const dir = join(sourceCacheDir(), sourceSlug(url));
