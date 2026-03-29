@@ -14,6 +14,7 @@ const baseState: SettingsState = {
     { url: "https://github.com/org/skills-a.git" },
     { url: "https://github.com/org/skills-b.git" },
   ],
+  enabledSkillSets: [],
 };
 
 function renderEditor(overrides?: {

@@ -79,6 +79,11 @@ const skillSetSourceSchema = z.object({
   url: z.string().min(1, "source URL is required"),
 });
 
+const enabledSkillSetSchema = z.object({
+  sourceUrl: z.string().min(1),
+  name: z.string().min(1),
+});
+
 const configSchema = z.object({
   activeProvider: z.string().default(""),
   activeModel: z.string().default(""),
@@ -90,12 +95,14 @@ const configSchema = z.object({
   allowed_commands: z.array(z.string()).optional(),
   mcpServers: z.record(z.string(), mcpServerSchema).optional(),
   skillSetSources: z.array(skillSetSourceSchema).optional(),
+  enabledSkillSets: z.array(enabledSkillSetSchema).optional(),
 });
 
 export type ProviderConfig = z.infer<typeof providerSchema>;
 export type McpServerConfig = z.infer<typeof mcpServerSchema>;
 export type McpToolConfig = z.infer<typeof mcpToolSchema>;
 export type SkillSetSource = z.infer<typeof skillSetSourceSchema>;
+export type EnabledSkillSet = z.infer<typeof enabledSkillSetSchema>;
 export type Config = z.infer<typeof configSchema>;
 
 export interface AgentsConfig {
@@ -384,6 +391,18 @@ export function getSkillSetSources(config: Config): SkillSetSource[] {
 export function updateSkillSetSources(sources: SkillSetSource[]): void {
   updateConfigFile(globalConfigPath(), (raw) => {
     raw.skillSetSources = sources;
+  });
+}
+
+/** Returns enabled skill sets from config, falling back to empty. */
+export function getEnabledSkillSets(config: Config): EnabledSkillSet[] {
+  return config.enabledSkillSets ?? [];
+}
+
+/** Updates enabled skill sets in the global config. */
+export function updateEnabledSkillSets(sets: EnabledSkillSet[]): void {
+  updateConfigFile(globalConfigPath(), (raw) => {
+    raw.enabledSkillSets = sets;
   });
 }
 
