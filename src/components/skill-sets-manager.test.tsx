@@ -6,12 +6,22 @@ import { SkillSetsManager } from "./skill-sets-manager";
 vi.mock("../skill-sets/sources", () => ({
   cloneSource: vi.fn(),
   discoverSkillSets: vi.fn(),
+  pullSource: vi.fn(),
 }));
 
-import { cloneSource, discoverSkillSets } from "../skill-sets/sources";
+vi.mock("../skills", () => ({
+  reloadSkills: vi.fn(),
+}));
+
+import {
+  cloneSource,
+  discoverSkillSets,
+  pullSource,
+} from "../skill-sets/sources";
 
 const mockCloneSource = vi.mocked(cloneSource);
 const mockDiscoverSkillSets = vi.mocked(discoverSkillSets);
+const mockPullSource = vi.mocked(pullSource);
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
@@ -138,7 +148,9 @@ describe("SkillSetsManager", () => {
     const { stdin, lastFrame } = renderManager();
     await flush();
 
-    // Navigate down to "Manage Sources..."
+    // Navigate down past "Update Sources..." to "Manage Sources..."
+    stdin.write("\x1B[B");
+    await flush();
     stdin.write("\x1B[B");
     await flush();
     stdin.write("\r");
@@ -213,5 +225,60 @@ describe("SkillSetsManager", () => {
     const output = lastFrame() ?? "";
     expect(output).toContain("dev");
     expect(output).toContain("design");
+  });
+
+  it("shows Update Sources row", async () => {
+    const { lastFrame } = renderManager();
+    await flush();
+
+    const output = lastFrame() ?? "";
+    expect(output).toContain("Update Sources...");
+  });
+
+  it("pulls sources on Enter at Update Sources", async () => {
+    const { stdin } = renderManager();
+    await flush();
+
+    // Navigate to "Update Sources..."
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    expect(mockPullSource).toHaveBeenCalledWith(
+      "git@github.com:org/skills.git",
+    );
+  });
+
+  it("shows success result after update", async () => {
+    const { stdin, lastFrame } = renderManager();
+    await flush();
+
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    const output = lastFrame() ?? "";
+    expect(output).toContain("✔");
+    expect(output).toContain("git@github.com:org/skills.git");
+  });
+
+  it("shows failure result when pull fails", async () => {
+    mockPullSource.mockImplementation(() => {
+      throw new Error("network error");
+    });
+
+    const { stdin, lastFrame } = renderManager();
+    await flush();
+
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    const output = lastFrame() ?? "";
+    expect(output).toContain("✗");
+    expect(output).toContain("git@github.com:org/skills.git");
   });
 });
