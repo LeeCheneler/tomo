@@ -268,6 +268,42 @@ describe("runCompletionLoop", () => {
     expect(toolMsg?.content).not.toMatch(/\x1b/);
   });
 
+  it("preserves ANSI in onMessage for display while stripping for API", async () => {
+    const toolCall: ToolCall = {
+      id: "tc_1",
+      type: "function",
+      function: { name: "run_command", arguments: "{}" },
+    };
+
+    mockStream.mockResolvedValueOnce(mockCompletion([], [toolCall]));
+    mockStream.mockResolvedValueOnce(mockCompletion(["done"]));
+
+    const ansiContent =
+      "\x1b[1m\x1b[33mRun Command\x1b[39m\x1b[22m\nExit code: 0";
+    mockExecuteTools.mockResolvedValueOnce([
+      {
+        id: "msg_1",
+        role: "tool",
+        content: ansiContent,
+        tool_call_id: "tc_1",
+      },
+    ]);
+
+    const onMessage = vi.fn();
+    const result = await runCompletionLoop(baseOptions({ onMessage }));
+
+    // onMessage should receive ANSI-rich content for display
+    const displayCall = onMessage.mock.calls.find(
+      (args) => args[0].role === "tool",
+    );
+    expect(displayCall).toBeDefined();
+    expect(displayCall?.[0].content).toBe(ansiContent);
+
+    // result.messages (API) should be stripped
+    const apiMsg = result.messages.find((m) => m.role === "tool");
+    expect(apiMsg?.content).toBe("Run Command\nExit code: 0");
+  });
+
   it("propagates non-abort errors", async () => {
     mockStream.mockRejectedValueOnce(new Error("connection failed"));
 

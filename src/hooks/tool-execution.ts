@@ -13,9 +13,26 @@ export class ToolDismissedError extends Error {
 
 const MAX_ARG_VALUE_LENGTH = 60;
 
+/**
+ * Maximum character length for a tool result. Results exceeding this are
+ * truncated to head + tail with an indicator in the middle.
+ */
+const MAX_RESULT_LENGTH = 30_000;
+const TRUNCATION_HEAD = 20_000;
+const TRUNCATION_TAIL = 10_000;
+
 /** Truncates a string to a max length with ellipsis. */
 function truncateValue(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+/** Truncates a tool result to head + tail with an indicator if it exceeds the max length. */
+export function truncateResult(result: string): string {
+  if (result.length <= MAX_RESULT_LENGTH) return result;
+  const omitted = result.length - TRUNCATION_HEAD - TRUNCATION_TAIL;
+  const head = result.slice(0, TRUNCATION_HEAD);
+  const tail = result.slice(-TRUNCATION_TAIL);
+  return `${head}\n\n[output truncated — ${omitted.toLocaleString()} chars omitted]\n\n${tail}`;
 }
 
 /** Formats a single arg value for display. */
@@ -90,7 +107,7 @@ async function executeSingleToolCall(
   return {
     id: crypto.randomUUID(),
     role: "tool",
-    content: `${header}\n${result}`,
+    content: `${header}\n${truncateResult(result)}`,
     tool_call_id: tc.id,
   };
 }

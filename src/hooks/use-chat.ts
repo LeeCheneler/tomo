@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { getCommand, parse } from "../commands";
 import { runCompletionLoop } from "../completion-loop";
 import type { DisplayMessage } from "../components/message-list";
+import { stripAnsi } from "../strip-ansi";
 import {
   type Config,
   getAllMcpServers,
@@ -76,7 +77,7 @@ function toChatMessages(
         if (m.role === "tool") {
           return {
             role: "tool",
-            content: m.content,
+            content: stripAnsi(m.content),
             tool_call_id: m.tool_call_id,
           };
         }

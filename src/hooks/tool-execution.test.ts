@@ -4,6 +4,7 @@ import {
   executeToolCalls,
   formatToolHeader,
   ToolDismissedError,
+  truncateResult,
 } from "./tool-execution";
 
 vi.mock("../tools", () => ({
@@ -644,6 +645,52 @@ describe("executeToolCalls with mcpManager", () => {
     );
 
     expect(results[0].content).toContain("file contents");
+  });
+});
+
+describe("truncateResult", () => {
+  it("returns short results unchanged", () => {
+    const result = "short output";
+    expect(truncateResult(result)).toBe(result);
+  });
+
+  it("returns results at exactly the limit unchanged", () => {
+    const result = "x".repeat(30_000);
+    expect(truncateResult(result)).toBe(result);
+  });
+
+  it("truncates results exceeding the limit with head + tail", () => {
+    const result = "H".repeat(20_000) + "M".repeat(20_000) + "T".repeat(20_000);
+    const truncated = truncateResult(result);
+
+    expect(truncated.length).toBeLessThan(result.length);
+    expect(truncated).toMatch(/^H+/);
+    expect(truncated).toMatch(/T+$/);
+    expect(truncated).toContain("[output truncated");
+    expect(truncated).toContain("chars omitted]");
+  });
+
+  it("preserves the first 20,000 chars as head", () => {
+    const head = "A".repeat(20_000);
+    const rest = "B".repeat(40_000);
+    const truncated = truncateResult(head + rest);
+
+    expect(truncated.startsWith(head)).toBe(true);
+  });
+
+  it("preserves the last 10,000 chars as tail", () => {
+    const start = "A".repeat(40_000);
+    const tail = "Z".repeat(10_000);
+    const truncated = truncateResult(start + tail);
+
+    expect(truncated.endsWith(tail)).toBe(true);
+  });
+
+  it("reports correct number of omitted chars", () => {
+    const result = "x".repeat(60_000);
+    const truncated = truncateResult(result);
+    // 60,000 - 20,000 head - 10,000 tail = 30,000 omitted
+    expect(truncated).toContain("30,000 chars omitted");
   });
 });
 
