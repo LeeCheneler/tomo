@@ -16,7 +16,8 @@ registerTool({
 
 - Use sparingly — only when you genuinely need the user to choose between meaningfully different options.
 - Do not ask for confirmation on routine actions. Do not ask questions you can resolve by reading the codebase.
-- Provide clear, distinct options. The returned value is the exact option string the user selected.`,
+- Provide clear, distinct options. The returned value is the exact option string the user selected.
+- A free-text input is always shown as the last option so the user can type a custom response instead of choosing a predefined option. Never include "Other", "Custom", or any free-text escape hatch in the options array — the tool provides this automatically.`,
   parameters: {
     type: "object",
     properties: {

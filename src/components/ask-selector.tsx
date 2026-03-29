@@ -8,23 +8,24 @@ interface AskSelectorProps {
   onCancel: () => void;
 }
 
-/** Interactive multiple-choice selector with a free-text "Other" option. */
+/** Interactive multiple-choice selector with a free-text input as the last option. */
 export function AskSelector({
   question,
   options,
   onSelect,
   onCancel,
 }: AskSelectorProps) {
-  // Append the "Other" escape hatch — always last.
-  const allOptions = [...options, "Other (type your answer)"];
+  const textInputIndex = options.length;
+  const totalItems = options.length + 1;
   const [cursor, setCursor] = useState(0);
-  const [typing, setTyping] = useState(false);
   const [customValue, setCustomValue] = useState("");
+
+  // Typing mode is active when the cursor is on the text input row.
+  const typing = cursor === textInputIndex;
 
   useInput((input, key) => {
     if (key.escape) {
-      if (typing) {
-        setTyping(false);
+      if (typing && customValue) {
         setCustomValue("");
         return;
       }
@@ -43,6 +44,10 @@ export function AskSelector({
         setCustomValue((v) => v.slice(0, -1));
         return;
       }
+      if (key.upArrow) {
+        setCursor(textInputIndex - 1);
+        return;
+      }
       if (input && !key.ctrl && !key.meta) {
         setCustomValue((v) => v + input);
       }
@@ -50,20 +55,15 @@ export function AskSelector({
     }
 
     if (key.return) {
-      if (cursor === allOptions.length - 1) {
-        // "Other" selected — switch to text input mode
-        setTyping(true);
-        return;
-      }
       onSelect(options[cursor]);
       return;
     }
 
     if (key.upArrow) {
-      setCursor((c) => (c > 0 ? c - 1 : allOptions.length - 1));
+      setCursor((c) => (c > 0 ? c - 1 : totalItems - 1));
     }
     if (key.downArrow) {
-      setCursor((c) => (c < allOptions.length - 1 ? c + 1 : 0));
+      setCursor((c) => (c < totalItems - 1 ? c + 1 : 0));
     }
   });
 
@@ -74,7 +74,7 @@ export function AskSelector({
         {question}
       </Text>
       <Text dimColor>{"  (↑↓ navigate, Enter select, Esc cancel)"}</Text>
-      {allOptions.map((option, i) => {
+      {options.map((option, i) => {
         const isCursor = i === cursor;
         const prefix = isCursor ? "❯" : " ";
         return (
@@ -84,15 +84,14 @@ export function AskSelector({
           </Text>
         );
       })}
-      {typing ? (
-        <Box marginTop={1}>
-          <Text>
-            {"  > "}
-            {customValue}
-            <Text inverse> </Text>
-          </Text>
-        </Box>
-      ) : null}
+      <Text color={typing ? "cyan" : undefined}>
+        {"  "}
+        {typing ? "❯" : " "} {customValue}
+        {typing ? <Text inverse> </Text> : null}
+        {!typing && !customValue ? (
+          <Text dimColor>Type your answer...</Text>
+        ) : null}
+      </Text>
     </Box>
   );
 }
