@@ -5,7 +5,7 @@ import { AskSelector } from "./ask-selector";
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
 describe("AskSelector", () => {
-  it("renders the question and options with an Other option", () => {
+  it("renders the question, options, and a text input placeholder", () => {
     const { lastFrame } = render(
       <AskSelector
         question="Pick one"
@@ -19,7 +19,7 @@ describe("AskSelector", () => {
     expect(output).toContain("Pick one");
     expect(output).toContain("A");
     expect(output).toContain("B");
-    expect(output).toContain("Other (type your answer)");
+    expect(output).toContain("Type your answer...");
   });
 
   it("calls onSelect with the chosen option on Enter", async () => {
@@ -77,7 +77,7 @@ describe("AskSelector", () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
-  it("enters text input mode when Other is selected", async () => {
+  it("allows typing immediately when scrolled to text input", async () => {
     const onSelect = vi.fn();
     const { stdin, lastFrame } = render(
       <AskSelector
@@ -88,16 +88,11 @@ describe("AskSelector", () => {
       />,
     );
 
-    // Move down to "Other" (index 1), press Enter
+    // Move down to text input (index 1) — typing starts immediately
     stdin.write("\x1B[B");
     await flush();
-    stdin.write("\r");
-    await flush();
 
-    // Should not have selected yet — should be in typing mode
-    expect(onSelect).not.toHaveBeenCalled();
-
-    // Type a custom answer
+    // Type a custom answer — no Enter needed to activate
     stdin.write("custom answer");
     await flush();
 
@@ -111,7 +106,7 @@ describe("AskSelector", () => {
     expect(onSelect).toHaveBeenCalledWith("custom answer");
   });
 
-  it("escape from typing mode returns to selection", async () => {
+  it("escape from text input clears text first, then cancels", async () => {
     const onCancel = vi.fn();
     const { stdin, lastFrame } = render(
       <AskSelector
@@ -122,22 +117,25 @@ describe("AskSelector", () => {
       />,
     );
 
-    // Enter typing mode
+    // Scroll to text input and type
     stdin.write("\x1B[B");
-    await flush();
-    stdin.write("\r");
     await flush();
     stdin.write("partial");
     await flush();
 
-    // Escape from typing mode — should not call onCancel
+    // First Escape clears the text
     stdin.write("\x1B");
     await flush();
 
     expect(onCancel).not.toHaveBeenCalled();
-    // Should be back in selection mode, typing UI gone
     const output = lastFrame();
     expect(output).not.toContain("partial");
+
+    // Second Escape cancels
+    stdin.write("\x1B");
+    await flush();
+
+    expect(onCancel).toHaveBeenCalled();
   });
 
   it("does not submit empty custom text", async () => {
@@ -151,10 +149,8 @@ describe("AskSelector", () => {
       />,
     );
 
-    // Enter typing mode
+    // Scroll to text input
     stdin.write("\x1B[B");
-    await flush();
-    stdin.write("\r");
     await flush();
 
     // Press Enter with empty input
@@ -164,7 +160,7 @@ describe("AskSelector", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("supports backspace in typing mode", async () => {
+  it("supports backspace in text input", async () => {
     const onSelect = vi.fn();
     const { stdin } = render(
       <AskSelector
@@ -175,10 +171,8 @@ describe("AskSelector", () => {
       />,
     );
 
-    // Enter typing mode
+    // Scroll to text input
     stdin.write("\x1B[B");
-    await flush();
-    stdin.write("\r");
     await flush();
 
     stdin.write("abc");
@@ -202,15 +196,43 @@ describe("AskSelector", () => {
       />,
     );
 
-    // Move up from first item — should wrap to last (Other)
+    // Move up from first item — should wrap to text input (index 2)
     stdin.write("\x1B[A");
     await flush();
-    // Move up again — should wrap to "B"
+    // Move up again — should wrap to "B" (index 1)
     stdin.write("\x1B[A");
     await flush();
     stdin.write("\r");
     await flush();
 
     expect(onSelect).toHaveBeenCalledWith("B");
+  });
+
+  it("preserves typed text when navigating away and back", async () => {
+    const { stdin, lastFrame } = render(
+      <AskSelector
+        question="Pick"
+        options={["A"]}
+        onSelect={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Scroll to text input and type
+    stdin.write("\x1B[B");
+    await flush();
+    stdin.write("hello");
+    await flush();
+
+    // Navigate up to option A
+    stdin.write("\x1B[A");
+    await flush();
+
+    // Navigate back down to text input
+    stdin.write("\x1B[B");
+    await flush();
+
+    const output = lastFrame();
+    expect(output).toContain("hello");
   });
 });
