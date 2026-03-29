@@ -23,17 +23,18 @@ describe("ask tool", () => {
         options: {
           type: "array",
           items: { type: "string" },
-          description: "The available choices (2 or more)",
+          description:
+            "The available choices. Omit or pass an empty array for a plain text input with no predefined choices.",
         },
       },
-      required: ["question", "options"],
+      required: ["question"],
     });
   });
 
-  it("throws when no options provided", async () => {
+  it("accepts 0 options and renders text-only input", async () => {
     const tool = getTool("ask");
     const context = {
-      renderInteractive: vi.fn(),
+      renderInteractive: vi.fn().mockResolvedValue("typed answer"),
       reportProgress: vi.fn(),
       permissions: {},
       signal: new AbortController().signal,
@@ -49,10 +50,13 @@ describe("ask tool", () => {
       allowedCommands: [],
     };
 
-    await expect(
-      tool?.execute(JSON.stringify({ question: "pick", options: [] }), context),
-    ).rejects.toThrow("no options provided");
-    expect(context.renderInteractive).not.toHaveBeenCalled();
+    const result = await tool?.execute(
+      JSON.stringify({ question: "What is your name?", options: [] }),
+      context,
+    );
+
+    expect(context.renderInteractive).toHaveBeenCalledTimes(1);
+    expect(result).toBe("typed answer");
   });
 
   it("uses default question when none provided", async () => {

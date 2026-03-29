@@ -208,6 +208,55 @@ describe("AskSelector", () => {
     expect(onSelect).toHaveBeenCalledWith("B");
   });
 
+  it("renders as text-only input when no options are provided", async () => {
+    const onSelect = vi.fn();
+    const { stdin, lastFrame } = render(
+      <AskSelector
+        question="What is your name?"
+        options={[]}
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const output = lastFrame();
+    expect(output).toContain("What is your name?");
+    // Cursor starts on text input (typing mode active), so the caret ❯ is shown
+    // rather than the placeholder — the placeholder only shows in non-typing mode.
+    expect(output).toContain("❯");
+
+    // Cursor starts on text input — typing works immediately
+    stdin.write("Alice");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    expect(onSelect).toHaveBeenCalledWith("Alice");
+  });
+
+  it("up arrow in text-only mode does nothing (no options to navigate to)", async () => {
+    const onSelect = vi.fn();
+    const { stdin } = render(
+      <AskSelector
+        question="What is your name?"
+        options={[]}
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Cursor already on text input — up arrow should not crash or move elsewhere
+    stdin.write("\x1B[A");
+    await flush();
+
+    stdin.write("Bob");
+    await flush();
+    stdin.write("\r");
+    await flush();
+
+    expect(onSelect).toHaveBeenCalledWith("Bob");
+  });
+
   it("preserves typed text when navigating away and back", async () => {
     const { stdin, lastFrame } = render(
       <AskSelector

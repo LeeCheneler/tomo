@@ -17,7 +17,9 @@ export function AskSelector({
 }: AskSelectorProps) {
   const textInputIndex = options.length;
   const totalItems = options.length + 1;
-  const [cursor, setCursor] = useState(0);
+  const [cursor, setCursor] = useState(
+    options.length === 0 ? textInputIndex : 0,
+  );
   const [customValue, setCustomValue] = useState("");
 
   // Typing mode is active when the cursor is on the text input row.
@@ -45,7 +47,9 @@ export function AskSelector({
         return;
       }
       if (key.upArrow) {
-        setCursor(textInputIndex - 1);
+        if (options.length > 0) {
+          setCursor(textInputIndex - 1);
+        }
         return;
       }
       if (input && !key.ctrl && !key.meta) {
