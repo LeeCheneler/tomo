@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { stripAnsi } from "../strip-ansi";
 import { formatDiff, formatNewFile } from "./format-diff";
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escape codes
-const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*m/g, "");
 
 describe("formatNewFile", () => {
   it("formats all lines as additions", () => {

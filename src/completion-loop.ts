@@ -1,6 +1,7 @@
 import type { DisplayMessage } from "./components/message-list";
 import { truncateMessages } from "./context/truncate";
 import { executeToolCalls, ToolDismissedError } from "./hooks/tool-execution";
+import { stripAnsi } from "./strip-ansi";
 import type { McpManager } from "./mcp/manager";
 import type {
   ChatMessage,
@@ -188,7 +189,7 @@ export async function runCompletionLoop(
         if (dm.role !== "tool") continue;
         const toolMsg: ChatMessage = {
           role: "tool",
-          content: dm.content,
+          content: stripAnsi(dm.content),
           tool_call_id: dm.tool_call_id,
         };
         addMessage(toolMsg);
