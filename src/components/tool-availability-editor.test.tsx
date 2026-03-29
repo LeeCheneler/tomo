@@ -17,6 +17,7 @@ const baseState: SettingsState = {
   permissions: {},
   allowedCommands: [],
   mcpServers: {},
+  skillSetSources: [],
 };
 
 function renderEditor(overrides?: {

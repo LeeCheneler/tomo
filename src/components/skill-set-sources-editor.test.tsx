@@ -1,16 +1,19 @@
 import { render } from "ink-testing-library";
 import { describe, expect, it, vi } from "vitest";
-import { AllowedCommandsEditor } from "./allowed-commands-editor";
 import type { SettingsState } from "./settings-selector";
+import { SkillSetSourcesEditor } from "./skill-set-sources-editor";
 
 const flush = () => new Promise((r) => setTimeout(r, 50));
 
 const baseState: SettingsState = {
   toolAvailability: {},
   permissions: {},
-  allowedCommands: ["git:*", "npm:*"],
+  allowedCommands: [],
   mcpServers: {},
-  skillSetSources: [],
+  skillSetSources: [
+    { url: "https://github.com/org/skills-a.git" },
+    { url: "https://github.com/org/skills-b.git" },
+  ],
 };
 
 function renderEditor(overrides?: {
@@ -21,7 +24,7 @@ function renderEditor(overrides?: {
   const onUpdate = overrides?.onUpdate ?? vi.fn();
   const onBack = overrides?.onBack ?? vi.fn();
   const result = render(
-    <AllowedCommandsEditor
+    <SkillSetSourcesEditor
       state={{ ...baseState, ...overrides?.state }}
       onUpdate={onUpdate}
       onBack={onBack}
@@ -30,16 +33,16 @@ function renderEditor(overrides?: {
   return { ...result, onUpdate, onBack };
 }
 
-describe("AllowedCommandsEditor", () => {
-  it("shows commands and Add option", () => {
+describe("SkillSetSourcesEditor", () => {
+  it("shows sources and Add option", () => {
     const { lastFrame } = renderEditor();
     const output = lastFrame() ?? "";
-    expect(output).toContain("git:*");
-    expect(output).toContain("npm:*");
+    expect(output).toContain("skills-a.git");
+    expect(output).toContain("skills-b.git");
     expect(output).toContain("Add...");
   });
 
-  it("deletes command with d", async () => {
+  it("deletes source with d", async () => {
     const onUpdate = vi.fn();
     const { stdin } = renderEditor({ onUpdate });
 
@@ -47,39 +50,27 @@ describe("AllowedCommandsEditor", () => {
     await flush();
 
     expect(onUpdate).toHaveBeenCalledWith({
-      allowedCommands: ["npm:*"],
+      skillSetSources: [{ url: "https://github.com/org/skills-b.git" }],
     });
   });
 
-  it("adds command", async () => {
+  it("adds source", async () => {
     const onUpdate = vi.fn();
     const { stdin } = renderEditor({ onUpdate });
 
     stdin.write("a");
     await flush();
-    stdin.write("cargo:*");
+    stdin.write("https://github.com/org/skills-c.git");
     await flush();
     stdin.write("\r");
     await flush();
 
     expect(onUpdate).toHaveBeenCalledWith({
-      allowedCommands: ["git:*", "npm:*", "cargo:*"],
-    });
-  });
-
-  it("adds with a shortcut", async () => {
-    const onUpdate = vi.fn();
-    const { stdin } = renderEditor({ onUpdate });
-
-    stdin.write("a");
-    await flush();
-    stdin.write("yarn:*");
-    await flush();
-    stdin.write("\r");
-    await flush();
-
-    expect(onUpdate).toHaveBeenCalledWith({
-      allowedCommands: ["git:*", "npm:*", "yarn:*"],
+      skillSetSources: [
+        { url: "https://github.com/org/skills-a.git" },
+        { url: "https://github.com/org/skills-b.git" },
+        { url: "https://github.com/org/skills-c.git" },
+      ],
     });
   });
 
@@ -94,13 +85,17 @@ describe("AllowedCommandsEditor", () => {
     await flush();
     stdin.write("\r");
     await flush();
-    stdin.write("cargo:*");
+    stdin.write("https://github.com/org/skills-c.git");
     await flush();
     stdin.write("\r");
     await flush();
 
     expect(onUpdate).toHaveBeenCalledWith({
-      allowedCommands: ["git:*", "npm:*", "cargo:*"],
+      skillSetSources: [
+        { url: "https://github.com/org/skills-a.git" },
+        { url: "https://github.com/org/skills-b.git" },
+        { url: "https://github.com/org/skills-c.git" },
+      ],
     });
   });
 
@@ -115,13 +110,17 @@ describe("AllowedCommandsEditor", () => {
     await flush();
     stdin.write(" ");
     await flush();
-    stdin.write("cargo:*");
+    stdin.write("https://github.com/org/skills-c.git");
     await flush();
     stdin.write("\r");
     await flush();
 
     expect(onUpdate).toHaveBeenCalledWith({
-      allowedCommands: ["git:*", "npm:*", "cargo:*"],
+      skillSetSources: [
+        { url: "https://github.com/org/skills-a.git" },
+        { url: "https://github.com/org/skills-b.git" },
+        { url: "https://github.com/org/skills-c.git" },
+      ],
     });
   });
 
@@ -132,7 +131,7 @@ describe("AllowedCommandsEditor", () => {
 
     stdin.write("a");
     await flush();
-    stdin.write("cargo");
+    stdin.write("https://github.com/org/skills-c.git");
     await flush();
     stdin.write("\x1B");
     await flush();
@@ -151,13 +150,13 @@ describe("AllowedCommandsEditor", () => {
     expect(onBack).toHaveBeenCalled();
   });
 
-  it("deduplicates commands", async () => {
+  it("deduplicates sources", async () => {
     const onUpdate = vi.fn();
     const { stdin } = renderEditor({ onUpdate });
 
     stdin.write("a");
     await flush();
-    stdin.write("git:*");
+    stdin.write("https://github.com/org/skills-a.git");
     await flush();
     stdin.write("\r");
     await flush();

@@ -1,10 +1,11 @@
 import { Box, Text, useInput } from "ink";
 import { useEffect, useState } from "react";
-import type { McpServerConfig } from "../config";
+import type { McpServerConfig, SkillSetSource } from "../config";
 import { useListNavigation } from "../hooks/use-list-navigation";
 import { AllowedCommandsEditor } from "./allowed-commands-editor";
 import { HintBar } from "./hint-bar";
 import { McpServerSelector } from "./mcp-server-selector";
+import { SkillSetSourcesEditor } from "./skill-set-sources-editor";
 import { ToolAvailabilityEditor } from "./tool-availability-editor";
 import { ToolPermissionsEditor } from "./tool-permissions-editor";
 
@@ -14,6 +15,7 @@ export interface SettingsState {
   permissions: Record<string, boolean>;
   allowedCommands: string[];
   mcpServers: Record<string, McpServerConfig>;
+  skillSetSources: SkillSetSource[];
 }
 
 /** Static tool metadata that doesn't change during the settings session. */
@@ -24,16 +26,29 @@ export interface ToolMeta {
   warnings: Record<string, string>;
 }
 
-type Step = "menu" | "tools" | "permissions" | "allowed" | "mcpServers";
+type Step =
+  | "menu"
+  | "tools"
+  | "permissions"
+  | "allowed"
+  | "mcpServers"
+  | "skillSetSources";
 
 const MENU_OPTIONS = [
   "Tool Availability",
   "Tool Permissions",
   "Allowed Commands",
   "MCP Servers",
+  "Skill Sets",
 ];
 
-const MENU_STEPS: Step[] = ["tools", "permissions", "allowed", "mcpServers"];
+const MENU_STEPS: Step[] = [
+  "tools",
+  "permissions",
+  "allowed",
+  "mcpServers",
+  "skillSetSources",
+];
 
 export interface SettingsSelectorProps {
   initialState: SettingsState;
@@ -143,6 +158,15 @@ export function SettingsSelector({
           state={state}
           onUpdate={update}
           failedServers={mcpFailedServers}
+          onBack={goBack}
+        />
+      );
+
+    case "skillSetSources":
+      return (
+        <SkillSetSourcesEditor
+          state={state}
+          onUpdate={update}
           onBack={goBack}
         />
       );

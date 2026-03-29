@@ -75,6 +75,10 @@ const mcpServerSchema = z.discriminatedUnion("transport", [
   mcpHttpServerSchema,
 ]);
 
+const skillSetSourceSchema = z.object({
+  url: z.string().min(1, "source URL is required"),
+});
+
 const configSchema = z.object({
   activeProvider: z.string().default(""),
   activeModel: z.string().default(""),
@@ -85,11 +89,13 @@ const configSchema = z.object({
   agents: agentsSchema,
   allowed_commands: z.array(z.string()).optional(),
   mcpServers: z.record(z.string(), mcpServerSchema).optional(),
+  skillSetSources: z.array(skillSetSourceSchema).optional(),
 });
 
 export type ProviderConfig = z.infer<typeof providerSchema>;
 export type McpServerConfig = z.infer<typeof mcpServerSchema>;
 export type McpToolConfig = z.infer<typeof mcpToolSchema>;
+export type SkillSetSource = z.infer<typeof skillSetSourceSchema>;
 export type Config = z.infer<typeof configSchema>;
 
 export interface AgentsConfig {
@@ -366,6 +372,18 @@ export function updateMcpServerTools(
       servers[serverName].tools = tools;
       raw.mcpServers = servers;
     }
+  });
+}
+
+/** Returns skill set sources from config, falling back to empty. */
+export function getSkillSetSources(config: Config): SkillSetSource[] {
+  return config.skillSetSources ?? [];
+}
+
+/** Updates skill set sources in the global config. */
+export function updateSkillSetSources(sources: SkillSetSource[]): void {
+  updateConfigFile(globalConfigPath(), (raw) => {
+    raw.skillSetSources = sources;
   });
 }
 
