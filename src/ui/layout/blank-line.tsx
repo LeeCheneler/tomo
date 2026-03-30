@@ -1,4 +1,4 @@
-import { Text } from "ink";
+import { Box, Text } from "ink";
 
 /** Props for the BlankLine component. */
 interface BlankLineProps {
@@ -8,5 +8,12 @@ interface BlankLineProps {
 /** Renders vertical blank lines for spacing between sections. */
 export function BlankLine(props: BlankLineProps) {
   const count = props.lines ?? 1;
-  return <Text>{"\n".repeat(count)}</Text>;
+  const items = Array.from({ length: count }, (_, i) => i);
+  return (
+    <Box flexDirection="column">
+      {items.map((i) => (
+        <Text key={i}> </Text>
+      ))}
+    </Box>
+  );
 }

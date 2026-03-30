@@ -17,19 +17,20 @@ interface AppHeaderProps {
   provider: string | null | undefined;
 }
 
-/** Derives the version info line from props. */
+/** Derives display values from props. */
 function useAppHeader(props: AppHeaderProps) {
-  const versionInfo =
+  const versionLabel = `v${props.version}`;
+  const modelInfo =
     props.model && props.provider
-      ? `v${props.version} · ${props.model} (${props.provider})`
-      : `v${props.version} · No active model or provider`;
+      ? `${props.model} (${props.provider})`
+      : "No active model or provider";
 
-  return { versionInfo };
+  return { versionLabel, modelInfo };
 }
 
 /** Renders the app logo, tagline, version, and active model/provider. */
 export function AppHeader(props: AppHeaderProps) {
-  const { versionInfo } = useAppHeader(props);
+  const { versionLabel, modelInfo } = useAppHeader(props);
 
   return (
     <Box flexDirection="column">
@@ -41,13 +42,12 @@ export function AppHeader(props: AppHeaderProps) {
         <Text color={theme.brand} bold>
           友
         </Text>
-        <Text dimColor> — your local AI companion</Text>
+        <Text dimColor> · your local AI companion</Text>
       </Indent>
-      <BlankLine />
       <Indent>
-        <Hint>{versionInfo}</Hint>
+        <Text color={theme.brand}>{versionLabel}</Text>
+        <Hint> · {modelInfo}</Hint>
       </Indent>
-      <BlankLine />
     </Box>
   );
 }
