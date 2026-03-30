@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { ModelSelector } from "../components/model-selector";
+import { ok } from "../tools/types";
 import { register } from "./registry";
 import type { Command } from "./types";
 
@@ -15,9 +16,7 @@ const model: Command = {
         onSelect: (provider: string, selectedModel: string) => {
           callbacks.setActiveProvider(provider);
           callbacks.setActiveModel(selectedModel);
-          callbacks.onComplete({
-            output: `Switched to ${provider}/${selectedModel}.`,
-          });
+          callbacks.onComplete(ok(`Switched to ${provider}/${selectedModel}.`));
         },
         onCancel: callbacks.onCancel,
       }),

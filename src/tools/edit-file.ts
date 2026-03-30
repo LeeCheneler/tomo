@@ -27,7 +27,7 @@ function performEdit(filePath: string, content: string): ToolResult {
     writeFileSync(filePath, content, "utf-8");
     return ok(`Successfully edited ${filePath}`);
   } catch (e) {
-    return err(`Error writing file: ${getErrorMessage(e)}`);
+    return err(`writing file: ${getErrorMessage(e)}`);
   }
 }
 
@@ -84,7 +84,7 @@ To delete text, set new_string to an empty string. Prefer this tool over write_f
     try {
       content = readFileSync(filePath, "utf-8");
     } catch (e) {
-      return err(`Error reading file: ${getErrorMessage(e)}`);
+      return err(`reading file: ${getErrorMessage(e)}`);
     }
 
     // Count occurrences

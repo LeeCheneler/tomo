@@ -1,18 +1,12 @@
 import type { ReactElement } from "react";
-
-/** Output returned by a command to display as a system message. */
-export interface CommandResult {
-  output: string;
-}
+import type { ToolResult } from "../tools/types";
 
 /** Either an immediate result or an interactive element that takes over input. */
-export type CommandExecuteResult =
-  | CommandResult
-  | { interactive: ReactElement };
+export type CommandExecuteResult = ToolResult | { interactive: ReactElement };
 
 /** Context and callbacks provided to commands for state changes and provider access. */
 export interface CommandCallbacks {
-  onComplete: (result: CommandResult) => void;
+  onComplete: (result: ToolResult) => void;
   onCancel: () => void;
   clearMessages: () => void;
   switchSession: (id: string) => string | null;

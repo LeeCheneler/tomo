@@ -27,7 +27,7 @@ function performWrite(filePath: string, content: string): ToolResult {
     writeFileSync(filePath, content, "utf-8");
     return ok(`Successfully wrote to ${filePath}`);
   } catch (e) {
-    return err(`Error writing file: ${getErrorMessage(e)}`);
+    return err(`writing file: ${getErrorMessage(e)}`);
   }
 }
 

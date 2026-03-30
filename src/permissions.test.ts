@@ -102,7 +102,7 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: ok("denied"),
+      denyMessage: denied("denied"),
     });
 
     expect(result).toEqual(ok("done"));
@@ -122,7 +122,7 @@ describe("withFilePermission", () => {
       filePath: "/tmp/outside.txt",
       execute,
       renderConfirm,
-      denyMessage: ok("denied"),
+      denyMessage: denied("denied"),
     });
 
     expect(result).toEqual(ok("done"));
@@ -143,7 +143,7 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: ok("denied"),
+      denyMessage: denied("denied"),
     });
 
     expect(result).toEqual(ok("done"));
@@ -183,7 +183,7 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: ok("denied"),
+      denyMessage: denied("denied"),
     });
 
     expect(result).toEqual(ok("written"));
@@ -204,7 +204,7 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: ok("denied"),
+      denyMessage: denied("denied"),
     });
 
     expect(result).toEqual(ok("async result"));

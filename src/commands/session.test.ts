@@ -35,7 +35,7 @@ describe("/session command", () => {
     const result = command.execute("abc-123", callbacks);
 
     expect(callbacks.switchSession).toHaveBeenCalledWith("abc-123");
-    expect(result).toEqual({ output: "Session loaded." });
+    expect(result).toEqual({ output: "Session loaded.", status: "ok" });
   });
 
   it("returns error when session not found", () => {
@@ -44,7 +44,10 @@ describe("/session command", () => {
     callbacks.switchSession.mockReturnValue("Session not found: bad-id");
     const result = command.execute("bad-id", callbacks);
 
-    expect(result).toEqual({ output: "Session not found: bad-id" });
+    expect(result).toEqual({
+      output: "Session not found: bad-id",
+      status: "ok",
+    });
   });
 
   it("returns interactive element when no arg given", () => {

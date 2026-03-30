@@ -4,7 +4,12 @@ import { getErrorMessage } from "../errors";
 import type { McpManager } from "../mcp/manager";
 import type { ToolCall } from "../provider/client";
 import { getTool, getToolDisplayName, type ToolContext } from "../tools";
-import type { ToolResult, ToolResultStatus } from "../tools/types";
+import {
+  err,
+  ok,
+  type ToolResult,
+  type ToolResultStatus,
+} from "../tools/types";
 
 export class ToolDismissedError extends Error {
   constructor() {
@@ -84,43 +89,29 @@ async function executeSingleToolCall(
 
   if (mcpManager?.isMcpTool(tc.function.name)) {
     if (toolAvailability?.[tc.function.name] === false) {
-      result = { output: "This MCP tool has been disabled.", status: "error" };
+      result = err("This MCP tool has been disabled.");
     } else {
       try {
         const args = JSON.parse(tc.function.arguments || "{}");
-        result = {
-          output: await mcpManager.callTool(tc.function.name, args),
-          status: "ok",
-        };
-      } catch (err) {
-        result = {
-          output: `Error: ${getErrorMessage(err)}`,
-          status: "error",
-        };
+        result = ok(await mcpManager.callTool(tc.function.name, args));
+      } catch (e) {
+        result = err(getErrorMessage(e));
       }
     }
   } else if (tc.function.name.startsWith("mcp__")) {
-    result = {
-      output:
-        "This MCP tool is no longer available. The server has been disabled.",
-      status: "error",
-    };
+    result = err(
+      "This MCP tool is no longer available. The server has been disabled.",
+    );
   } else {
     const tool = getTool(tc.function.name);
     if (!tool) {
-      result = {
-        output: `Error: unknown tool "${tc.function.name}"`,
-        status: "error",
-      };
+      result = err(`unknown tool "${tc.function.name}"`);
     } else {
       try {
         result = await tool.execute(tc.function.arguments, toolContext);
-      } catch (err) {
-        if (err instanceof ToolDismissedError) throw err;
-        result = {
-          output: `Error: ${getErrorMessage(err)}`,
-          status: "error",
-        };
+      } catch (e) {
+        if (e instanceof ToolDismissedError) throw e;
+        result = err(getErrorMessage(e));
       }
     }
   }

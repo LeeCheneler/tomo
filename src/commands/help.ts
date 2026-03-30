@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { ok } from "../tools/types";
 import { getAllCommands, register } from "./registry";
 import type { Command } from "./types";
 
@@ -24,7 +25,7 @@ const help: Command = {
       `${chalk.bold("Tips:")}\n \n  Press ${chalk.cyan("Tab")} to expand the full conversation in your system pager (e.g. ${chalk.cyan("less")}).\n  Commands ${chalk.cyan("/")} control the app. Skills ${chalk.cyan("//")} inject instructions into the conversation.`,
     ];
 
-    return { output: sections.join("\n \n") };
+    return ok(sections.join("\n \n"));
   },
 };
 

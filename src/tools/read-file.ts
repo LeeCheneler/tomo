@@ -71,7 +71,7 @@ function readFile(
     );
     return ok(`${filePath} (${totalLines} lines)\n${numbered.join("\n")}`);
   } catch (e) {
-    return err(`Error reading file: ${getErrorMessage(e)}`);
+    return err(`reading file: ${getErrorMessage(e)}`);
   }
 }
 

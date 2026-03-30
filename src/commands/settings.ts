@@ -21,6 +21,7 @@ import {
 import { resolvePermissions } from "../permissions";
 import { reloadSkills } from "../skills";
 import { getAllTools, resolveToolAvailability } from "../tools";
+import { ok } from "../tools/types";
 import { register } from "./registry";
 import type { Command } from "./types";
 
@@ -94,7 +95,7 @@ const settings: Command = {
         onSave: (state: SettingsState) => {
           saveSettings(state);
           reloadSkills();
-          callbacks.onComplete({ output: "Settings updated." });
+          callbacks.onComplete(ok("Settings updated."));
         },
       }),
     };
