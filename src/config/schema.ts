@@ -92,6 +92,17 @@ export const mcpSchema = z.object({
   connections: z.record(z.string(), mcpConnectionSchema).default({}),
 });
 
+/** Schema for a skill set source (git repo) with its enabled sets. */
+export const skillSetSourceSchema = z.object({
+  url: z.string().min(1, "source URL is required"),
+  enabledSets: z.array(z.string()).default([]),
+});
+
+/** Schema for skill set configuration. */
+export const skillSetsSchema = z.object({
+  sources: z.array(skillSetSourceSchema).default([]),
+});
+
 /** Schema for the application config. */
 export const configSchema = z.object({
   activeModel: z.string().nullish(),
@@ -106,6 +117,7 @@ export const configSchema = z.object({
     tools: ["readFile", "glob", "grep", "webSearch", "skill"],
   }),
   mcp: mcpSchema.default({ connections: {} }),
+  skillSets: skillSetsSchema.default({ sources: [] }),
   tools: toolsSchema.default({
     agent: { enabled: true },
     ask: { enabled: true },
@@ -149,6 +161,12 @@ export type McpConnection = z.infer<typeof mcpConnectionSchema>;
 
 /** MCP configuration. */
 export type Mcp = z.infer<typeof mcpSchema>;
+
+/** A skill set source (git repo) with its enabled sets. */
+export type SkillSetSource = z.infer<typeof skillSetSourceSchema>;
+
+/** Skill set configuration. */
+export type SkillSets = z.infer<typeof skillSetsSchema>;
 
 /** Application config type inferred from the schema. */
 export type Config = z.infer<typeof configSchema>;

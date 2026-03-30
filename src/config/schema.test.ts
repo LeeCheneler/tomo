@@ -5,6 +5,7 @@ import {
   mcpSchema,
   permissionsSchema,
   providerSchema,
+  skillSetsSchema,
   toolsSchema,
 } from "./schema";
 
@@ -197,6 +198,38 @@ describe("mcpSchema", () => {
   });
 });
 
+describe("skillSetsSchema", () => {
+  it("defaults to empty sources", () => {
+    const result = skillSetsSchema.parse({});
+    expect(result.sources).toEqual([]);
+  });
+
+  it("parses a source with enabled sets", () => {
+    const result = skillSetsSchema.parse({
+      sources: [
+        {
+          url: "git@github.com:org/skills.git",
+          enabledSets: ["dev", "design"],
+        },
+      ],
+    });
+    expect(result.sources).toHaveLength(1);
+    expect(result.sources[0].url).toBe("git@github.com:org/skills.git");
+    expect(result.sources[0].enabledSets).toEqual(["dev", "design"]);
+  });
+
+  it("defaults enabledSets to empty array on a source", () => {
+    const result = skillSetsSchema.parse({
+      sources: [{ url: "git@github.com:org/skills.git" }],
+    });
+    expect(result.sources[0].enabledSets).toEqual([]);
+  });
+
+  it("rejects source with empty url", () => {
+    expect(() => skillSetsSchema.parse({ sources: [{ url: "" }] })).toThrow();
+  });
+});
+
 describe("configSchema", () => {
   it("parses with all fields present", () => {
     const result = configSchema.parse({
@@ -273,6 +306,11 @@ describe("configSchema", () => {
   it("defaults mcp to empty connections", () => {
     const result = configSchema.parse({});
     expect(result.mcp.connections).toEqual({});
+  });
+
+  it("defaults skillSets to empty sources", () => {
+    const result = configSchema.parse({});
+    expect(result.skillSets.sources).toEqual([]);
   });
 
   it("defaults tools with webSearch disabled", () => {

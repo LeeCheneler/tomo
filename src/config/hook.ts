@@ -12,6 +12,7 @@ export function useConfig(): Config {
       permissions: { cwdReadFile: true },
       allowedCommands: [],
       mcp: { connections: {} },
+      skillSets: { sources: [] },
       agents: {
         maxDepth: 1,
         maxConcurrent: 3,
