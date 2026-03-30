@@ -20,6 +20,14 @@ export const configSchema = z.object({
   activeModel: z.string().nullish(),
   activeProvider: z.string().nullish(),
   providers: z.array(providerSchema).default([]),
+  permissions: z
+    .object({
+      cwdReadFile: z.boolean().default(true),
+      cwdWriteFile: z.boolean().optional(),
+      globalReadFile: z.boolean().optional(),
+      globalWriteFile: z.boolean().optional(),
+    })
+    .default({ cwdReadFile: true }),
 });
 
 /** A single provider connection. */

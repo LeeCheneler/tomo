@@ -93,4 +93,27 @@ describe("configSchema", () => {
     expect(result.activeModel).toBeUndefined();
     expect(result.activeProvider).toBeUndefined();
   });
+
+  it("defaults permissions with cwdReadFile allowed", () => {
+    const result = configSchema.parse({});
+    expect(result.permissions.cwdReadFile).toBe(true);
+    expect(result.permissions.cwdWriteFile).toBeUndefined();
+    expect(result.permissions.globalReadFile).toBeUndefined();
+    expect(result.permissions.globalWriteFile).toBeUndefined();
+  });
+
+  it("parses explicit permissions", () => {
+    const result = configSchema.parse({
+      permissions: {
+        cwdReadFile: false,
+        cwdWriteFile: true,
+        globalReadFile: true,
+        globalWriteFile: false,
+      },
+    });
+    expect(result.permissions.cwdReadFile).toBe(false);
+    expect(result.permissions.cwdWriteFile).toBe(true);
+    expect(result.permissions.globalReadFile).toBe(true);
+    expect(result.permissions.globalWriteFile).toBe(false);
+  });
 });

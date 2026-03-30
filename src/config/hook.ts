@@ -9,6 +9,7 @@ export function useConfig(): Config {
       activeModel: null,
       activeProvider: null,
       providers: [],
+      permissions: { cwdReadFile: true },
     };
   }, []);
 }
