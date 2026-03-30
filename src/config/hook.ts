@@ -1,12 +1,12 @@
 import { useMemo } from "react";
+import type { Config } from "./schema";
 
 /** Loads and manages application config state. */
-export function useConfig() {
+export function useConfig(): Config {
   return useMemo(() => {
-    // TODO: load from config.yaml
     return {
-      activeModel: "none",
-      activeProvider: "none",
+      activeModel: null,
+      activeProvider: null,
     };
   }, []);
 }
