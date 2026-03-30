@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { BlankLine } from "./blank-line";
 
 describe("BlankLine", () => {
-  it("renders a single blank line by default", () => {
+  it("renders a blank line between content", () => {
     const { lastFrame } = render(
       <Box flexDirection="column">
         <Text>above</Text>
@@ -15,20 +15,6 @@ describe("BlankLine", () => {
     const lines = lastFrame()?.split("\n") ?? [];
     expect(lines[0]).toBe("above");
     expect(lines[lines.length - 1]).toBe("below");
-    expect(lines.length).toBeGreaterThan(2);
-  });
-
-  it("renders multiple blank lines", () => {
-    const { lastFrame } = render(
-      <Box flexDirection="column">
-        <Text>above</Text>
-        <BlankLine lines={2} />
-        <Text>below</Text>
-      </Box>,
-    );
-    const lines = lastFrame()?.split("\n") ?? [];
-    expect(lines[0]).toBe("above");
-    expect(lines[lines.length - 1]).toBe("below");
-    expect(lines.length).toBeGreaterThanOrEqual(4);
+    expect(lines.length).toBe(3);
   });
 });
