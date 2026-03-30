@@ -21,6 +21,7 @@
     "@biomejs/biome": "^2.4.8",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
+    "@vitest/coverage-v8": "4.1.0",
     "ink-testing-library": "^4.0.0",
     "lefthook": "^2.1.4",
     "react-devtools-core": "^7.0.1",
