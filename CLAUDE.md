@@ -16,6 +16,7 @@ See `CONTRIBUTING.md` for architecture guidelines and `repository-restructure.md
 - Strict mode. No `any` unless absolutely unavoidable — and if you must, add a comment explaining why.
 - Prefer `interface` over `type` for object shapes. Use `type` for unions, intersections, and mapped types.
 - Use explicit return types on exported functions. Inferred return types are fine for non-exported helpers and hooks.
+- Never use `.js` extensions in imports. Use extensionless paths: `from "./config/hook"` not `from "./config/hook.js"`.
 
 ### React / Ink
 

@@ -1,6 +1,6 @@
 import { Box, Static } from "ink";
-import { useConfig } from "./config/hook.js";
-import { AppHeader } from "./ui/app-header.js";
+import { useConfig } from "./config/hook";
+import { AppHeader } from "./ui/app-header";
 
 declare const TOMO_VERSION: string | undefined;
 const version = typeof TOMO_VERSION !== "undefined" ? TOMO_VERSION : "dev";
