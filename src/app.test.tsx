@@ -219,7 +219,7 @@ describe("App", () => {
 
     const { lastFrame } = render(<App onRestart={() => {}} />);
     const output = lastFrame() ?? "";
-    expect(output).toContain("file contents here");
+    expect(output).toContain("read_file");
   });
 
   it("hides streaming content when not streaming", () => {

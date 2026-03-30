@@ -6,7 +6,14 @@ import { FileAccessConfirm } from "../components/file-access-confirm";
 import { getErrorMessage } from "../errors";
 import { withFilePermission } from "../permissions";
 import { registerTool } from "./registry";
-import { parseToolArgs, type ToolContext } from "./types";
+import {
+  denied,
+  err,
+  ok,
+  parseToolArgs,
+  type ToolContext,
+  type ToolResult,
+} from "./types";
 
 const argsSchema = z.object({
   path: z.string().min(1, "no file path provided"),
@@ -20,14 +27,14 @@ function readFile(
   filePath: string,
   startLine?: number,
   endLine?: number,
-): string {
+): ToolResult {
   try {
     const stat = statSync(filePath);
     if (stat.isDirectory()) {
-      return `Error: ${filePath} is a directory, not a file`;
+      return err(`${filePath} is a directory, not a file`);
     }
   } catch {
-    return `Error: file not found: ${filePath}`;
+    return err(`file not found: ${filePath}`);
   }
 
   try {
@@ -43,7 +50,9 @@ function readFile(
       const numbered = slice.map(
         (line, i) => `${String(start + i).padStart(4)} | ${line}`,
       );
-      return `${filePath} (lines ${start}-${end} of ${totalLines})\n${numbered.join("\n")}`;
+      return ok(
+        `${filePath} (lines ${start}-${end} of ${totalLines})\n${numbered.join("\n")}`,
+      );
     }
 
     // Full file — truncate if needed
@@ -52,15 +61,17 @@ function readFile(
       const numbered = slice.map(
         (line, i) => `${String(i + 1).padStart(4)} | ${line}`,
       );
-      return `${filePath} (showing first ${MAX_LINES} of ${totalLines} lines, truncated)\n${numbered.join("\n")}`;
+      return ok(
+        `${filePath} (showing first ${MAX_LINES} of ${totalLines} lines, truncated)\n${numbered.join("\n")}`,
+      );
     }
 
     const numbered = allLines.map(
       (line, i) => `${String(i + 1).padStart(4)} | ${line}`,
     );
-    return `${filePath} (${totalLines} lines)\n${numbered.join("\n")}`;
-  } catch (err) {
-    return `Error reading file: ${getErrorMessage(err)}`;
+    return ok(`${filePath} (${totalLines} lines)\n${numbered.join("\n")}`);
+  } catch (e) {
+    return err(`reading file: ${getErrorMessage(e)}`);
   }
 }
 
@@ -95,7 +106,7 @@ registerTool({
     required: ["path"],
   },
   interactive: false,
-  async execute(args: string, context: ToolContext): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<ToolResult> {
     const parsed = parseToolArgs(argsSchema, args);
     const { startLine, endLine } = parsed;
     const filePath = resolve(parsed.path);
@@ -114,7 +125,7 @@ registerTool({
             onDeny: () => onResult("denied"),
           }),
         ),
-      denyMessage: "The user denied this read.",
+      denyMessage: denied("The user denied this read."),
     });
   },
 });

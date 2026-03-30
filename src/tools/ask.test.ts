@@ -56,7 +56,7 @@ describe("ask tool", () => {
     );
 
     expect(context.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result).toBe("typed answer");
+    expect(result?.output).toBe("typed answer");
   });
 
   it("defaults options to empty array when omitted", async () => {
@@ -84,7 +84,7 @@ describe("ask tool", () => {
     );
 
     expect(context.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result).toBe("typed answer");
+    expect(result?.output).toBe("typed answer");
   });
 
   it("uses default question when none provided", async () => {
@@ -138,6 +138,6 @@ describe("ask tool", () => {
 
     expect(context.renderInteractive).toHaveBeenCalledTimes(1);
     expect(typeof context.renderInteractive.mock.calls[0][0]).toBe("function");
-    expect(result).toBe("option A");
+    expect(result?.output).toBe("option A");
   });
 });

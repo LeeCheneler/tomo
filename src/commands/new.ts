@@ -1,3 +1,4 @@
+import { ok } from "../tools/types";
 import { register } from "./registry";
 import type { Command } from "./types";
 
@@ -6,7 +7,7 @@ const newCommand: Command = {
   description: "Start a new conversation",
   execute: (_args, { clearMessages }) => {
     clearMessages();
-    return { output: "Conversation cleared." };
+    return ok("Conversation cleared.");
   },
 };
 

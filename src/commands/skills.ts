@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import { getAllSkills } from "../skills";
+import { ok } from "../tools/types";
 import { register } from "./registry";
 import type { Command } from "./types";
 
@@ -13,14 +14,14 @@ const skills: Command = {
   execute: () => {
     const allSkills = getAllSkills();
     if (allSkills.length === 0) {
-      return { output: "No skills found." };
+      return ok("No skills found.");
     }
     const maxName = Math.max(...allSkills.map((s) => s.name.length));
     const lines = allSkills.map(
       (s) =>
         `  ${chalk.bold.cyan(s.name.padEnd(maxName))}  ${chalk.dim(truncate(s.description, 50))}`,
     );
-    return { output: `Available skills:\n \n${lines.join("\n")}` };
+    return ok(`Available skills:\n \n${lines.join("\n")}`);
   },
 };
 

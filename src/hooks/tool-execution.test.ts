@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTool } from "../tools";
+import { ok } from "../tools/types";
 import {
   executeToolCalls,
   formatToolHeader,
@@ -71,6 +72,15 @@ describe("formatToolHeader", () => {
     const header = formatToolHeader("ask", "{}");
     expect(header).toContain("ask");
   });
+
+  it("returns header containing the tool name for all statuses", () => {
+    const success = formatToolHeader("read_file", "{}", "ok");
+    const error = formatToolHeader("read_file", "{}", "error");
+    const deny = formatToolHeader("read_file", "{}", "denied");
+    expect(success).toContain("read_file");
+    expect(error).toContain("read_file");
+    expect(deny).toContain("read_file");
+  });
 });
 
 describe("executeToolCalls", () => {
@@ -80,7 +90,7 @@ describe("executeToolCalls", () => {
       description: "Read a file",
       parameters: {},
       interactive: false,
-      execute: async () => "file contents",
+      execute: async () => ok("file contents"),
     });
 
     const controller = new AbortController();
@@ -184,7 +194,7 @@ describe("executeToolCalls", () => {
       interactive: false,
       execute: async () => {
         callOrder.push(name ?? "");
-        return `result-${name}`;
+        return ok(`result-${name}`);
       },
     }));
 
@@ -224,7 +234,7 @@ describe("executeToolCalls", () => {
       description: "",
       parameters: {},
       interactive: name === "ask",
-      execute: async () => `result-${name}`,
+      execute: async () => ok(`result-${name}`),
     }));
 
     const controller = new AbortController();
@@ -268,7 +278,7 @@ describe("executeToolCalls", () => {
       description: "Ask",
       parameters: {},
       interactive: true,
-      execute: async () => "result",
+      execute: async () => ok("result"),
     });
 
     const controller = new AbortController();
@@ -339,7 +349,7 @@ describe("executeToolCalls with mcpManager", () => {
       description: "Read a file",
       parameters: {},
       interactive: false,
-      execute: async () => "builtin result",
+      execute: async () => ok("builtin result"),
     });
 
     const controller = new AbortController();
@@ -426,7 +436,7 @@ describe("executeToolCalls with mcpManager", () => {
       description: "Glob",
       parameters: {},
       interactive: false,
-      execute: async () => "glob result",
+      execute: async () => ok("glob result"),
     });
 
     const controller = new AbortController();
@@ -567,7 +577,7 @@ describe("executeToolCalls with mcpManager", () => {
       description: "Glob",
       parameters: {},
       interactive: false,
-      execute: async () => "glob result",
+      execute: async () => ok("glob result"),
     });
 
     const controller = new AbortController();
@@ -627,7 +637,7 @@ describe("executeToolCalls with mcpManager", () => {
       description: "Read",
       parameters: {},
       interactive: false,
-      execute: async () => "file contents",
+      execute: async () => ok("file contents"),
     });
 
     const controller = new AbortController();

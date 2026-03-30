@@ -35,7 +35,7 @@ describe("/context", () => {
 
   it("shows 0% usage when no token data yet", () => {
     const result = cmd.execute("", makeCallbacks());
-    const output = (result as { output: string }).output;
+    const output = (result as { output: string; status: string }).output;
 
     expect(output).toContain("0% used");
     expect(output).toContain("░".repeat(30));
@@ -55,7 +55,7 @@ describe("/context", () => {
       }),
     );
 
-    const output = (result as { output: string }).output;
+    const output = (result as { output: string; status: string }).output;
     expect(output).toContain("6% used");
     expect(output).toContain("2.0k / 32.8k tokens");
     expect(output).toContain("Context window     32.8k tokens");
@@ -76,7 +76,7 @@ describe("/context", () => {
       }),
     );
 
-    const output = (result as { output: string }).output;
+    const output = (result as { output: string; status: string }).output;
     expect(output).toContain("95% used");
     const bar = output.split("\n")[0] ?? "";
     const filledCount = (bar.match(/█/g) || []).length;
@@ -93,7 +93,7 @@ describe("/context", () => {
       }),
     );
 
-    const output = (result as { output: string }).output;
+    const output = (result as { output: string; status: string }).output;
     expect(output).toContain("2% used");
     expect(output).toContain("70 / 4.1k tokens");
     expect(output).toContain("Input budget       3.6k tokens");

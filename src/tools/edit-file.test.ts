@@ -42,7 +42,7 @@ describe("edit_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("Successfully edited");
+    expect(result?.output).toContain("Successfully edited");
     expect(readFileSync(filePath, "utf-8")).toBe("hi world\ngoodbye world\n");
   });
 
@@ -60,7 +60,7 @@ describe("edit_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("old_string not found");
+    expect(result?.output).toContain("old_string not found");
     expect(mockContext.renderInteractive).not.toHaveBeenCalled();
   });
 
@@ -78,8 +78,8 @@ describe("edit_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("found 2 times");
-    expect(result).toContain("must be unique");
+    expect(result?.output).toContain("found 2 times");
+    expect(result?.output).toContain("must be unique");
     expect(mockContext.renderInteractive).not.toHaveBeenCalled();
   });
 
@@ -94,7 +94,7 @@ describe("edit_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("file not found");
+    expect(result?.output).toContain("file not found");
   });
 
   it("throws for empty path", async () => {
@@ -132,7 +132,7 @@ describe("edit_file tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("Error: old_string and new_string are identical");
+    expect(result?.output).toBe("old_string and new_string are identical");
   });
 
   it("returns denial message when user denies", async () => {
@@ -150,7 +150,7 @@ describe("edit_file tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("The user denied this edit.");
+    expect(result?.output).toBe("The user denied this edit.");
     // File should be unchanged
     expect(readFileSync(filePath, "utf-8")).toBe("hello\n");
   });
@@ -190,7 +190,7 @@ describe("edit_file tool", () => {
       ctx,
     );
 
-    expect(result).toContain("Successfully edited");
+    expect(result?.output).toContain("Successfully edited");
     expect(ctx.renderInteractive).not.toHaveBeenCalled();
     expect(readFileSync(filePath, "utf-8")).toBe("bye\n");
     rmSync(filePath, { force: true });

@@ -7,7 +7,14 @@ import { getErrorMessage } from "../errors";
 import { withFilePermission } from "../permissions";
 import { formatDiff } from "./format-diff";
 import { registerTool } from "./registry";
-import { parseToolArgs, type ToolContext } from "./types";
+import {
+  denied,
+  err,
+  ok,
+  parseToolArgs,
+  type ToolContext,
+  type ToolResult,
+} from "./types";
 
 const argsSchema = z.object({
   path: z.string().min(1, "no file path provided"),
@@ -15,12 +22,12 @@ const argsSchema = z.object({
   new_string: z.string(),
 });
 
-function performEdit(filePath: string, content: string): string {
+function performEdit(filePath: string, content: string): ToolResult {
   try {
     writeFileSync(filePath, content, "utf-8");
-    return `Successfully edited ${filePath}`;
-  } catch (err) {
-    return `Error writing file: ${getErrorMessage(err)}`;
+    return ok(`Successfully edited ${filePath}`);
+  } catch (e) {
+    return err(`writing file: ${getErrorMessage(e)}`);
   }
 }
 
@@ -59,36 +66,38 @@ To delete text, set new_string to an empty string. Prefer this tool over write_f
     },
     required: ["path", "old_string", "new_string"],
   },
-  async execute(args: string, context: ToolContext): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<ToolResult> {
     const parsed = parseToolArgs(argsSchema, args);
     const { old_string: oldString, new_string: newString } = parsed;
 
     if (oldString === newString) {
-      return "Error: old_string and new_string are identical";
+      return err("old_string and new_string are identical");
     }
 
     const filePath = resolve(parsed.path);
 
     if (!existsSync(filePath)) {
-      return `Error: file not found: ${filePath}`;
+      return err(`file not found: ${filePath}`);
     }
 
     let content: string;
     try {
       content = readFileSync(filePath, "utf-8");
-    } catch (err) {
-      return `Error reading file: ${getErrorMessage(err)}`;
+    } catch (e) {
+      return err(`reading file: ${getErrorMessage(e)}`);
     }
 
     // Count occurrences
     const occurrences = content.split(oldString).length - 1;
 
     if (occurrences === 0) {
-      return `Error: old_string not found in ${filePath}`;
+      return err(`old_string not found in ${filePath}`);
     }
 
     if (occurrences > 1) {
-      return `Error: old_string found ${occurrences} times in ${filePath}. It must be unique. Provide more surrounding context to disambiguate.`;
+      return err(
+        `old_string found ${occurrences} times in ${filePath}. It must be unique. Provide more surrounding context to disambiguate.`,
+      );
     }
 
     const newContent = content.replace(oldString, newString);
@@ -110,7 +119,7 @@ To delete text, set new_string to an empty string. Prefer this tool over write_f
           }),
         );
       },
-      denyMessage: "The user denied this edit.",
+      denyMessage: denied("The user denied this edit."),
     });
   },
 });

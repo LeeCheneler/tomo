@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import type { ToolContext } from "./tools/types";
+import type { ToolContext, ToolResult } from "./tools/types";
 
 /** Tool names that support configurable permissions. */
 export type ToolPermission = "read_file" | "write_file";
@@ -35,10 +35,10 @@ export async function withFilePermission(opts: {
   context: ToolContext;
   permission: ToolPermission;
   filePath: string;
-  execute: () => string | Promise<string>;
+  execute: () => ToolResult | Promise<ToolResult>;
   renderConfirm: () => Promise<string>;
-  denyMessage: string;
-}): Promise<string> {
+  denyMessage: ToolResult;
+}): Promise<ToolResult> {
   const { context, permission, filePath, execute, renderConfirm, denyMessage } =
     opts;
 

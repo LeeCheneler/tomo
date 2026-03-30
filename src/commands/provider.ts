@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { ConfigureSelector } from "../components/configure-selector";
 import { addProvider, type ProviderConfig, removeProvider } from "../config";
+import { ok } from "../tools/types";
 import { register } from "./registry";
 import type { Command } from "./types";
 
@@ -24,16 +25,16 @@ const provider: Command = {
           addProvider(provider as ProviderConfig);
           callbacks.setActiveProvider(provider.name);
           callbacks.setActiveModel(model);
-          callbacks.onComplete({
-            output: `Added provider "${provider.name}" and switched to ${provider.name}/${model}.`,
-          });
+          callbacks.onComplete(
+            ok(
+              `Added provider "${provider.name}" and switched to ${provider.name}/${model}.`,
+            ),
+          );
         },
         onRemoveProvider: (name: string) => {
           removeProvider(name);
           callbacks.reloadProviders();
-          callbacks.onComplete({
-            output: `Removed provider "${name}".`,
-          });
+          callbacks.onComplete(ok(`Removed provider "${name}".`));
         },
         onCancel: callbacks.onCancel,
       }),

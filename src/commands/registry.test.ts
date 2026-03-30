@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { ok } from "../tools/types";
 import { getAllCommands, getCommand, parse, register } from "./registry";
 import type { Command } from "./types";
 
 const makeCommand = (name: string, description = "test"): Command => ({
   name,
   description,
-  execute: () => ({ output: `${name} executed` }),
+  execute: () => ok(`${name} executed`),
 });
 
 describe("parse", () => {

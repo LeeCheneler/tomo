@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { ok } from "../tools/types";
 import { register } from "./registry";
 import type { Command } from "./types";
 
@@ -40,7 +41,7 @@ const context: Command = {
       chalk.dim(`  (input budget = context window - response reserve)`),
     ];
 
-    return { output: lines.join("\n") };
+    return ok(lines.join("\n"));
   },
 };
 

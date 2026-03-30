@@ -90,7 +90,7 @@ describe("agent tool", () => {
       makeContext(),
     );
 
-    expect(result).toBe("Here are my findings");
+    expect(result?.output).toBe("Here are my findings");
   });
 
   it("returns fallback message when sub-agent produces no output", async () => {
@@ -106,7 +106,7 @@ describe("agent tool", () => {
       makeContext(),
     );
 
-    expect(result).toBe("(sub-agent produced no output)");
+    expect(result?.output).toBe("(sub-agent produced no output)");
   });
 
   it("passes provider config to the completion loop", async () => {
@@ -215,7 +215,7 @@ describe("agent tool", () => {
       makeContext(),
     );
 
-    expect(result).toBe("Sub-agent error: connection failed");
+    expect(result?.output).toBe("Sub-agent error: connection failed");
   });
 
   it("re-throws abort errors from parent signal", async () => {
@@ -279,7 +279,7 @@ describe("agent tool", () => {
     await vi.advanceTimersByTimeAsync(1500);
 
     const result = await resultPromise;
-    expect(result).toContain("timed out");
+    expect(result?.output).toContain("timed out");
 
     vi.useRealTimers();
   });
@@ -357,7 +357,7 @@ describe("agent tool", () => {
     await vi.advanceTimersByTimeAsync(2500);
 
     const result = await resultPromise;
-    expect(result).toContain("timed out after 2s");
+    expect(result?.output).toContain("timed out after 2s");
 
     vi.useRealTimers();
   });
@@ -396,7 +396,7 @@ describe("agent tool", () => {
     await vi.advanceTimersByTimeAsync(1500);
 
     const result = await resultPromise;
-    expect(result).toContain("timed out after 1s");
+    expect(result?.output).toContain("timed out after 1s");
 
     vi.useRealTimers();
   });

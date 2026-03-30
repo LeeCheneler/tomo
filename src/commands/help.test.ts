@@ -14,7 +14,7 @@ describe("/help", () => {
     const result = help.execute("", stubCallbacks);
     expect("output" in result).toBe(true);
 
-    const output = (result as { output: string }).output;
+    const output = (result as { output: string; status: string }).output;
     const commands = getAllCommands();
 
     for (const cmd of commands) {

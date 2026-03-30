@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { SessionSelector } from "../components/session-selector";
+import { ok } from "../tools/types";
 import { register } from "./registry";
 import type { Command } from "./types";
 
@@ -11,15 +12,15 @@ const session: Command = {
 
     if (id) {
       const error = callbacks.switchSession(id);
-      if (error) return { output: error };
-      return { output: "Session loaded." };
+      if (error) return ok(error);
+      return ok("Session loaded.");
     }
 
     return {
       interactive: createElement(SessionSelector, {
         onSelect: (selectedId: string) => {
           callbacks.switchSession(selectedId);
-          callbacks.onComplete({ output: "Session loaded." });
+          callbacks.onComplete(ok("Session loaded."));
         },
         onCancel: callbacks.onCancel,
       }),

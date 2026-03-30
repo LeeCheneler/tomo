@@ -64,11 +64,11 @@ describe("grep tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("src/index.ts");
-    expect(result).toContain("src/utils.ts");
-    expect(result).toContain("src/app.tsx");
+    expect(result?.output).toContain("src/index.ts");
+    expect(result?.output).toContain("src/utils.ts");
+    expect(result?.output).toContain("src/app.tsx");
     // Should include line numbers
-    expect(result).toMatch(/:\d+:/);
+    expect(result?.output).toMatch(/:\d+:/);
   });
 
   it("supports regex patterns", async () => {
@@ -79,8 +79,8 @@ describe("grep tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("src/index.ts");
-    expect(result).not.toContain("src/utils.ts");
+    expect(result?.output).toContain("src/index.ts");
+    expect(result?.output).not.toContain("src/utils.ts");
   });
 
   it("returns message when no matches found", async () => {
@@ -91,7 +91,7 @@ describe("grep tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("No matches found.");
+    expect(result?.output).toBe("No matches found.");
   });
 
   it("throws for empty pattern", async () => {
@@ -109,9 +109,9 @@ describe("grep tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("src/app.tsx");
-    expect(result).not.toContain("src/index.ts");
-    expect(result).not.toContain("src/utils.ts");
+    expect(result?.output).toContain("src/app.tsx");
+    expect(result?.output).not.toContain("src/index.ts");
+    expect(result?.output).not.toContain("src/utils.ts");
   });
 
   it("excludes gitignored files by default", async () => {
@@ -126,7 +126,7 @@ describe("grep tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("No matches found.");
+    expect(result?.output).toBe("No matches found.");
   });
 
   it("includes gitignored files when gitignore is false", async () => {
@@ -145,8 +145,8 @@ describe("grep tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("bundle.js");
-    expect(result).toContain("bundled");
+    expect(result?.output).toContain("bundle.js");
+    expect(result?.output).toContain("bundled");
   });
 
   it("falls back to grep for non-git directories", async () => {
@@ -165,8 +165,8 @@ describe("grep tool", () => {
         ctx,
       );
 
-      expect(result).toContain("file.ts");
-      expect(result).toContain("fallback");
+      expect(result?.output).toContain("file.ts");
+      expect(result?.output).toContain("fallback");
     } finally {
       rmSync(nonGitDir, { recursive: true, force: true });
     }
@@ -213,7 +213,7 @@ describe("grep tool", () => {
       ctx,
     );
 
-    expect(result).toBe("The user denied this search.");
+    expect(result?.output).toBe("The user denied this search.");
   });
 
   it("searches a single file when path points to a file", async () => {
@@ -225,10 +225,10 @@ describe("grep tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("hello");
+    expect(result?.output).toContain("hello");
     // Should not include results from other files
-    expect(result).not.toContain("utils.ts");
-    expect(result).not.toContain("app.tsx");
+    expect(result?.output).not.toContain("utils.ts");
+    expect(result?.output).not.toContain("app.tsx");
   });
 
   it("returns no matches for file path with no hits", async () => {
@@ -240,7 +240,7 @@ describe("grep tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("No matches found.");
+    expect(result?.output).toBe("No matches found.");
   });
 
   it("prompts for paths outside cwd even with permission granted", async () => {

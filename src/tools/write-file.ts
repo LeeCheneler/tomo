@@ -7,20 +7,27 @@ import { getErrorMessage } from "../errors";
 import { withFilePermission } from "../permissions";
 import { formatDiff, formatNewFile } from "./format-diff";
 import { registerTool } from "./registry";
-import { parseToolArgs, type ToolContext } from "./types";
+import {
+  denied,
+  err,
+  ok,
+  parseToolArgs,
+  type ToolContext,
+  type ToolResult,
+} from "./types";
 
 const argsSchema = z.object({
   path: z.string().min(1, "no file path provided"),
   content: z.string(),
 });
 
-function performWrite(filePath: string, content: string): string {
+function performWrite(filePath: string, content: string): ToolResult {
   try {
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, content, "utf-8");
-    return `Successfully wrote to ${filePath}`;
-  } catch (err) {
-    return `Error writing file: ${getErrorMessage(err)}`;
+    return ok(`Successfully wrote to ${filePath}`);
+  } catch (e) {
+    return err(`writing file: ${getErrorMessage(e)}`);
   }
 }
 
@@ -47,7 +54,7 @@ registerTool({
     },
     required: ["path", "content"],
   },
-  async execute(args: string, context: ToolContext): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<ToolResult> {
     const parsed = parseToolArgs(argsSchema, args);
     const { content } = parsed;
     const filePath = resolve(parsed.path);
@@ -73,7 +80,7 @@ registerTool({
           }),
         );
       },
-      denyMessage: "The user denied this write.",
+      denyMessage: denied("The user denied this write."),
     });
   },
 });

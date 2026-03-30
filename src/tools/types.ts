@@ -34,6 +34,29 @@ export interface ToolContext {
   allowedCommands: string[];
 }
 
+/** Structured result returned by a tool's execute function. */
+export type ToolResultStatus = "ok" | "error" | "denied";
+
+export interface ToolResult {
+  output: string;
+  status: ToolResultStatus;
+}
+
+/** Create a successful tool result. */
+export function ok(output: string): ToolResult {
+  return { output, status: "ok" };
+}
+
+/** Create an error tool result. Displayed with a red header. */
+export function err(output: string): ToolResult {
+  return { output, status: "error" };
+}
+
+/** Create a denied tool result (user rejected the action). Displayed with a dim header. */
+export function denied(output: string): ToolResult {
+  return { output, status: "denied" };
+}
+
 /** A model-initiated tool with a name, description, parameters, and execute handler. */
 export interface Tool {
   name: string;
@@ -47,7 +70,7 @@ export interface Tool {
   enabled?: boolean;
   /** Returns a warning message when the tool is enabled but misconfigured, or undefined if OK. */
   warning?: () => string | undefined;
-  execute: (args: string, context: ToolContext) => Promise<string>;
+  execute: (args: string, context: ToolContext) => Promise<ToolResult>;
 }
 
 /** Parse and validate tool arguments against a Zod schema. Throws with a clean message on failure. */

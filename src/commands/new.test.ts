@@ -35,6 +35,6 @@ describe("/new command", () => {
     const result = command.execute("", callbacks);
 
     expect(clearMessages).toHaveBeenCalled();
-    expect(result).toEqual({ output: "Conversation cleared." });
+    expect(result).toEqual({ output: "Conversation cleared.", status: "ok" });
   });
 });

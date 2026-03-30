@@ -29,7 +29,7 @@ describe("/skills command", () => {
 
     const result = cmd?.execute("", {} as never);
     expect(result).toHaveProperty("output");
-    const output = (result as { output: string }).output;
+    const output = (result as { output: string; status: string }).output;
     expect(output).toContain("commit");
     expect(output).toContain("Commit changes");
     expect(output).toContain("pr");
@@ -38,7 +38,10 @@ describe("/skills command", () => {
 
   it("formats output with header and aligned columns", () => {
     const cmd = getCommand("skills");
-    const result = cmd?.execute("", {} as never) as { output: string };
+    const result = cmd?.execute("", {} as never) as {
+      output: string;
+      status: string;
+    };
     const output = result.output;
     expect(output).toContain("Available skills:");
     // Header + blank line + 2 skill lines
