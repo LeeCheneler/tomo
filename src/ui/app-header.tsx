@@ -1,4 +1,8 @@
 import { Box, Text } from "ink";
+import { BlankLine } from "./layout/blank-line";
+import { Indent } from "./layout/indent";
+import { theme } from "./theme";
+import { Hint } from "./typography/hint";
 
 const LOGO = `
  ╔╦╗╔═╗╔╦╗╔═╗
@@ -13,35 +17,37 @@ interface AppHeaderProps {
   provider: string | null | undefined;
 }
 
+/** Derives the version info line from props. */
+function useAppHeader(props: AppHeaderProps) {
+  const versionInfo =
+    props.model && props.provider
+      ? `v${props.version} · ${props.model} (${props.provider})`
+      : `v${props.version} · No active model or provider`;
+
+  return { versionInfo };
+}
+
 /** Renders the app logo, tagline, version, and active model/provider. */
 export function AppHeader(props: AppHeaderProps) {
-  const hasModelAndProvider = props.model && props.provider;
+  const { versionInfo } = useAppHeader(props);
 
   return (
     <Box flexDirection="column">
-      <Text color="cyan" bold>
+      <Text color={theme.brand} bold>
         {LOGO}
       </Text>
-      <Text> </Text>
-      <Box paddingLeft={2}>
-        <Text color="cyan" bold>
+      <BlankLine />
+      <Indent>
+        <Text color={theme.brand} bold>
           友
         </Text>
         <Text dimColor> — your local AI companion</Text>
-      </Box>
-      <Text> </Text>
-      <Box paddingLeft={2}>
-        {hasModelAndProvider ? (
-          <Text dimColor>
-            {`v${props.version} · ${props.model} (${props.provider})`}
-          </Text>
-        ) : (
-          <Text
-            dimColor
-          >{`v${props.version} · No active model or provider`}</Text>
-        )}
-      </Box>
-      <Text> </Text>
+      </Indent>
+      <BlankLine />
+      <Indent>
+        <Hint>{versionInfo}</Hint>
+      </Indent>
+      <BlankLine />
     </Box>
   );
 }
