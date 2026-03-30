@@ -11,6 +11,12 @@ export function useConfig(): Config {
       providers: [],
       permissions: { cwdReadFile: true },
       allowedCommands: [],
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 3,
+        maxTimeoutSeconds: 300,
+        tools: ["readFile", "glob", "grep", "webSearch", "skill"],
+      },
       tools: {
         agent: { enabled: true },
         ask: { enabled: true },

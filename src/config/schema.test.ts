@@ -177,6 +177,29 @@ describe("configSchema", () => {
     expect(result.allowedCommands).toEqual(["git:*", "npm test"]);
   });
 
+  it("defaults agents with sensible values", () => {
+    const result = configSchema.parse({});
+    expect(result.agents.maxDepth).toBe(1);
+    expect(result.agents.maxConcurrent).toBe(3);
+    expect(result.agents.maxTimeoutSeconds).toBe(300);
+    expect(result.agents.tools).toEqual([
+      "readFile",
+      "glob",
+      "grep",
+      "webSearch",
+      "skill",
+    ]);
+  });
+
+  it("parses custom agents config", () => {
+    const result = configSchema.parse({
+      agents: { maxDepth: 2, maxConcurrent: 5, maxTimeoutSeconds: 600 },
+    });
+    expect(result.agents.maxDepth).toBe(2);
+    expect(result.agents.maxConcurrent).toBe(5);
+    expect(result.agents.maxTimeoutSeconds).toBe(600);
+  });
+
   it("defaults tools with webSearch disabled", () => {
     const result = configSchema.parse({});
     expect(result.tools.webSearch.enabled).toBe(false);

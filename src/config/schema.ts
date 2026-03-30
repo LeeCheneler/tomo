@@ -47,6 +47,17 @@ export const toolsSchema = z.object({
   writeFile: toolConfigSchema,
 });
 
+/** Schema for agent spawning configuration. */
+export const agentsSchema = z.object({
+  maxDepth: z.number().int().positive().default(1),
+  maxConcurrent: z.number().int().positive().default(3),
+  maxTimeoutSeconds: z.number().int().positive().default(300),
+  // Open string array rather than enum so users can allow-list third-party MCP tools too
+  tools: z
+    .array(z.string())
+    .default(["readFile", "glob", "grep", "webSearch", "skill"]),
+});
+
 /** Schema for the application config. */
 export const configSchema = z.object({
   activeModel: z.string().nullish(),
@@ -54,6 +65,12 @@ export const configSchema = z.object({
   providers: z.array(providerSchema).default([]),
   permissions: permissionsSchema.default({ cwdReadFile: true }),
   allowedCommands: z.array(z.string()).default([]),
+  agents: agentsSchema.default({
+    maxDepth: 1,
+    maxConcurrent: 3,
+    maxTimeoutSeconds: 300,
+    tools: ["readFile", "glob", "grep", "webSearch", "skill"],
+  }),
   tools: toolsSchema.default({
     agent: { enabled: true },
     ask: { enabled: true },
@@ -85,6 +102,9 @@ export type WebSearchToolConfig = z.infer<typeof webSearchToolConfigSchema>;
 
 /** Tool configuration map. */
 export type Tools = z.infer<typeof toolsSchema>;
+
+/** Agent spawning configuration. */
+export type Agents = z.infer<typeof agentsSchema>;
 
 /** Application config type inferred from the schema. */
 export type Config = z.infer<typeof configSchema>;
