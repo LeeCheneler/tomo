@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { configSchema, providerSchema } from "./schema";
+import {
+  configSchema,
+  permissionsSchema,
+  providerSchema,
+  toolsSchema,
+} from "./schema";
 
 describe("providerSchema", () => {
   it("parses a valid provider", () => {
@@ -55,6 +60,73 @@ describe("providerSchema", () => {
   });
 });
 
+describe("permissionsSchema", () => {
+  it("defaults cwdReadFile to true", () => {
+    const result = permissionsSchema.parse({});
+    expect(result.cwdReadFile).toBe(true);
+    expect(result.cwdWriteFile).toBeUndefined();
+    expect(result.globalReadFile).toBeUndefined();
+    expect(result.globalWriteFile).toBeUndefined();
+  });
+
+  it("parses explicit values", () => {
+    const result = permissionsSchema.parse({
+      cwdReadFile: false,
+      cwdWriteFile: true,
+      globalReadFile: true,
+      globalWriteFile: false,
+    });
+    expect(result.cwdReadFile).toBe(false);
+    expect(result.cwdWriteFile).toBe(true);
+    expect(result.globalReadFile).toBe(true);
+    expect(result.globalWriteFile).toBe(false);
+  });
+});
+
+describe("toolsSchema", () => {
+  it("parses all tool config entries", () => {
+    const result = toolsSchema.parse({
+      agent: { enabled: true },
+      ask: { enabled: true },
+      editFile: { enabled: true },
+      glob: { enabled: true },
+      grep: { enabled: true },
+      readFile: { enabled: true },
+      runCommand: { enabled: true },
+      skill: { enabled: true },
+      webSearch: { enabled: false },
+      writeFile: { enabled: true },
+    });
+    expect(result.webSearch.enabled).toBe(false);
+    expect(result.agent.enabled).toBe(true);
+  });
+
+  it("parses webSearch with apiKey", () => {
+    const result = toolsSchema.parse({
+      agent: { enabled: true },
+      ask: { enabled: true },
+      editFile: { enabled: true },
+      glob: { enabled: true },
+      grep: { enabled: true },
+      readFile: { enabled: true },
+      runCommand: { enabled: true },
+      skill: { enabled: true },
+      webSearch: { enabled: true, apiKey: "tvly-123" },
+      writeFile: { enabled: true },
+    });
+    expect(result.webSearch.apiKey).toBe("tvly-123");
+  });
+
+  it("defaults webSearch apiKey to undefined", () => {
+    const result = configSchema.parse({});
+    expect(result.tools.webSearch.apiKey).toBeUndefined();
+  });
+
+  it("rejects missing tools", () => {
+    expect(() => toolsSchema.parse({})).toThrow();
+  });
+});
+
 describe("configSchema", () => {
   it("parses with all fields present", () => {
     const result = configSchema.parse({
@@ -88,32 +160,20 @@ describe("configSchema", () => {
     expect(result.providers).toEqual([]);
   });
 
+  it("defaults permissions with cwdReadFile allowed", () => {
+    const result = configSchema.parse({});
+    expect(result.permissions.cwdReadFile).toBe(true);
+  });
+
+  it("defaults tools with webSearch disabled", () => {
+    const result = configSchema.parse({});
+    expect(result.tools.webSearch.enabled).toBe(false);
+    expect(result.tools.readFile.enabled).toBe(true);
+  });
+
   it("defaults missing fields to undefined", () => {
     const result = configSchema.parse({});
     expect(result.activeModel).toBeUndefined();
     expect(result.activeProvider).toBeUndefined();
-  });
-
-  it("defaults permissions with cwdReadFile allowed", () => {
-    const result = configSchema.parse({});
-    expect(result.permissions.cwdReadFile).toBe(true);
-    expect(result.permissions.cwdWriteFile).toBeUndefined();
-    expect(result.permissions.globalReadFile).toBeUndefined();
-    expect(result.permissions.globalWriteFile).toBeUndefined();
-  });
-
-  it("parses explicit permissions", () => {
-    const result = configSchema.parse({
-      permissions: {
-        cwdReadFile: false,
-        cwdWriteFile: true,
-        globalReadFile: true,
-        globalWriteFile: false,
-      },
-    });
-    expect(result.permissions.cwdReadFile).toBe(false);
-    expect(result.permissions.cwdWriteFile).toBe(true);
-    expect(result.permissions.globalReadFile).toBe(true);
-    expect(result.permissions.globalWriteFile).toBe(false);
   });
 });

@@ -10,6 +10,18 @@ export function useConfig(): Config {
       activeProvider: null,
       providers: [],
       permissions: { cwdReadFile: true },
+      tools: {
+        agent: { enabled: true },
+        ask: { enabled: true },
+        editFile: { enabled: true },
+        glob: { enabled: true },
+        grep: { enabled: true },
+        readFile: { enabled: true },
+        runCommand: { enabled: true },
+        skill: { enabled: true },
+        webSearch: { enabled: false },
+        writeFile: { enabled: true },
+      },
     };
   }, []);
 }
