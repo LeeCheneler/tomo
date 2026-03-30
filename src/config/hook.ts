@@ -10,6 +10,7 @@ export function useConfig(): Config {
       activeProvider: null,
       providers: [],
       permissions: { cwdReadFile: true },
+      allowedCommands: [],
       tools: {
         agent: { enabled: true },
         ask: { enabled: true },

@@ -165,6 +165,18 @@ describe("configSchema", () => {
     expect(result.permissions.cwdReadFile).toBe(true);
   });
 
+  it("defaults allowedCommands to empty array", () => {
+    const result = configSchema.parse({});
+    expect(result.allowedCommands).toEqual([]);
+  });
+
+  it("parses allowedCommands", () => {
+    const result = configSchema.parse({
+      allowedCommands: ["git:*", "npm test"],
+    });
+    expect(result.allowedCommands).toEqual(["git:*", "npm test"]);
+  });
+
   it("defaults tools with webSearch disabled", () => {
     const result = configSchema.parse({});
     expect(result.tools.webSearch.enabled).toBe(false);

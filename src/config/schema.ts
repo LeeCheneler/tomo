@@ -53,6 +53,7 @@ export const configSchema = z.object({
   activeProvider: z.string().nullish(),
   providers: z.array(providerSchema).default([]),
   permissions: permissionsSchema.default({ cwdReadFile: true }),
+  allowedCommands: z.array(z.string()).default([]),
   tools: toolsSchema.default({
     agent: { enabled: true },
     ask: { enabled: true },
