@@ -11,6 +11,7 @@ export function useConfig(): Config {
       providers: [],
       permissions: { cwdReadFile: true },
       allowedCommands: [],
+      mcp: { connections: {} },
       agents: {
         maxDepth: 1,
         maxConcurrent: 3,

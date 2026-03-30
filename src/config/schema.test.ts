@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   configSchema,
+  mcpConnectionSchema,
+  mcpSchema,
   permissionsSchema,
   providerSchema,
   toolsSchema,
@@ -127,6 +129,74 @@ describe("toolsSchema", () => {
   });
 });
 
+describe("mcpConnectionSchema", () => {
+  it("parses a stdio connection", () => {
+    const result = mcpConnectionSchema.parse({
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@mcp/server"],
+    });
+    expect(result.transport).toBe("stdio");
+    if (result.transport === "stdio") {
+      expect(result.command).toBe("npx");
+      expect(result.args).toEqual(["-y", "@mcp/server"]);
+    }
+    expect(result.enabled).toBe(true);
+  });
+
+  it("parses an http connection", () => {
+    const result = mcpConnectionSchema.parse({
+      transport: "http",
+      url: "https://mcp.example.com/mcp",
+      headers: { Authorization: { value: "Bearer xxx", sensitive: true } },
+    });
+    expect(result.transport).toBe("http");
+    if (result.transport === "http") {
+      expect(result.url).toBe("https://mcp.example.com/mcp");
+    }
+    expect(result.enabled).toBe(true);
+  });
+
+  it("rejects invalid transport", () => {
+    expect(() =>
+      mcpConnectionSchema.parse({ transport: "websocket", command: "foo" }),
+    ).toThrow();
+  });
+
+  it("rejects http connection without url", () => {
+    expect(() => mcpConnectionSchema.parse({ transport: "http" })).toThrow();
+  });
+
+  it("rejects http connection with invalid url", () => {
+    expect(() =>
+      mcpConnectionSchema.parse({ transport: "http", url: "not-a-url" }),
+    ).toThrow();
+  });
+
+  it("rejects stdio connection without command", () => {
+    expect(() => mcpConnectionSchema.parse({ transport: "stdio" })).toThrow();
+  });
+});
+
+describe("mcpSchema", () => {
+  it("defaults to empty connections", () => {
+    const result = mcpSchema.parse({});
+    expect(result.connections).toEqual({});
+  });
+
+  it("parses named connections", () => {
+    const result = mcpSchema.parse({
+      connections: {
+        myServer: {
+          transport: "stdio",
+          command: "npx",
+        },
+      },
+    });
+    expect(result.connections.myServer.transport).toBe("stdio");
+  });
+});
+
 describe("configSchema", () => {
   it("parses with all fields present", () => {
     const result = configSchema.parse({
@@ -198,6 +268,11 @@ describe("configSchema", () => {
     expect(result.agents.maxDepth).toBe(2);
     expect(result.agents.maxConcurrent).toBe(5);
     expect(result.agents.maxTimeoutSeconds).toBe(600);
+  });
+
+  it("defaults mcp to empty connections", () => {
+    const result = configSchema.parse({});
+    expect(result.mcp.connections).toEqual({});
   });
 
   it("defaults tools with webSearch disabled", () => {

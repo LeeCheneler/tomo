@@ -58,6 +58,40 @@ export const agentsSchema = z.object({
     .default(["readFile", "glob", "grep", "webSearch", "skill"]),
 });
 
+/** Schema for a key-value entry with optional sensitivity marker. */
+export const kvEntrySchema = z.object({
+  value: z.string(),
+  sensitive: z.boolean().optional(),
+});
+
+/** Schema for an MCP stdio connection. */
+export const mcpStdioConnectionSchema = z.object({
+  transport: z.literal("stdio"),
+  command: z.string().min(1, "command is required"),
+  args: z.array(z.string()).default([]),
+  env: z.record(z.string(), kvEntrySchema).optional(),
+  enabled: z.boolean().default(true),
+});
+
+/** Schema for an MCP HTTP connection. */
+export const mcpHttpConnectionSchema = z.object({
+  transport: z.literal("http"),
+  url: z.url("url must be a valid URL"),
+  headers: z.record(z.string(), kvEntrySchema).optional(),
+  enabled: z.boolean().default(true),
+});
+
+/** Schema for an MCP connection (stdio or HTTP). */
+export const mcpConnectionSchema = z.discriminatedUnion("transport", [
+  mcpStdioConnectionSchema,
+  mcpHttpConnectionSchema,
+]);
+
+/** Schema for MCP configuration. */
+export const mcpSchema = z.object({
+  connections: z.record(z.string(), mcpConnectionSchema).default({}),
+});
+
 /** Schema for the application config. */
 export const configSchema = z.object({
   activeModel: z.string().nullish(),
@@ -71,6 +105,7 @@ export const configSchema = z.object({
     maxTimeoutSeconds: 300,
     tools: ["readFile", "glob", "grep", "webSearch", "skill"],
   }),
+  mcp: mcpSchema.default({ connections: {} }),
   tools: toolsSchema.default({
     agent: { enabled: true },
     ask: { enabled: true },
@@ -105,6 +140,15 @@ export type Tools = z.infer<typeof toolsSchema>;
 
 /** Agent spawning configuration. */
 export type Agents = z.infer<typeof agentsSchema>;
+
+/** A key-value entry with optional sensitivity marker. */
+export type KvEntry = z.infer<typeof kvEntrySchema>;
+
+/** An MCP connection (stdio or HTTP). */
+export type McpConnection = z.infer<typeof mcpConnectionSchema>;
+
+/** MCP configuration. */
+export type Mcp = z.infer<typeof mcpSchema>;
 
 /** Application config type inferred from the schema. */
 export type Config = z.infer<typeof configSchema>;
