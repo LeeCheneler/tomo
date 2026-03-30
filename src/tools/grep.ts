@@ -8,7 +8,14 @@ import { getErrorMessage } from "../errors";
 import { isGitRepo } from "../git";
 import { withFilePermission } from "../permissions";
 import { registerTool } from "./registry";
-import { parseToolArgs, type ToolContext } from "./types";
+import {
+  denied,
+  err,
+  ok,
+  parseToolArgs,
+  type ToolContext,
+  type ToolResult,
+} from "./types";
 
 const argsSchema = z.object({
   pattern: z.string().min(1, "no search pattern provided"),
@@ -60,7 +67,7 @@ Effective search patterns:
     required: ["pattern"],
   },
   interactive: false,
-  async execute(args: string, context: ToolContext): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<ToolResult> {
     const parsed = parseToolArgs(argsSchema, args);
     const { pattern, include, gitignore } = parsed;
     const resolved = parsed.path ? resolve(parsed.path) : process.cwd();
@@ -85,7 +92,7 @@ Effective search patterns:
             onDeny: () => onResult("denied"),
           }),
         ),
-      denyMessage: "The user denied this search.",
+      denyMessage: denied("The user denied this search."),
     });
   },
 });
@@ -96,7 +103,7 @@ function runGrep(
   include: string | undefined,
   gitignore: boolean,
   file?: string,
-): string {
+): ToolResult {
   try {
     const useGit = gitignore && isGitRepo(cwd);
     let output: string;
@@ -129,18 +136,18 @@ function runGrep(
 
     const lines = output.trimEnd();
     if (!lines) {
-      return "No matches found.";
+      return ok("No matches found.");
     }
-    return lines;
-  } catch (err) {
+    return ok(lines);
+  } catch (e) {
     // grep/git grep exit with code 1 when no matches found
     if (
-      err instanceof Error &&
-      "status" in err &&
-      (err as NodeJS.ErrnoException & { status: number }).status === 1
+      e instanceof Error &&
+      "status" in e &&
+      (e as NodeJS.ErrnoException & { status: number }).status === 1
     ) {
-      return "No matches found.";
+      return ok("No matches found.");
     }
-    return `Error: ${getErrorMessage(err)}`;
+    return err(`${getErrorMessage(e)}`);
   }
 }

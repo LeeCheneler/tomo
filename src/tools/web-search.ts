@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { registerTool } from "./registry";
-import { parseToolArgs, type ToolContext } from "./types";
+import {
+  err,
+  ok,
+  parseToolArgs,
+  type ToolContext,
+  type ToolResult,
+} from "./types";
 
 const TAVILY_API_URL = "https://api.tavily.com/search";
 
@@ -32,12 +38,14 @@ registerTool({
     process.env.TAVILY_API_KEY
       ? undefined
       : "TAVILY_API_KEY env var is not set",
-  async execute(args: string, _context: ToolContext): Promise<string> {
+  async execute(args: string, _context: ToolContext): Promise<ToolResult> {
     const { query } = parseToolArgs(argsSchema, args);
 
     const apiKey = process.env.TAVILY_API_KEY;
     if (!apiKey) {
-      return "Error: TAVILY_API_KEY environment variable is not set. Set it to use web search.";
+      return err(
+        "TAVILY_API_KEY environment variable is not set. Set it to use web search.",
+      );
     }
 
     return search(query, apiKey);
@@ -56,7 +64,7 @@ interface TavilyResponse {
   results: TavilyResult[];
 }
 
-async function search(query: string, apiKey: string): Promise<string> {
+async function search(query: string, apiKey: string): Promise<ToolResult> {
   const response = await fetch(TAVILY_API_URL, {
     method: "POST",
     headers: {
@@ -74,18 +82,18 @@ async function search(query: string, apiKey: string): Promise<string> {
   if (!response.ok) {
     const status = response.status;
     if (status === 401) {
-      return "Error: invalid TAVILY_API_KEY. Check your API key.";
+      return err("Invalid TAVILY_API_KEY. Check your API key.");
     }
     if (status === 429) {
-      return "Error: Tavily rate limit exceeded. Try again later.";
+      return err("Tavily rate limit exceeded. Try again later.");
     }
-    return `Error: Tavily API returned status ${status}`;
+    return err(`Tavily API returned status ${status}`);
   }
 
   const data = (await response.json()) as TavilyResponse;
 
   if (!data.results || data.results.length === 0) {
-    return "No results found.";
+    return ok("No results found.");
   }
 
   const parts: string[] = [];
@@ -100,5 +108,5 @@ async function search(query: string, apiKey: string): Promise<string> {
     ),
   );
 
-  return parts.join("\n\n");
+  return ok(parts.join("\n\n"));
 }

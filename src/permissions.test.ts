@@ -6,6 +6,7 @@ import {
   resolvePermissions,
   withFilePermission,
 } from "./permissions";
+import { denied, ok } from "./tools/types";
 import type { ToolContext } from "./tools/types";
 
 describe("resolvePermissions", () => {
@@ -89,7 +90,7 @@ describe("withFilePermission", () => {
   }
 
   it("auto-approves when permission granted and path within cwd", async () => {
-    const execute = vi.fn().mockReturnValue("done");
+    const execute = vi.fn().mockReturnValue(ok("done"));
     const renderConfirm = vi.fn();
     const filePath = resolve(process.cwd(), "src/test.ts");
 
@@ -101,16 +102,16 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: "denied",
+      denyMessage: ok("denied"),
     });
 
-    expect(result).toBe("done");
+    expect(result).toEqual(ok("done"));
     expect(execute).toHaveBeenCalledTimes(1);
     expect(renderConfirm).not.toHaveBeenCalled();
   });
 
   it("prompts when permission granted but path outside cwd", async () => {
-    const execute = vi.fn().mockReturnValue("done");
+    const execute = vi.fn().mockReturnValue(ok("done"));
     const renderConfirm = vi.fn().mockResolvedValue("approved");
 
     const result = await withFilePermission({
@@ -121,16 +122,16 @@ describe("withFilePermission", () => {
       filePath: "/tmp/outside.txt",
       execute,
       renderConfirm,
-      denyMessage: "denied",
+      denyMessage: ok("denied"),
     });
 
-    expect(result).toBe("done");
+    expect(result).toEqual(ok("done"));
     expect(renderConfirm).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it("prompts when permission not granted even for cwd paths", async () => {
-    const execute = vi.fn().mockReturnValue("done");
+    const execute = vi.fn().mockReturnValue(ok("done"));
     const renderConfirm = vi.fn().mockResolvedValue("approved");
     const filePath = resolve(process.cwd(), "src/test.ts");
 
@@ -142,10 +143,10 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: "denied",
+      denyMessage: ok("denied"),
     });
 
-    expect(result).toBe("done");
+    expect(result).toEqual(ok("done"));
     expect(renderConfirm).toHaveBeenCalledTimes(1);
   });
 
@@ -162,15 +163,15 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: "The user denied this read.",
+      denyMessage: denied("The user denied this read."),
     });
 
-    expect(result).toBe("The user denied this read.");
+    expect(result).toEqual(denied("The user denied this read."));
     expect(execute).not.toHaveBeenCalled();
   });
 
   it("works with write_file permission", async () => {
-    const execute = vi.fn().mockReturnValue("written");
+    const execute = vi.fn().mockReturnValue(ok("written"));
     const renderConfirm = vi.fn();
     const filePath = resolve(process.cwd(), "src/test.ts");
 
@@ -182,16 +183,16 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: "denied",
+      denyMessage: ok("denied"),
     });
 
-    expect(result).toBe("written");
+    expect(result).toEqual(ok("written"));
     expect(execute).toHaveBeenCalledTimes(1);
     expect(renderConfirm).not.toHaveBeenCalled();
   });
 
   it("handles async execute functions", async () => {
-    const execute = vi.fn().mockResolvedValue("async result");
+    const execute = vi.fn().mockResolvedValue(ok("async result"));
     const renderConfirm = vi.fn();
     const filePath = resolve(process.cwd(), "src/test.ts");
 
@@ -203,9 +204,9 @@ describe("withFilePermission", () => {
       filePath,
       execute,
       renderConfirm,
-      denyMessage: "denied",
+      denyMessage: ok("denied"),
     });
 
-    expect(result).toBe("async result");
+    expect(result).toEqual(ok("async result"));
   });
 });

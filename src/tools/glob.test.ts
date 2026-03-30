@@ -54,10 +54,10 @@ describe("glob tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("src/index.ts");
-    expect(result).toContain("src/utils.test.ts");
-    expect(result).not.toContain("readme.md");
-    expect(result).not.toContain("app.tsx");
+    expect(result?.output).toContain("src/index.ts");
+    expect(result?.output).toContain("src/utils.test.ts");
+    expect(result?.output).not.toContain("readme.md");
+    expect(result?.output).not.toContain("app.tsx");
   });
 
   it("matches files with tsx extension", async () => {
@@ -67,8 +67,8 @@ describe("glob tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("src/app.tsx");
-    expect(result).not.toContain("index.ts");
+    expect(result?.output).toContain("src/app.tsx");
+    expect(result?.output).not.toContain("index.ts");
   });
 
   it("returns message when no files match", async () => {
@@ -78,7 +78,7 @@ describe("glob tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("No files matched the pattern.");
+    expect(result?.output).toBe("No files matched the pattern.");
   });
 
   it("throws for empty pattern", async () => {
@@ -96,7 +96,7 @@ describe("glob tool", () => {
     );
 
     // Running from project root, should find the project's package.json
-    expect(result).toContain("package.json");
+    expect(result?.output).toContain("package.json");
   });
 
   it("does not prompt when read_file permission is granted and path in cwd", async () => {
@@ -122,7 +122,7 @@ describe("glob tool", () => {
     );
 
     expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result).toContain("src/index.ts");
+    expect(result?.output).toContain("src/index.ts");
   });
 
   it("returns denial when user denies search", async () => {
@@ -138,7 +138,7 @@ describe("glob tool", () => {
       ctx,
     );
 
-    expect(result).toBe("The user denied this search.");
+    expect(result?.output).toBe("The user denied this search.");
   });
 
   it("prompts for paths outside cwd even with permission granted", async () => {
@@ -161,7 +161,7 @@ describe("glob tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("No files matched the pattern.");
+    expect(result?.output).toBe("No files matched the pattern.");
   });
 
   it("excludes gitignored files when gitignore is true", async () => {
@@ -173,7 +173,7 @@ describe("glob tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("No files matched the pattern.");
+    expect(result?.output).toBe("No files matched the pattern.");
   });
 
   it("includes gitignored files when gitignore is false", async () => {
@@ -185,7 +185,7 @@ describe("glob tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("dist/bundle.js");
+    expect(result?.output).toContain("dist/bundle.js");
   });
 
   it("includes untracked non-ignored files with gitignore on", async () => {
@@ -199,8 +199,8 @@ describe("glob tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("src/index.ts");
-    expect(result).toContain("src/new.ts");
+    expect(result?.output).toContain("src/index.ts");
+    expect(result?.output).toContain("src/new.ts");
   });
 
   it("falls back to fs.globSync for non-git directories", async () => {
@@ -212,7 +212,7 @@ describe("glob tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("src/index.ts");
-    expect(result).toContain("src/utils.test.ts");
+    expect(result?.output).toContain("src/index.ts");
+    expect(result?.output).toContain("src/utils.test.ts");
   });
 });

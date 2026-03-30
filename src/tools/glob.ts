@@ -8,7 +8,14 @@ import { getErrorMessage } from "../errors";
 import { isGitRepo } from "../git";
 import { withFilePermission } from "../permissions";
 import { registerTool } from "./registry";
-import { parseToolArgs, type ToolContext } from "./types";
+import {
+  denied,
+  err,
+  ok,
+  parseToolArgs,
+  type ToolContext,
+  type ToolResult,
+} from "./types";
 
 const argsSchema = z.object({
   pattern: z.string().min(1, "no glob pattern provided"),
@@ -52,7 +59,7 @@ Use this tool instead of shell commands like find or ls. For searching file *con
     required: ["pattern"],
   },
   interactive: false,
-  async execute(args: string, context: ToolContext): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<ToolResult> {
     const parsed = parseToolArgs(argsSchema, args);
     const { pattern, gitignore } = parsed;
     const searchDir = parsed.path ? resolve(parsed.path) : process.cwd();
@@ -71,7 +78,7 @@ Use this tool instead of shell commands like find or ls. For searching file *con
             onDeny: () => onResult("denied"),
           }),
         ),
-      denyMessage: "The user denied this search.",
+      denyMessage: denied("The user denied this search."),
     });
   },
 });
@@ -98,7 +105,7 @@ function gitGlob(pattern: string, cwd: string): string[] {
   return combined.split("\n").filter((line) => line.length > 0);
 }
 
-function runGlob(pattern: string, cwd: string, gitignore: boolean): string {
+function runGlob(pattern: string, cwd: string, gitignore: boolean): ToolResult {
   try {
     const matches =
       gitignore && isGitRepo(cwd)
@@ -106,10 +113,10 @@ function runGlob(pattern: string, cwd: string, gitignore: boolean): string {
         : globSync(pattern, { cwd });
 
     if (matches.length === 0) {
-      return "No files matched the pattern.";
+      return ok("No files matched the pattern.");
     }
-    return matches.join("\n");
-  } catch (err) {
-    return `Error: ${getErrorMessage(err)}`;
+    return ok(matches.join("\n"));
+  } catch (e) {
+    return err(`${getErrorMessage(e)}`);
   }
 }

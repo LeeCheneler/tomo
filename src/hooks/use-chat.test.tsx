@@ -3,6 +3,7 @@ import { render } from "ink-testing-library";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getCommand, parse } from "../commands";
 import { getMcpServers, loadConfig } from "../config";
+import { ok } from "../tools/types";
 import { McpManager } from "../mcp/manager";
 import type { ToolCall } from "../provider/client";
 import { streamChatCompletion } from "../provider/client";
@@ -327,7 +328,7 @@ describe("useChat", () => {
       vi.mocked(getCommand).mockReturnValue({
         name: "help",
         description: "List commands",
-        execute: () => ({ output: "help output here" }),
+        execute: () => ok("help output here"),
       });
 
       render(<TestApp />);
@@ -609,7 +610,7 @@ describe("useChat", () => {
         name: "ask",
         description: "Ask a question",
         parameters: {},
-        execute: async () => "option A",
+        execute: async () => ok("option A"),
       });
 
       // First call returns tool call, second returns content
@@ -680,7 +681,7 @@ describe("useChat", () => {
         name: "ask",
         description: "Ask",
         parameters: {},
-        execute: async () => "result",
+        execute: async () => ok("result"),
       });
 
       vi.mocked(streamChatCompletion)
@@ -753,12 +754,16 @@ describe("useChat", () => {
         name: "ask",
         description: "Ask",
         parameters: {},
-        execute: async (_args, context) =>
-          context.renderInteractive((_onResult, onCancel) => {
-            // Simulate user dismissing immediately via microtask
-            Promise.resolve().then(onCancel);
-            return <Text>mock</Text>;
-          }),
+        execute: async (_args, context) => {
+          const answer = await context.renderInteractive(
+            (_onResult, onCancel) => {
+              // Simulate user dismissing immediately via microtask
+              Promise.resolve().then(onCancel);
+              return <Text>mock</Text>;
+            },
+          );
+          return ok(answer);
+        },
       });
 
       vi.mocked(streamChatCompletion).mockResolvedValueOnce(
@@ -826,7 +831,7 @@ describe("useChat", () => {
         name: "ask",
         description: "Ask",
         parameters: {},
-        execute: async () => "result",
+        execute: async () => ok("result"),
       });
 
       function createEmptyStream() {

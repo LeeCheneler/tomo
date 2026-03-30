@@ -77,8 +77,8 @@ describe("approval flow", () => {
     );
 
     expect(context.renderInteractive).not.toHaveBeenCalled();
-    expect(result).toContain("echo hello");
-    expect(result).toContain("Exit code: 0");
+    expect(result?.output).toContain("echo hello");
+    expect(result?.output).toContain("Exit code: 0");
   });
 
   it("auto-approves prefix match (word:*)", async () => {
@@ -93,7 +93,7 @@ describe("approval flow", () => {
     );
 
     expect(context.renderInteractive).not.toHaveBeenCalled();
-    expect(result).toContain("echo hello");
+    expect(result?.output).toContain("echo hello");
   });
 
   it("skips prefix match for compound commands", async () => {
@@ -122,7 +122,7 @@ describe("approval flow", () => {
     );
 
     expect(context.renderInteractive).not.toHaveBeenCalled();
-    expect(result).toContain("echo a && echo b");
+    expect(result?.output).toContain("echo a && echo b");
   });
 
   it("prompts when no match", async () => {
@@ -145,7 +145,7 @@ describe("approval flow", () => {
       context,
     );
 
-    expect(result).toBe("The user denied this command.");
+    expect(result?.output).toBe("The user denied this command.");
   });
 
   it("persists command on approve always", async () => {
@@ -161,8 +161,8 @@ describe("approval flow", () => {
     );
 
     expect(addAllowedCommand).toHaveBeenCalledWith("echo hello");
-    expect(result).toContain("echo hello");
-    expect(result).toContain("Exit code: 0");
+    expect(result?.output).toContain("echo hello");
+    expect(result?.output).toContain("Exit code: 0");
   });
 });
 
@@ -192,8 +192,9 @@ describe("command execution", () => {
       context,
     );
 
-    expect(result).toContain("Exit code: 1");
-    expect(result).toContain("stderr:");
-    expect(result).toContain("err");
+    expect(result?.output).toContain("Exit code: 1");
+    expect(result?.output).toContain("stderr:");
+    expect(result?.output).toContain("err");
+    expect(result?.status).toBe("error");
   });
 });

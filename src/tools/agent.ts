@@ -6,7 +6,14 @@ import { loadSubAgentInstructions } from "../instructions";
 import type { ChatMessage } from "../provider/client";
 import { addAgent, incrementToolCalls, removeAgent } from "./agent-tracker";
 import { getTool, registerTool } from "./registry";
-import { parseToolArgs, type ToolContext, toToolDefinition } from "./types";
+import {
+  err,
+  ok,
+  parseToolArgs,
+  type ToolContext,
+  type ToolResult,
+  toToolDefinition,
+} from "./types";
 
 const argsSchema = z.object({
   prompt: z.string().min(1, "prompt is required"),
@@ -92,7 +99,7 @@ registerTool({
     required: ["prompt"],
   },
   interactive: false,
-  async execute(args: string, context: ToolContext): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<ToolResult> {
     const { prompt, timeout: requestedTimeout } = parseToolArgs(
       argsSchema,
       args,
@@ -152,15 +159,15 @@ registerTool({
         },
       });
 
-      return result.content || "(sub-agent produced no output)";
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
+      return ok(result.content || "(sub-agent produced no output)");
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
         if (timeoutController.signal.aborted && !context.signal.aborted) {
-          return `Sub-agent timed out after ${effectiveTimeout}s`;
+          return err(`Sub-agent timed out after ${effectiveTimeout}s`);
         }
-        throw err;
+        throw e;
       }
-      return `Sub-agent error: ${getErrorMessage(err)}`;
+      return err(`Sub-agent error: ${getErrorMessage(e)}`);
     } finally {
       clearTimeout(timeoutId);
       removeAgent(agentId);

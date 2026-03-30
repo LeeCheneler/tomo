@@ -47,7 +47,7 @@ describe("web_search tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("TAVILY_API_KEY");
+    expect(result?.output).toContain("TAVILY_API_KEY");
   });
 
   it("warning returns message when API key is not set", () => {
@@ -92,12 +92,12 @@ describe("web_search tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("Answer: This is the summarised answer.");
-    expect(result).toContain("1. Test Result");
-    expect(result).toContain("https://example.com");
-    expect(result).toContain("A test snippet");
-    expect(result).toContain("2. Another Result");
-    expect(result).toContain("https://example.org");
+    expect(result?.output).toContain("Answer: This is the summarised answer.");
+    expect(result?.output).toContain("1. Test Result");
+    expect(result?.output).toContain("https://example.com");
+    expect(result?.output).toContain("A test snippet");
+    expect(result?.output).toContain("2. Another Result");
+    expect(result?.output).toContain("https://example.org");
   });
 
   it("returns message when no results found", async () => {
@@ -112,7 +112,7 @@ describe("web_search tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("No results found.");
+    expect(result?.output).toBe("No results found.");
   });
 
   it("returns error on 401 response", async () => {
@@ -127,7 +127,7 @@ describe("web_search tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("invalid TAVILY_API_KEY");
+    expect(result?.output).toContain("Invalid TAVILY_API_KEY");
   });
 
   it("returns error on 429 response", async () => {
@@ -142,6 +142,6 @@ describe("web_search tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("rate limit");
+    expect(result?.output).toContain("rate limit");
   });
 });

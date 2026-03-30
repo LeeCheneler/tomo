@@ -2,7 +2,7 @@ import React from "react";
 import { z } from "zod";
 import { AskSelector } from "../components/ask-selector";
 import { registerTool } from "./registry";
-import { parseToolArgs, type ToolContext } from "./types";
+import { ok, parseToolArgs, type ToolContext, type ToolResult } from "./types";
 
 const argsSchema = z.object({
   question: z.string().default("Please choose:"),
@@ -35,10 +35,10 @@ registerTool({
     },
     required: ["question"],
   },
-  async execute(args: string, context: ToolContext): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<ToolResult> {
     const { question, options } = parseToolArgs(argsSchema, args);
 
-    return context.renderInteractive((onResult, onCancel) =>
+    const answer = await context.renderInteractive((onResult, onCancel) =>
       React.createElement(AskSelector, {
         question,
         options,
@@ -46,5 +46,6 @@ registerTool({
         onCancel,
       }),
     );
+    return ok(answer);
   },
 });

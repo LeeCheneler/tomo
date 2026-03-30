@@ -5,7 +5,14 @@ import { isCommandAllowed, isCompoundCommand } from "../command-safety";
 import { CommandConfirm } from "../components/command-confirm";
 import { addAllowedCommand } from "../config";
 import { registerTool } from "./registry";
-import { parseToolArgs, type ToolContext } from "./types";
+import {
+  denied,
+  err,
+  ok,
+  parseToolArgs,
+  type ToolContext,
+  type ToolResult,
+} from "./types";
 
 const argsSchema = z.object({
   command: z.string().min(1, "no command provided"),
@@ -62,7 +69,7 @@ function spawnCommand(
 async function runAndReport(
   command: string,
   context: ToolContext,
-): Promise<string> {
+): Promise<ToolResult> {
   const result = await spawnCommand(command, DEFAULT_TIMEOUT_MS, (output) => {
     context.reportProgress(`$ ${command}\n${output}`);
   });
@@ -70,7 +77,9 @@ async function runAndReport(
   context.reportProgress("");
 
   if (result.timedOut) {
-    return `$ ${command}\nCommand timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`;
+    return err(
+      `$ ${command}\nCommand timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`,
+    );
   }
 
   return formatResult(command, result.exitCode, result.stdout, result.stderr);
@@ -79,7 +88,7 @@ async function runAndReport(
 async function promptAndRun(
   command: string,
   context: ToolContext,
-): Promise<string> {
+): Promise<ToolResult> {
   const result = await context.renderInteractive((onResult, _onCancel) =>
     createElement(CommandConfirm, {
       command,
@@ -90,7 +99,7 @@ async function promptAndRun(
   );
 
   if (result === "denied") {
-    return "The user denied this command.";
+    return denied("The user denied this command.");
   }
 
   if (result === "approved_always") {
@@ -123,7 +132,7 @@ registerTool({
     },
     required: ["command"],
   },
-  async execute(args: string, context: ToolContext): Promise<string> {
+  async execute(args: string, context: ToolContext): Promise<ToolResult> {
     const { command } = parseToolArgs(argsSchema, args);
 
     // 1. Exact match — auto-approve
@@ -148,7 +157,7 @@ function formatResult(
   exitCode: number,
   stdout: string,
   stderr: string,
-): string {
+): ToolResult {
   const parts = [`$ ${command}`, `Exit code: ${exitCode}`];
   if (stdout.trim()) {
     parts.push(`\nstdout:\n${stdout.trim()}`);
@@ -156,5 +165,6 @@ function formatResult(
   if (stderr.trim()) {
     parts.push(`\nstderr:\n${stderr.trim()}`);
   }
-  return parts.join("\n");
+  const output = parts.join("\n");
+  return exitCode === 0 ? ok(output) : err(output);
 }

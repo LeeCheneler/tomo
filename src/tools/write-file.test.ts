@@ -38,7 +38,7 @@ describe("write_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("Successfully wrote to");
+    expect(result?.output).toContain("Successfully wrote to");
     expect(readFileSync(filePath, "utf-8")).toBe("hello world\n");
   });
 
@@ -52,7 +52,7 @@ describe("write_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("Successfully wrote to");
+    expect(result?.output).toContain("Successfully wrote to");
     expect(readFileSync(filePath, "utf-8")).toBe("new content\n");
   });
 
@@ -65,7 +65,7 @@ describe("write_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("Successfully wrote to");
+    expect(result?.output).toContain("Successfully wrote to");
     expect(readFileSync(filePath, "utf-8")).toBe("deep\n");
   });
 
@@ -87,7 +87,7 @@ describe("write_file tool", () => {
       mockContext,
     );
 
-    expect(result).toBe("The user denied this write.");
+    expect(result?.output).toBe("The user denied this write.");
   });
 
   it("calls renderInteractive for confirmation", async () => {
@@ -115,7 +115,7 @@ describe("write_file tool", () => {
       ctx,
     );
 
-    expect(result).toContain("Successfully wrote to");
+    expect(result?.output).toContain("Successfully wrote to");
     expect(ctx.renderInteractive).not.toHaveBeenCalled();
     // Clean up
     rmSync(filePath, { force: true });

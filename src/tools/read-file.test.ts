@@ -38,10 +38,10 @@ describe("read_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("hello");
-    expect(result).toContain("world");
-    expect(result).toContain("1 |");
-    expect(result).toContain("2 |");
+    expect(result?.output).toContain("hello");
+    expect(result?.output).toContain("world");
+    expect(result?.output).toContain("1 |");
+    expect(result?.output).toContain("2 |");
   });
 
   it("returns error for non-existent file", async () => {
@@ -51,7 +51,7 @@ describe("read_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("Error: file not found");
+    expect(result?.output).toContain("file not found");
   });
 
   it("throws for empty path", async () => {
@@ -68,7 +68,7 @@ describe("read_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("is a directory");
+    expect(result?.output).toContain("is a directory");
   });
 
   it("truncates files exceeding 500 lines", async () => {
@@ -82,10 +82,10 @@ describe("read_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("showing first 500 of 600 lines");
-    expect(result).toContain("line 1");
-    expect(result).toContain("line 500");
-    expect(result).not.toContain("line 501");
+    expect(result?.output).toContain("showing first 500 of 600 lines");
+    expect(result?.output).toContain("line 1");
+    expect(result?.output).toContain("line 500");
+    expect(result?.output).not.toContain("line 501");
   });
 
   it("supports startLine and endLine for range reads", async () => {
@@ -99,11 +99,11 @@ describe("read_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("lines 5-10 of 20");
-    expect(result).toContain("line 5");
-    expect(result).toContain("line 10");
-    expect(result).not.toContain("line 4\n");
-    expect(result).not.toContain("line 11");
+    expect(result?.output).toContain("lines 5-10 of 20");
+    expect(result?.output).toContain("line 5");
+    expect(result?.output).toContain("line 10");
+    expect(result?.output).not.toContain("line 4\n");
+    expect(result?.output).not.toContain("line 11");
   });
 
   it("clamps line range to file bounds", async () => {
@@ -116,7 +116,7 @@ describe("read_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("lines 1-4 of 4");
+    expect(result?.output).toContain("lines 1-4 of 4");
   });
 
   it("does not prompt when read_file permission is granted and path in cwd", async () => {
@@ -129,7 +129,7 @@ describe("read_file tool", () => {
       mockContext,
     );
 
-    expect(result).toContain("content");
+    expect(result?.output).toContain("content");
     expect(mockContext.renderInteractive).not.toHaveBeenCalled();
   });
 
@@ -145,7 +145,7 @@ describe("read_file tool", () => {
     const result = await tool?.execute(JSON.stringify({ path: filePath }), ctx);
 
     expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result).toContain("secret");
+    expect(result?.output).toContain("secret");
   });
 
   it("returns denial when user denies read", async () => {
@@ -160,7 +160,7 @@ describe("read_file tool", () => {
 
     const result = await tool?.execute(JSON.stringify({ path: filePath }), ctx);
 
-    expect(result).toBe("The user denied this read.");
+    expect(result?.output).toBe("The user denied this read.");
   });
 
   it("prompts for files outside cwd even with permission granted", async () => {
@@ -174,7 +174,7 @@ describe("read_file tool", () => {
     );
 
     expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result).toContain("outside");
+    expect(result?.output).toContain("outside");
     rmSync(filePath, { force: true });
   });
 });

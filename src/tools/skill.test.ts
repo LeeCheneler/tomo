@@ -48,7 +48,7 @@ describe("skill tool", () => {
       JSON.stringify({ name: "commit" }),
       mockContext,
     );
-    expect(result).toBe("Follow conventional commits.\n\nBe concise.");
+    expect(result?.output).toBe("Follow conventional commits.\n\nBe concise.");
   });
 
   it("returns error for unknown skill", async () => {
@@ -57,9 +57,9 @@ describe("skill tool", () => {
       JSON.stringify({ name: "nonexistent" }),
       mockContext,
     );
-    expect(result).toContain('Unknown skill: "nonexistent"');
-    expect(result).toContain("commit");
-    expect(result).toContain("review");
+    expect(result?.output).toContain('Unknown skill: "nonexistent"');
+    expect(result?.output).toContain("commit");
+    expect(result?.output).toContain("review");
   });
 
   it("throws for empty name", async () => {

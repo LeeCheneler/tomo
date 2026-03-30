@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getAllSkills, getSkill } from "../skills";
 import { registerTool } from "./registry";
-import { parseToolArgs } from "./types";
+import { err, ok, parseToolArgs, type ToolResult } from "./types";
 
 const argsSchema = z.object({
   name: z.string().min(1, "skill name is required"),
@@ -33,17 +33,19 @@ registerTool({
     required: ["name"],
   },
   interactive: false,
-  async execute(args: string): Promise<string> {
+  async execute(args: string): Promise<ToolResult> {
     const { name } = parseToolArgs(argsSchema, args);
     const skill = getSkill(name);
     if (!skill) {
       const available = getAllSkills()
         .map((s) => s.name)
         .join(", ");
-      return available
-        ? `Unknown skill: "${name}". Available skills: ${available}`
-        : `Unknown skill: "${name}". No skills are available.`;
+      return err(
+        available
+          ? `Unknown skill: "${name}". Available skills: ${available}`
+          : `Unknown skill: "${name}". No skills are available.`,
+      );
     }
-    return skill.body;
+    return ok(skill.body);
   },
 });

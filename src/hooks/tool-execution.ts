@@ -4,6 +4,7 @@ import { getErrorMessage } from "../errors";
 import type { McpManager } from "../mcp/manager";
 import type { ToolCall } from "../provider/client";
 import { getTool, getToolDisplayName, type ToolContext } from "../tools";
+import type { ToolResult, ToolResultStatus } from "../tools/types";
 
 export class ToolDismissedError extends Error {
   constructor() {
@@ -46,8 +47,12 @@ function formatArgValue(value: unknown): string {
   return truncateValue(JSON.stringify(value), MAX_ARG_VALUE_LENGTH);
 }
 
-/** Formats a tool call header: bold yellow name + dim args summary. */
-export function formatToolHeader(name: string, args: string): string {
+/** Formats a tool call header: bold name coloured by status + dim args summary. */
+export function formatToolHeader(
+  name: string,
+  args: string,
+  status: ToolResultStatus = "ok",
+): string {
   let argsSummary = "";
   try {
     const parsed = JSON.parse(args);
@@ -57,10 +62,15 @@ export function formatToolHeader(name: string, args: string): string {
   } catch {
     // Malformed args — skip summary
   }
-  const header = argsSummary
-    ? `${chalk.bold.yellow(name)}  ${chalk.dim(argsSummary)}`
-    : chalk.bold.yellow(name);
-  return header;
+  const colorMap = {
+    ok: chalk.bold.yellow,
+    error: chalk.bold.red,
+    denied: chalk.bold.dim,
+  };
+  const coloredName = colorMap[status](name);
+  return argsSummary
+    ? `${coloredName}  ${chalk.dim(argsSummary)}`
+    : coloredName;
 }
 
 /** Execute a single tool call and return a tool result message. */
@@ -70,32 +80,47 @@ async function executeSingleToolCall(
   mcpManager?: McpManager,
   toolAvailability?: Record<string, boolean>,
 ): Promise<DisplayMessage> {
-  let result: string;
+  let result: ToolResult;
 
   if (mcpManager?.isMcpTool(tc.function.name)) {
     if (toolAvailability?.[tc.function.name] === false) {
-      result = "This MCP tool has been disabled.";
+      result = { output: "This MCP tool has been disabled.", status: "error" };
     } else {
       try {
         const args = JSON.parse(tc.function.arguments || "{}");
-        result = await mcpManager.callTool(tc.function.name, args);
+        result = {
+          output: await mcpManager.callTool(tc.function.name, args),
+          status: "ok",
+        };
       } catch (err) {
-        result = `Error: ${getErrorMessage(err)}`;
+        result = {
+          output: `Error: ${getErrorMessage(err)}`,
+          status: "error",
+        };
       }
     }
   } else if (tc.function.name.startsWith("mcp__")) {
-    result =
-      "This MCP tool is no longer available. The server has been disabled.";
+    result = {
+      output:
+        "This MCP tool is no longer available. The server has been disabled.",
+      status: "error",
+    };
   } else {
     const tool = getTool(tc.function.name);
     if (!tool) {
-      result = `Error: unknown tool "${tc.function.name}"`;
+      result = {
+        output: `Error: unknown tool "${tc.function.name}"`,
+        status: "error",
+      };
     } else {
       try {
         result = await tool.execute(tc.function.arguments, toolContext);
       } catch (err) {
         if (err instanceof ToolDismissedError) throw err;
-        result = `Error: ${getErrorMessage(err)}`;
+        result = {
+          output: `Error: ${getErrorMessage(err)}`,
+          status: "error",
+        };
       }
     }
   }
@@ -103,11 +128,12 @@ async function executeSingleToolCall(
   const header = formatToolHeader(
     getToolDisplayName(tc.function.name),
     tc.function.arguments,
+    result.status,
   );
   return {
     id: crypto.randomUUID(),
     role: "tool",
-    content: `${header}\n${truncateResult(result)}`,
+    content: `${header}\n${truncateResult(result.output)}`,
     tool_call_id: tc.id,
   };
 }
