@@ -24,6 +24,8 @@ export interface TextInputOptions {
 export interface TextInputResult {
   /** Current cursor position for rendering. */
   cursor: number;
+  /** Sets the cursor position directly. Useful for resetting after programmatic value changes. */
+  setCursor: (pos: number) => void;
 }
 
 const WORD_CHAR = /\w/;
@@ -64,6 +66,36 @@ function findNextWordBoundary(value: string, pos: number): number {
   return i;
 }
 
+/** Returns the line index and column offset for a cursor position within a value. */
+function getCursorLineInfo(value: string, pos: number) {
+  const lines = value.split("\n");
+  let remaining = pos;
+  for (const [i, line] of lines.entries()) {
+    if (remaining <= line.length) {
+      return { lineIndex: i, column: remaining, lines };
+    }
+    // +1 accounts for the \n character.
+    remaining -= line.length + 1;
+  }
+  // Unreachable when cursor is clamped correctly — the loop always matches
+  // because the last line's length equals remaining when pos === value.length.
+  /* v8 ignore next */
+  throw new Error("Cursor position out of bounds");
+}
+
+/** Converts a line index and column back to an absolute cursor position. */
+function lineColumnToPos(
+  lines: string[],
+  lineIndex: number,
+  column: number,
+): number {
+  let pos = 0;
+  for (let i = 0; i < lineIndex; i++) {
+    pos += lines[i].length + 1;
+  }
+  return pos + Math.min(column, lines[lineIndex].length);
+}
+
 /** Tracks cursor position within the input value using a ref for immediate access in callbacks. */
 function useCursor(valueLength: number) {
   const ref = useRef(valueLength);
@@ -88,11 +120,24 @@ function useCursor(valueLength: number) {
 
 /** Manages text input state: cursor position, keyboard handling, and value changes. */
 export function useTextInput(options: TextInputOptions): TextInputResult {
-  const { cursor, getCursor, setCursor } = useCursor(options.value.length);
+  // Value ref stays fresh across batched React updates. Updated on render
+  // from options.value and immediately when onChange fires, so the next
+  // event in the same tick always sees the latest value.
+  const valueRef = useRef(options.value);
+  valueRef.current = options.value;
+
+  const { cursor, getCursor, setCursor } = useCursor(valueRef.current.length);
   const lineMode = options.lineMode;
+
+  /** Updates value ref and notifies the parent. */
+  function applyChange(newValue: string) {
+    valueRef.current = newValue;
+    options.onChange(newValue);
+  }
 
   useInput((input, key) => {
     const pos = getCursor();
+    const value = valueRef.current;
 
     // In multi mode, Shift+Enter inserts a newline and plain Enter submits.
     // In single mode, both submit.
@@ -100,12 +145,12 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     // Kitty do, but Terminal.app sends the same \r for both.
     if (key.return) {
       if (key.shift && lineMode === "multi") {
-        const before = options.value.slice(0, pos);
-        const after = options.value.slice(pos);
-        options.onChange(`${before}\n${after}`);
+        const before = value.slice(0, pos);
+        const after = value.slice(pos);
+        applyChange(`${before}\n${after}`);
         setCursor(pos + 1);
       } else {
-        options.onSubmit(options.value);
+        options.onSubmit(value);
       }
       return;
     }
@@ -113,9 +158,9 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     // macOS Backspace sends \x7f which Ink maps to key.delete.
     if (key.backspace || key.delete) {
       if (pos > 0) {
-        const before = options.value.slice(0, pos - 1);
-        const after = options.value.slice(pos);
-        options.onChange(before + after);
+        const before = value.slice(0, pos - 1);
+        const after = value.slice(pos);
+        applyChange(before + after);
         setCursor(pos - 1);
       }
       return;
@@ -130,12 +175,12 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     // in most terminals. Some terminals (and readline) send ESC+b / ESC+f instead.
     // We handle both so word-jump works regardless of terminal configuration.
     if (key.meta && (input === "b" || key.leftArrow)) {
-      setCursor(findPreviousWordBoundary(options.value, pos));
+      setCursor(findPreviousWordBoundary(value, pos));
       return;
     }
 
     if (key.meta && (input === "f" || key.rightArrow)) {
-      setCursor(findNextWordBoundary(options.value, pos));
+      setCursor(findNextWordBoundary(value, pos));
       return;
     }
 
@@ -150,19 +195,31 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     }
 
     if (key.upArrow) {
-      if (pos === 0) {
-        options.onUp?.();
+      const { lineIndex, column, lines } = getCursorLineInfo(value, pos);
+      if (lineIndex === 0) {
+        // On first line: move to start, or fire boundary callback if already there.
+        if (pos === 0) {
+          options.onUp?.();
+        } else {
+          setCursor(0);
+        }
       } else {
-        setCursor(0);
+        setCursor(lineColumnToPos(lines, lineIndex - 1, column));
       }
       return;
     }
 
     if (key.downArrow) {
-      if (pos === options.value.length) {
-        options.onDown?.();
+      const { lineIndex, column, lines } = getCursorLineInfo(value, pos);
+      if (lineIndex === lines.length - 1) {
+        // On last line: move to end, or fire boundary callback if already there.
+        if (pos === value.length) {
+          options.onDown?.();
+        } else {
+          setCursor(value.length);
+        }
       } else {
-        setCursor(options.value.length);
+        setCursor(lineColumnToPos(lines, lineIndex + 1, column));
       }
       return;
     }
@@ -172,11 +229,11 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
       return;
     }
 
-    const before = options.value.slice(0, pos);
-    const after = options.value.slice(pos);
-    options.onChange(before + input + after);
+    const before = value.slice(0, pos);
+    const after = value.slice(pos);
+    applyChange(before + input + after);
     setCursor(pos + input.length);
   });
 
-  return { cursor };
+  return { cursor, setCursor };
 }

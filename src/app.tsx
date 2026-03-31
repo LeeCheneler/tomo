@@ -1,14 +1,12 @@
 import { Box, Static } from "ink";
-import { useState } from "react";
+import { ChatInput } from "./chat/chat-input";
 import { useConfig } from "./config/hook";
-import { ChatInput } from "./ui/chat-input";
 import { AppHeader } from "./ui/app-header";
 import { version } from "./utils/version";
 
 /** Root application component. Renders the header and chat UI. */
 export function App() {
   const config = useConfig();
-  const [value, setValue] = useState("");
   const staticItems = [{ id: "__header__" }];
 
   return (
@@ -24,12 +22,7 @@ export function App() {
           </Box>
         )}
       </Static>
-      <ChatInput
-        value={value}
-        onChange={setValue}
-        onSubmit={() => {}}
-        statusText="1% context"
-      />
+      <ChatInput onMessage={() => {}} />
     </>
   );
 }
