@@ -45,6 +45,7 @@ export function ChatInput(props: ChatInputProps) {
     value: props.value,
     onChange: props.onChange,
     onSubmit: props.onSubmit,
+    lineMode: "multi",
   });
 
   const beforeCursor = props.value.slice(0, cursor);

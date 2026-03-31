@@ -1,19 +1,21 @@
 import { render } from "ink-testing-library";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { useTextInput } from "./text";
+import { type LineMode, useTextInput } from "./text";
 
 /** Test harness that renders useTextInput and exposes cursor position. */
 function Harness(props: {
   value: string;
   onChange: (v: string) => void;
   onSubmit: (v: string) => void;
+  lineMode: LineMode;
   onCursor?: (cursor: number) => void;
 }) {
   const { cursor } = useTextInput({
     value: props.value,
     onChange: props.onChange,
     onSubmit: props.onSubmit,
+    lineMode: props.lineMode,
   });
   props.onCursor?.(cursor);
   return null;
@@ -25,6 +27,7 @@ function renderHarness(
     value: string;
     onChange: (v: string) => void;
     onSubmit: (v: string) => void;
+    lineMode: LineMode;
     onCursor: (cursor: number) => void;
   }> = {},
 ) {
@@ -33,6 +36,7 @@ function renderHarness(
       value: overrides.value ?? "",
       onChange: overrides.onChange ?? (() => {}),
       onSubmit: overrides.onSubmit ?? (() => {}),
+      lineMode: overrides.lineMode ?? "multi",
       onCursor: overrides.onCursor,
     }),
   );
@@ -91,11 +95,33 @@ describe("useTextInput", () => {
       expect(onChange).toHaveBeenCalledWith("hel\nlo");
     });
 
-    it("does not call onSubmit on shift+enter", () => {
+    it("does not call onSubmit on shift+enter in multi mode", () => {
       const onSubmit = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onSubmit });
       stdin.write("\x1b[13;2u");
       expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("shift+enter submits in single mode", () => {
+      const onSubmit = vi.fn();
+      const { stdin } = renderHarness({
+        value: "hello",
+        onSubmit,
+        lineMode: "single",
+      });
+      stdin.write("\x1b[13;2u");
+      expect(onSubmit).toHaveBeenCalledWith("hello");
+    });
+
+    it("shift+enter does not insert newline in single mode", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({
+        value: "hello",
+        onChange,
+        lineMode: "single",
+      });
+      stdin.write("\x1b[13;2u");
+      expect(onChange).not.toHaveBeenCalled();
     });
 
     it("ignores ctrl key combinations", () => {
@@ -185,6 +211,7 @@ describe("useTextInput", () => {
           value: "he",
           onChange,
           onSubmit: () => {},
+          lineMode: "multi",
         }),
       );
       stdin.write("x");
@@ -203,6 +230,7 @@ describe("useTextInput", () => {
           value: "axyzc",
           onChange,
           onSubmit: () => {},
+          lineMode: "multi",
         }),
       );
       stdin.write("!");

@@ -1,6 +1,9 @@
 import { useInput } from "ink";
 import { useRef, useState } from "react";
 
+/** Controls newline behaviour. "multi" allows Shift+Enter newlines, "single" does not. */
+export type LineMode = "single" | "multi";
+
 /** Options for the useTextInput hook. */
 export interface TextInputOptions {
   /** Current text value. */
@@ -9,6 +12,8 @@ export interface TextInputOptions {
   onChange: (value: string) => void;
   /** Called when the user submits (Enter). */
   onSubmit: (value: string) => void;
+  /** Controls newline behaviour. "multi" allows Shift+Enter newlines, "single" does not. */
+  lineMode: LineMode;
 }
 
 /** Return value of useTextInput. */
@@ -80,15 +85,17 @@ function useCursor(valueLength: number) {
 /** Manages text input state: cursor position, keyboard handling, and value changes. */
 export function useTextInput(options: TextInputOptions): TextInputResult {
   const { cursor, getCursor, setCursor } = useCursor(options.value.length);
+  const lineMode = options.lineMode;
 
   useInput((input, key) => {
     const pos = getCursor();
 
-    // Shift+Enter inserts a newline. Plain Enter submits.
+    // In multi mode, Shift+Enter inserts a newline and plain Enter submits.
+    // In single mode, both submit.
     // Not all macOS terminals distinguish Shift+Enter from Enter — iTerm2 and
     // Kitty do, but Terminal.app sends the same \r for both.
     if (key.return) {
-      if (key.shift) {
+      if (key.shift && lineMode === "multi") {
         const before = options.value.slice(0, pos);
         const after = options.value.slice(pos);
         options.onChange(`${before}\n${after}`);
