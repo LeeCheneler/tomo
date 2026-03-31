@@ -1,4 +1,4 @@
-import { Box, Text } from "ink";
+import { Box, Text, useInput } from "ink";
 import { theme } from "./theme";
 
 /** Props for the ChatInput component. */
@@ -38,8 +38,46 @@ function buildBottomBorder(statusText: string): string {
   return `${"─".repeat(leadingLength)}${statusSegment}`;
 }
 
-/** Stateless chat input with bordered text area and status ribbon. */
+/** Handles keyboard input and dispatches onChange/onSubmit. */
+function useChatInputKeys(props: ChatInputProps) {
+  useInput((input, key) => {
+    if (key.return) {
+      props.onSubmit(props.value);
+      return;
+    }
+
+    // macOS Backspace sends \x7f which Ink maps to key.delete.
+    if (key.backspace || key.delete) {
+      if (props.value.length > 0) {
+        props.onChange(props.value.slice(0, -1));
+      }
+      return;
+    }
+
+    // Ignore control sequences that aren't printable characters.
+    if (key.ctrl || key.meta || key.escape) {
+      return;
+    }
+
+    // Ignore arrow keys and other special keys.
+    if (
+      key.upArrow ||
+      key.downArrow ||
+      key.leftArrow ||
+      key.rightArrow ||
+      key.tab
+    ) {
+      return;
+    }
+
+    props.onChange(props.value + input);
+  });
+}
+
+/** Chat input with bordered text area and status ribbon. */
 export function ChatInput(props: ChatInputProps) {
+  useChatInputKeys(props);
+
   return (
     <Box flexDirection="column" paddingTop={1}>
       <Text color={theme.brand}>{buildTopBorder()}</Text>

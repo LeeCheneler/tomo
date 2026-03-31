@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatInput } from "./chat-input";
 
 const COLUMNS = 40;
@@ -40,64 +40,138 @@ describe("ChatInput", () => {
     );
   }
 
-  it("renders a top border at full terminal width", () => {
-    const { lastFrame } = renderInput();
-    const frame = lastFrame() ?? "";
-    const lines = frame.split("\n");
-    // paddingTop={1} adds an empty line before the border.
-    expect(lines[1]).toBe("─".repeat(COLUMNS));
+  describe("layout", () => {
+    it("renders a top border at full terminal width", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      // paddingTop={1} adds an empty line before the border.
+      expect(lines[1]).toBe("─".repeat(COLUMNS));
+    });
+
+    it("renders the input value with a prompt marker", () => {
+      const { lastFrame } = renderInput({ value: "hello world" });
+      expect(lastFrame()).toContain("❯ hello world");
+    });
+
+    it("renders the prompt marker when value is empty", () => {
+      const { lastFrame } = renderInput({ value: "" });
+      // Ink trims trailing whitespace, so we assert on the marker alone.
+      expect(lastFrame()).toContain("❯");
+    });
+
+    it("falls back to 80 columns when stdout.columns is undefined", () => {
+      setColumns(undefined);
+
+      const { lastFrame } = render(
+        <ChatInput
+          value=""
+          onChange={() => {}}
+          onSubmit={() => {}}
+          statusText=""
+        />,
+      );
+
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      expect(lines[1]).toBe("─".repeat(80));
+    });
   });
 
-  it("renders the input value with a prompt marker", () => {
-    const { lastFrame } = renderInput({ value: "hello world" });
-    expect(lastFrame()).toContain("❯ hello world");
+  describe("status bar", () => {
+    it("renders a bottom border at full terminal width with no status", () => {
+      const { lastFrame } = renderInput({ statusText: "" });
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      const bottomBorder = lines[lines.length - 1];
+      expect(bottomBorder).toBe("─".repeat(COLUMNS));
+    });
+
+    it("renders status text right-aligned on the bottom border", () => {
+      const status = "1% context";
+      const { lastFrame } = renderInput({ statusText: status });
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      const bottomBorder = lines[lines.length - 1];
+
+      const trailingSuffix = "──";
+      const expectedSuffix = `${status}${trailingSuffix}`;
+      expect(bottomBorder).toContain(expectedSuffix);
+      expect(bottomBorder).toHaveLength(COLUMNS);
+
+      const leadingLength = COLUMNS - status.length - 2;
+      const leading = "─".repeat(leadingLength);
+      expect(bottomBorder).toBe(`${leading}${status}${trailingSuffix}`);
+    });
   });
 
-  it("renders the prompt marker when value is empty", () => {
-    const { lastFrame } = renderInput({ value: "" });
-    // Ink trims trailing whitespace, so we assert on the marker alone.
-    expect(lastFrame()).toContain("❯");
-  });
+  describe("typing", () => {
+    it("calls onChange with appended character when a key is typed", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hel", onChange });
+      stdin.write("l");
+      expect(onChange).toHaveBeenCalledWith("hell");
+    });
 
-  it("renders a bottom border at full terminal width with no status", () => {
-    const { lastFrame } = renderInput({ statusText: "" });
-    const frame = lastFrame() ?? "";
-    const lines = frame.split("\n");
-    const bottomBorder = lines[lines.length - 1];
-    expect(bottomBorder).toBe("─".repeat(COLUMNS));
-  });
+    it("calls onChange with character removed on backspace (ctrl+h)", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      stdin.write("\x08");
+      expect(onChange).toHaveBeenCalledWith("hell");
+    });
 
-  it("renders status text right-aligned on the bottom border", () => {
-    const status = "1% context";
-    const { lastFrame } = renderInput({ statusText: status });
-    const frame = lastFrame() ?? "";
-    const lines = frame.split("\n");
-    const bottomBorder = lines[lines.length - 1];
+    it("calls onChange with character removed on backspace (macOS delete)", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      stdin.write("\x7f");
+      expect(onChange).toHaveBeenCalledWith("hell");
+    });
 
-    const trailingSuffix = "──";
-    const expectedSuffix = `${status}${trailingSuffix}`;
-    expect(bottomBorder).toContain(expectedSuffix);
-    expect(bottomBorder).toHaveLength(COLUMNS);
+    it("does not call onChange on backspace when value is empty", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "", onChange });
+      stdin.write("\x08");
+      expect(onChange).not.toHaveBeenCalled();
+    });
 
-    const leadingLength = COLUMNS - status.length - 2;
-    const leading = "─".repeat(leadingLength);
-    expect(bottomBorder).toBe(`${leading}${status}${trailingSuffix}`);
-  });
+    it("calls onSubmit on enter", () => {
+      const onSubmit = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onSubmit });
+      stdin.write("\r");
+      expect(onSubmit).toHaveBeenCalledWith("hello");
+    });
 
-  it("falls back to 80 columns when stdout.columns is undefined", () => {
-    setColumns(undefined);
+    it("ignores ctrl key combinations", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      // ctrl+a
+      stdin.write("\x01");
+      expect(onChange).not.toHaveBeenCalled();
+    });
 
-    const { lastFrame } = render(
-      <ChatInput
-        value=""
-        onChange={() => {}}
-        onSubmit={() => {}}
-        statusText=""
-      />,
-    );
+    it("ignores escape key", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      stdin.write("\x1b");
+      expect(onChange).not.toHaveBeenCalled();
+    });
 
-    const frame = lastFrame() ?? "";
-    const lines = frame.split("\n");
-    expect(lines[1]).toBe("─".repeat(80));
+    it("ignores arrow keys", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      // Up, Down, Left, Right arrow escape sequences
+      stdin.write("\x1b[A");
+      stdin.write("\x1b[B");
+      stdin.write("\x1b[C");
+      stdin.write("\x1b[D");
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("ignores tab key", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      stdin.write("\t");
+      expect(onChange).not.toHaveBeenCalled();
+    });
   });
 });
