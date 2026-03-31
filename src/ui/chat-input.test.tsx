@@ -156,14 +156,11 @@ describe("ChatInput", () => {
       expect(onChange).not.toHaveBeenCalled();
     });
 
-    it("ignores arrow keys", () => {
+    it("ignores up and down arrow keys", () => {
       const onChange = vi.fn();
       const { stdin } = renderInput({ value: "hello", onChange });
-      // Up, Down, Left, Right arrow escape sequences
       stdin.write("\x1b[A");
       stdin.write("\x1b[B");
-      stdin.write("\x1b[C");
-      stdin.write("\x1b[D");
       expect(onChange).not.toHaveBeenCalled();
     });
 
@@ -172,6 +169,118 @@ describe("ChatInput", () => {
       const { stdin } = renderInput({ value: "hello", onChange });
       stdin.write("\t");
       expect(onChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("cursor", () => {
+    it("renders text around cursor when cursor is mid-value", () => {
+      const { lastFrame, stdin } = renderInput({ value: "hello" });
+      // Move cursor left twice — cursor sits on 'l' (index 3)
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      // Ink strips ANSI inverse, but the characters are still present.
+      expect(lastFrame()).toContain("❯ hello");
+    });
+
+    it("inserts characters at cursor position after moving left", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "helo", onChange });
+      // Move cursor left once (before 'o')
+      stdin.write("\x1b[D");
+      stdin.write("l");
+      expect(onChange).toHaveBeenCalledWith("hello");
+    });
+
+    it("deletes character before cursor position after moving left", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      // Move cursor left once (before 'o'), then backspace deletes 'l'
+      stdin.write("\x1b[D");
+      stdin.write("\x08");
+      expect(onChange).toHaveBeenCalledWith("helo");
+    });
+
+    it("does not backspace past the beginning", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "a", onChange });
+      // Move cursor to start, then try backspace
+      stdin.write("\x1b[D");
+      stdin.write("\x08");
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("moves cursor left and right", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "abc", onChange });
+      // Move left twice (cursor at 1), then right once (cursor at 2), type "x"
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[C");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("abxc");
+    });
+
+    it("does not move cursor left past beginning", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "ab", onChange });
+      // Move left 5 times (more than length), then type "x"
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("xab");
+    });
+
+    it("clamps cursor when value shrinks externally", () => {
+      const onChange = vi.fn();
+      const { stdin, rerender } = renderInput({ value: "hello", onChange });
+      // Move cursor to end (position 5), then shrink value to 2 chars
+      rerender(
+        <ChatInput
+          value="he"
+          onChange={onChange}
+          onSubmit={() => {}}
+          statusText=""
+        />,
+      );
+      // Type at cursor — should be clamped to position 2 (end of "he")
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hex");
+    });
+
+    it("advances cursor to end of pasted text", () => {
+      const onChange = vi.fn();
+      const { stdin, rerender } = renderInput({ value: "ac", onChange });
+      // Move cursor left (position 1), then paste "xyz"
+      stdin.write("\x1b[D");
+      stdin.write("xyz");
+      expect(onChange).toHaveBeenCalledWith("axyzc");
+      // Simulate parent updating value after paste
+      onChange.mockClear();
+      rerender(
+        <ChatInput
+          value="axyzc"
+          onChange={onChange}
+          onSubmit={() => {}}
+          statusText=""
+        />,
+      );
+      // Type "!" — should insert at position 4 (after "axyz", before "c")
+      stdin.write("!");
+      expect(onChange).toHaveBeenCalledWith("axyz!c");
+    });
+
+    it("does not move cursor right past end", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "ab", onChange });
+      // Move right 5 times (already at end), then type "x"
+      stdin.write("\x1b[C");
+      stdin.write("\x1b[C");
+      stdin.write("\x1b[C");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("abx");
     });
   });
 });
