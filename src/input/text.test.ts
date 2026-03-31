@@ -290,7 +290,54 @@ describe("useTextInput", () => {
       expect(onChange).toHaveBeenCalledWith("hello  worldx");
     });
 
-    it("ESC+b jumps to start of previous word (readline binding)", () => {
+    it("option+left stops at newline boundary", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello\nworld", onChange });
+      stdin.write("\x1b[1;3D");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hello\nxworld");
+    });
+
+    it("option+right stops at newline boundary", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello\nworld", onChange });
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3C");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hellox\nworld");
+    });
+
+    it("option+left stops at punctuation boundary", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello-world", onChange });
+      stdin.write("\x1b[1;3D");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hello-xworld");
+    });
+
+    it("option+right stops at punctuation boundary", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello-world", onChange });
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3C");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hellox-world");
+    });
+
+    it("option+left skips consecutive punctuation", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "https://example", onChange });
+      // From end: "example"(8) → skip "://"(5) → "https"(0)
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("xhttps://example");
+    });
+
+    it("option+left via readline sequence jumps to start of previous word", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello world", onChange });
       stdin.write("\x1bb");
@@ -298,7 +345,7 @@ describe("useTextInput", () => {
       expect(onChange).toHaveBeenCalledWith("hello xworld");
     });
 
-    it("ESC+f jumps to end of next word (readline binding)", () => {
+    it("option+right via readline sequence jumps to end of next word", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello world", onChange });
       stdin.write("\x1bb");

@@ -17,18 +17,25 @@ export interface TextInputResult {
   cursor: number;
 }
 
+const WORD_CHAR = /\w/;
+
+/** Returns true if the character is a word character (alphanumeric or underscore). */
+function isWordChar(ch: string): boolean {
+  return WORD_CHAR.test(ch);
+}
+
 /** Finds the start of the previous word from the given position. */
 function findPreviousWordBoundary(value: string, pos: number): number {
   if (pos <= 0) {
     return 0;
   }
   let i = pos - 1;
-  // Skip whitespace before the word.
-  while (i > 0 && value[i - 1] === " ") {
+  // Skip non-word characters (whitespace, punctuation).
+  while (i > 0 && !isWordChar(value[i - 1])) {
     i--;
   }
   // Skip the word itself.
-  while (i > 0 && value[i - 1] !== " ") {
+  while (i > 0 && isWordChar(value[i - 1])) {
     i--;
   }
   return i;
@@ -37,12 +44,12 @@ function findPreviousWordBoundary(value: string, pos: number): number {
 /** Finds the end of the next word from the given position. */
 function findNextWordBoundary(value: string, pos: number): number {
   let i = pos;
-  // Skip whitespace first.
-  while (i < value.length && value[i] === " ") {
+  // Skip non-word characters (whitespace, punctuation).
+  while (i < value.length && !isWordChar(value[i])) {
     i++;
   }
   // Skip the word itself to land at end of word.
-  while (i < value.length && value[i] !== " ") {
+  while (i < value.length && isWordChar(value[i])) {
     i++;
   }
   return i;

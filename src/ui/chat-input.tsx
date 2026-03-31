@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import { useTextInput } from "./input/text";
+import { useTextInput } from "../input/text";
 import { theme } from "./theme";
 
 /** Props for the ChatInput component. */
