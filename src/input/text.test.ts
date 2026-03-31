@@ -9,6 +9,8 @@ function Harness(props: {
   onChange: (v: string) => void;
   onSubmit: (v: string) => void;
   lineMode: LineMode;
+  onUp?: () => void;
+  onDown?: () => void;
   onCursor?: (cursor: number) => void;
 }) {
   const { cursor } = useTextInput({
@@ -16,6 +18,8 @@ function Harness(props: {
     onChange: props.onChange,
     onSubmit: props.onSubmit,
     lineMode: props.lineMode,
+    onUp: props.onUp,
+    onDown: props.onDown,
   });
   props.onCursor?.(cursor);
   return null;
@@ -28,6 +32,8 @@ function renderHarness(
     onChange: (v: string) => void;
     onSubmit: (v: string) => void;
     lineMode: LineMode;
+    onUp: () => void;
+    onDown: () => void;
     onCursor: (cursor: number) => void;
   }> = {},
 ) {
@@ -37,6 +43,8 @@ function renderHarness(
       onChange: overrides.onChange ?? (() => {}),
       onSubmit: overrides.onSubmit ?? (() => {}),
       lineMode: overrides.lineMode ?? "multi",
+      onUp: overrides.onUp,
+      onDown: overrides.onDown,
       onCursor: overrides.onCursor,
     }),
   );
@@ -381,6 +389,40 @@ describe("useTextInput", () => {
       stdin.write("\x1bf");
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hellox world");
+    });
+
+    it("fires onUp when up arrow pressed at start", () => {
+      const onUp = vi.fn();
+      const { stdin } = renderHarness({ value: "hello", onUp });
+      // Move to start first, then press up again
+      stdin.write("\x1b[A");
+      stdin.write("\x1b[A");
+      expect(onUp).toHaveBeenCalledOnce();
+    });
+
+    it("does not fire onUp when cursor is not at start", () => {
+      const onUp = vi.fn();
+      const { stdin } = renderHarness({ value: "hello", onUp });
+      // Cursor at end, up moves to start — should not fire onUp
+      stdin.write("\x1b[A");
+      expect(onUp).not.toHaveBeenCalled();
+    });
+
+    it("fires onDown when down arrow pressed at end", () => {
+      const onDown = vi.fn();
+      const { stdin } = renderHarness({ value: "hello", onDown });
+      // Already at end, press down
+      stdin.write("\x1b[B");
+      expect(onDown).toHaveBeenCalledOnce();
+    });
+
+    it("does not fire onDown when cursor is not at end", () => {
+      const onDown = vi.fn();
+      const { stdin } = renderHarness({ value: "hello", onDown });
+      // Move to start, then down moves to end — should not fire onDown
+      stdin.write("\x1b[A");
+      stdin.write("\x1b[B");
+      expect(onDown).not.toHaveBeenCalled();
     });
   });
 });

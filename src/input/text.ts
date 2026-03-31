@@ -14,6 +14,10 @@ export interface TextInputOptions {
   onSubmit: (value: string) => void;
   /** Controls newline behaviour. "multi" allows Shift+Enter newlines, "single" does not. */
   lineMode: LineMode;
+  /** Called when up arrow is pressed and cursor is already at the start. */
+  onUp?: () => void;
+  /** Called when down arrow is pressed and cursor is already at the end. */
+  onDown?: () => void;
 }
 
 /** Return value of useTextInput. */
@@ -146,12 +150,20 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     }
 
     if (key.upArrow) {
-      setCursor(0);
+      if (pos === 0) {
+        options.onUp?.();
+      } else {
+        setCursor(0);
+      }
       return;
     }
 
     if (key.downArrow) {
-      setCursor(options.value.length);
+      if (pos === options.value.length) {
+        options.onDown?.();
+      } else {
+        setCursor(options.value.length);
+      }
       return;
     }
 
