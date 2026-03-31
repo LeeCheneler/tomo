@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { ensureDir, fileExists, readFile, writeFile } from "../utils/fs";
+import { z } from "zod";
 import { type Config, configSchema } from "./schema";
 
 /** Path to the global config file (~/.tomo/config.yaml). */
@@ -16,11 +17,14 @@ activeModel: null
 providers: []
 `;
 
-/** Loads and parses a YAML file. Returns null if the file does not exist. */
+/** Schema for validating that parsed YAML is a plain object. */
+const yamlObjectSchema = z.record(z.string(), z.unknown());
+
+/** Loads and parses a YAML file. Returns null if the file does not exist or is not an object. */
 function loadYaml(path: string): Record<string, unknown> | null {
   if (!fileExists(path)) return null;
-  const content = readFile(path);
-  return (parse(content) as Record<string, unknown>) ?? null;
+  const result = yamlObjectSchema.safeParse(parse(readFile(path)));
+  return result.success ? result.data : null;
 }
 
 /** Creates the default config file at the given path. */
@@ -35,13 +39,12 @@ function createDefaultConfig(path: string): void {
  * Local config is merged on top of global.
  */
 export function loadConfig(): Config {
-  let global = loadYaml(GLOBAL_CONFIG_PATH);
-  if (!global) {
+  if (!fileExists(GLOBAL_CONFIG_PATH)) {
     createDefaultConfig(GLOBAL_CONFIG_PATH);
-    global = loadYaml(GLOBAL_CONFIG_PATH);
   }
 
-  const local = loadYaml(LOCAL_CONFIG_PATH);
+  const global = loadYaml(GLOBAL_CONFIG_PATH) ?? {};
+  const local = loadYaml(LOCAL_CONFIG_PATH) ?? {};
   const merged = { ...global, ...local };
 
   const result = configSchema.safeParse(merged);

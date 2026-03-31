@@ -18,6 +18,7 @@ See `CONTRIBUTING.md` for architecture guidelines and `repository-restructure.md
 - Use explicit return types on exported functions. Inferred return types are fine for non-exported helpers and hooks.
 - Never use `.js` extensions in imports. Use extensionless paths: `from "./config/hook"` not `from "./config/hook.js"`.
 - Never use namespace imports (`import * as X`). Always use named imports: `import { foo, bar } from "./module"`.
+- Never use type casts (`as`). Use zod schemas or runtime checks to narrow types. If `yaml.parse` returns `unknown`, validate it through a zod schema — don't cast it.
 
 ### React / Ink
 
