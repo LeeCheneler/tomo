@@ -24,6 +24,8 @@ export interface TextInputOptions {
 export interface TextInputResult {
   /** Current cursor position for rendering. */
   cursor: number;
+  /** Sets the cursor position directly. Useful for resetting after programmatic value changes. */
+  setCursor: (pos: number) => void;
 }
 
 const WORD_CHAR = /\w/;
@@ -178,5 +180,5 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     setCursor(pos + input.length);
   });
 
-  return { cursor };
+  return { cursor, setCursor };
 }

@@ -12,8 +12,9 @@ function Harness(props: {
   onUp?: () => void;
   onDown?: () => void;
   onCursor?: (cursor: number) => void;
+  onSetCursor?: (setCursor: (pos: number) => void) => void;
 }) {
-  const { cursor } = useTextInput({
+  const { cursor, setCursor } = useTextInput({
     value: props.value,
     onChange: props.onChange,
     onSubmit: props.onSubmit,
@@ -22,6 +23,7 @@ function Harness(props: {
     onDown: props.onDown,
   });
   props.onCursor?.(cursor);
+  props.onSetCursor?.(setCursor);
   return null;
 }
 
@@ -35,6 +37,7 @@ function renderHarness(
     onUp: () => void;
     onDown: () => void;
     onCursor: (cursor: number) => void;
+    onSetCursor: (setCursor: (pos: number) => void) => void;
   }> = {},
 ) {
   return render(
@@ -46,6 +49,7 @@ function renderHarness(
       onUp: overrides.onUp,
       onDown: overrides.onDown,
       onCursor: overrides.onCursor,
+      onSetCursor: overrides.onSetCursor,
     }),
   );
 }
@@ -423,6 +427,36 @@ describe("useTextInput", () => {
       stdin.write("\x1b[A");
       stdin.write("\x1b[B");
       expect(onDown).not.toHaveBeenCalled();
+    });
+
+    it("setCursor moves cursor to specified position", () => {
+      const onChange = vi.fn();
+      let setCursorFn: ((pos: number) => void) | undefined;
+      const { stdin } = renderHarness({
+        value: "hello",
+        onChange,
+        onSetCursor: (sc) => {
+          setCursorFn = sc;
+        },
+      });
+      setCursorFn?.(2);
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hexllo");
+    });
+
+    it("setCursor clamps to valid range", () => {
+      const onChange = vi.fn();
+      let setCursorFn: ((pos: number) => void) | undefined;
+      const { stdin } = renderHarness({
+        value: "hello",
+        onChange,
+        onSetCursor: (sc) => {
+          setCursorFn = sc;
+        },
+      });
+      setCursorFn?.(100);
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hellox");
     });
   });
 });
