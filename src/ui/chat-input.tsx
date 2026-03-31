@@ -1,5 +1,5 @@
-import { Box, Text, useInput } from "ink";
-import { useRef, useState } from "react";
+import { Box, Text } from "ink";
+import { useTextInput } from "./input/text";
 import { theme } from "./theme";
 
 /** Props for the ChatInput component. */
@@ -39,148 +39,13 @@ function buildBottomBorder(statusText: string): string {
   return `${"─".repeat(leadingLength)}${statusSegment}`;
 }
 
-/** Finds the start of the previous word from the given position. */
-function findPreviousWordBoundary(value: string, pos: number): number {
-  if (pos <= 0) {
-    return 0;
-  }
-  let i = pos - 1;
-  // Skip whitespace before the word.
-  while (i > 0 && value[i - 1] === " ") {
-    i--;
-  }
-  // Skip the word itself.
-  while (i > 0 && value[i - 1] !== " ") {
-    i--;
-  }
-  return i;
-}
-
-/** Finds the end of the next word from the given position. */
-function findNextWordBoundary(value: string, pos: number): number {
-  let i = pos;
-  // Skip whitespace first.
-  while (i < value.length && value[i] === " ") {
-    i++;
-  }
-  // Skip the word itself to land at end of word.
-  while (i < value.length && value[i] !== " ") {
-    i++;
-  }
-  return i;
-}
-
-/** Tracks cursor position within the input value using a ref for immediate access in callbacks. */
-function useCursor(valueLength: number) {
-  const ref = useRef(valueLength);
-  const [, rerender] = useState(0);
-
-  // Clamp cursor to valid range on each render.
-  ref.current = Math.max(0, Math.min(ref.current, valueLength));
-
-  /** Updates cursor position and triggers a re-render. */
-  function setCursor(pos: number) {
-    ref.current = pos;
-    rerender((n) => n + 1);
-  }
-
-  /** Returns the current cursor position (always fresh, safe in callbacks). */
-  function getCursor() {
-    return ref.current;
-  }
-
-  return { cursor: ref.current, getCursor, setCursor };
-}
-
-/** Handles keyboard input and dispatches onChange/onSubmit. */
-function useChatInputKeys(
-  props: ChatInputProps,
-  getCursor: () => number,
-  setCursor: (pos: number) => void,
-) {
-  useInput((input, key) => {
-    const cursor = getCursor();
-
-    // Shift+Enter inserts a newline. Plain Enter submits.
-    // Not all macOS terminals distinguish Shift+Enter from Enter — iTerm2 and
-    // Kitty do, but Terminal.app sends the same \r for both.
-    if (key.return) {
-      if (key.shift) {
-        const before = props.value.slice(0, cursor);
-        const after = props.value.slice(cursor);
-        props.onChange(`${before}\n${after}`);
-        setCursor(cursor + 1);
-      } else {
-        props.onSubmit(props.value);
-      }
-      return;
-    }
-
-    // macOS Backspace sends \x7f which Ink maps to key.delete.
-    if (key.backspace || key.delete) {
-      if (cursor > 0) {
-        const before = props.value.slice(0, cursor - 1);
-        const after = props.value.slice(cursor);
-        props.onChange(before + after);
-        setCursor(cursor - 1);
-      }
-      return;
-    }
-
-    // Ignore control sequences that aren't printable characters.
-    if (key.ctrl || key.escape) {
-      return;
-    }
-
-    // Word jump: Option+Left/Right sends CSI meta+arrow (\x1b[1;3D / \x1b[1;3C)
-    // in most terminals. Some terminals (and readline) send ESC+b / ESC+f instead.
-    // We handle both so word-jump works regardless of terminal configuration.
-    if (key.meta && (input === "b" || key.leftArrow)) {
-      setCursor(findPreviousWordBoundary(props.value, cursor));
-      return;
-    }
-
-    if (key.meta && (input === "f" || key.rightArrow)) {
-      setCursor(findNextWordBoundary(props.value, cursor));
-      return;
-    }
-
-    if (key.leftArrow) {
-      setCursor(cursor - 1);
-      return;
-    }
-
-    if (key.rightArrow) {
-      setCursor(cursor + 1);
-      return;
-    }
-
-    if (key.upArrow) {
-      setCursor(0);
-      return;
-    }
-
-    if (key.downArrow) {
-      setCursor(props.value.length);
-      return;
-    }
-
-    // Ignore remaining meta combinations or special keys
-    if (key.meta || key.tab) {
-      return;
-    }
-
-    const before = props.value.slice(0, cursor);
-    const after = props.value.slice(cursor);
-    props.onChange(before + input + after);
-    setCursor(cursor + input.length);
-  });
-}
-
 /** Chat input with bordered text area and status ribbon. */
 export function ChatInput(props: ChatInputProps) {
-  const { cursor, getCursor, setCursor } = useCursor(props.value.length);
-  useChatInputKeys(props, getCursor, setCursor);
+  const { cursor } = useTextInput({
+    value: props.value,
+    onChange: props.onChange,
+    onSubmit: props.onSubmit,
+  });
 
   const beforeCursor = props.value.slice(0, cursor);
   const atCursor = props.value[cursor] ?? " ";
