@@ -1,5 +1,6 @@
 import { Box, Static } from "ink";
 import { useConfig } from "./config/hook";
+import { ChatInput } from "./ui/chat-input";
 import { AppHeader } from "./ui/app-header";
 import { version } from "./utils/version";
 
@@ -9,7 +10,7 @@ export function App() {
   const staticItems = [{ id: "__header__" }];
 
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <>
       <Static items={staticItems}>
         {(item) => (
           <Box key={item.id} flexDirection="column">
@@ -21,6 +22,12 @@ export function App() {
           </Box>
         )}
       </Static>
-    </Box>
+      <ChatInput
+        value="hello world"
+        onChange={() => {}}
+        onSubmit={() => {}}
+        statusText="1% context"
+      />
+    </>
   );
 }
