@@ -43,12 +43,6 @@ describe("ChatInput", () => {
       expect(lastFrame()).toContain("❯");
     });
 
-    it("renders the prompt marker when value is empty", () => {
-      const { lastFrame } = renderInput();
-      // Ink trims trailing whitespace, so we assert on the marker alone.
-      expect(lastFrame()).toContain("❯");
-    });
-
     it("falls back to 80 columns when stdout.columns is undefined", () => {
       setColumns(undefined);
 
@@ -91,56 +85,6 @@ describe("ChatInput", () => {
       stdin.write("\r");
       stdin.write("\r");
       expect(onMessage).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("history", () => {
-    it("up arrow loads most recent history entry", () => {
-      const onMessage = vi.fn();
-      const { stdin } = renderInput({ onMessage });
-      stdin.write("first");
-      stdin.write("\r");
-      stdin.write("second");
-      stdin.write("\r");
-      // Up loads "second" (most recent)
-      stdin.write("\x1b[A");
-      stdin.write("\r");
-      expect(onMessage).toHaveBeenLastCalledWith("second");
-    });
-
-    it("up arrow navigates further back in history", () => {
-      const onMessage = vi.fn();
-      const { stdin } = renderInput({ onMessage });
-      stdin.write("first");
-      stdin.write("\r");
-      stdin.write("second");
-      stdin.write("\r");
-      // Up twice loads "first"
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
-      stdin.write("\r");
-      expect(onMessage).toHaveBeenLastCalledWith("first");
-    });
-
-    it("up arrow at oldest entry stays put", () => {
-      const onMessage = vi.fn();
-      const { stdin } = renderInput({ onMessage });
-      stdin.write("only");
-      stdin.write("\r");
-      // Up three times — only one entry, should stay on it
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
-      stdin.write("\r");
-      expect(onMessage).toHaveBeenLastCalledWith("only");
-    });
-
-    it("up arrow does nothing with no history", () => {
-      const onMessage = vi.fn();
-      const { stdin } = renderInput({ onMessage });
-      stdin.write("\x1b[A");
-      stdin.write("\r");
-      expect(onMessage).not.toHaveBeenCalled();
     });
   });
 });

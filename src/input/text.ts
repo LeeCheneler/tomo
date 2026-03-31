@@ -90,11 +90,24 @@ function useCursor(valueLength: number) {
 
 /** Manages text input state: cursor position, keyboard handling, and value changes. */
 export function useTextInput(options: TextInputOptions): TextInputResult {
-  const { cursor, getCursor, setCursor } = useCursor(options.value.length);
+  // Value ref stays fresh across batched React updates. Updated on render
+  // from options.value and immediately when onChange fires, so the next
+  // event in the same tick always sees the latest value.
+  const valueRef = useRef(options.value);
+  valueRef.current = options.value;
+
+  const { cursor, getCursor, setCursor } = useCursor(valueRef.current.length);
   const lineMode = options.lineMode;
+
+  /** Updates value ref and notifies the parent. */
+  function applyChange(newValue: string) {
+    valueRef.current = newValue;
+    options.onChange(newValue);
+  }
 
   useInput((input, key) => {
     const pos = getCursor();
+    const value = valueRef.current;
 
     // In multi mode, Shift+Enter inserts a newline and plain Enter submits.
     // In single mode, both submit.
@@ -102,12 +115,12 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     // Kitty do, but Terminal.app sends the same \r for both.
     if (key.return) {
       if (key.shift && lineMode === "multi") {
-        const before = options.value.slice(0, pos);
-        const after = options.value.slice(pos);
-        options.onChange(`${before}\n${after}`);
+        const before = value.slice(0, pos);
+        const after = value.slice(pos);
+        applyChange(`${before}\n${after}`);
         setCursor(pos + 1);
       } else {
-        options.onSubmit(options.value);
+        options.onSubmit(value);
       }
       return;
     }
@@ -115,9 +128,9 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     // macOS Backspace sends \x7f which Ink maps to key.delete.
     if (key.backspace || key.delete) {
       if (pos > 0) {
-        const before = options.value.slice(0, pos - 1);
-        const after = options.value.slice(pos);
-        options.onChange(before + after);
+        const before = value.slice(0, pos - 1);
+        const after = value.slice(pos);
+        applyChange(before + after);
         setCursor(pos - 1);
       }
       return;
@@ -132,12 +145,12 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     // in most terminals. Some terminals (and readline) send ESC+b / ESC+f instead.
     // We handle both so word-jump works regardless of terminal configuration.
     if (key.meta && (input === "b" || key.leftArrow)) {
-      setCursor(findPreviousWordBoundary(options.value, pos));
+      setCursor(findPreviousWordBoundary(value, pos));
       return;
     }
 
     if (key.meta && (input === "f" || key.rightArrow)) {
-      setCursor(findNextWordBoundary(options.value, pos));
+      setCursor(findNextWordBoundary(value, pos));
       return;
     }
 
@@ -161,10 +174,10 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     }
 
     if (key.downArrow) {
-      if (pos === options.value.length) {
+      if (pos === value.length) {
         options.onDown?.();
       } else {
-        setCursor(options.value.length);
+        setCursor(value.length);
       }
       return;
     }
@@ -174,9 +187,9 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
       return;
     }
 
-    const before = options.value.slice(0, pos);
-    const after = options.value.slice(pos);
-    options.onChange(before + input + after);
+    const before = value.slice(0, pos);
+    const after = value.slice(pos);
+    applyChange(before + input + after);
     setCursor(pos + input.length);
   });
 

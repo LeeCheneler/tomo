@@ -19,18 +19,12 @@ function buildBorder(): string {
   return "─".repeat(getTerminalWidth());
 }
 
-/** Manages chat input state, submission, and history. */
+/** Manages chat input state and submission. */
 function useChatInput(props: ChatInputProps) {
   const [value, setValue] = useState("");
   // Ref keeps value fresh across batched React updates so submit
   // always sees the latest input even before re-render.
   const valueRef = useRef("");
-
-  // History is stored newest-first: [most recent, ..., oldest].
-  const historyRef = useRef<string[]>([]);
-  // -1 means not browsing history. 0 is most recent, 1 is next oldest, etc.
-  const historyIndexRef = useRef(-1);
-  const draftRef = useRef("");
 
   /** Updates value in both state (for rendering) and ref (for callbacks). */
   function handleChange(newValue: string) {
@@ -44,38 +38,9 @@ function useChatInput(props: ChatInputProps) {
     if (current.trim() === "") {
       return;
     }
-    historyRef.current.unshift(current);
-    historyIndexRef.current = -1;
-    draftRef.current = "";
     props.onMessage(current);
     handleChange("");
     setCursorPos(0);
-  }
-
-  /** Navigates backward through history when cursor is at the start. */
-  function handleUp() {
-    const history = historyRef.current;
-    if (history.length === 0) {
-      return;
-    }
-
-    const currentIndex = historyIndexRef.current;
-
-    if (currentIndex === -1) {
-      // Entering history — stash current input as draft.
-      draftRef.current = valueRef.current;
-      historyIndexRef.current = 0;
-      handleChange(history[0]);
-    } else if (currentIndex < history.length - 1) {
-      // Navigate further back.
-      historyIndexRef.current = currentIndex + 1;
-      handleChange(history[currentIndex + 1]);
-    }
-  }
-
-  /** Navigates forward through history when cursor is at the end. */
-  function handleDown() {
-    // TODO: implement in next commit
   }
 
   const { cursor, setCursor: setCursorPos } = useTextInput({
@@ -83,14 +48,12 @@ function useChatInput(props: ChatInputProps) {
     onChange: handleChange,
     onSubmit: handleSubmit,
     lineMode: "multi",
-    onUp: handleUp,
-    onDown: handleDown,
   });
 
   return { value, cursor };
 }
 
-/** Chat input with bordered text area, status ribbon, and history. */
+/** Chat input with bordered text area. */
 export function ChatInput(props: ChatInputProps) {
   const { value, cursor } = useChatInput(props);
 
