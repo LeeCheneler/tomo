@@ -53,22 +53,35 @@ function useChatInput(props: ChatInputProps) {
   return { value, cursor };
 }
 
+/** Splits a value around a cursor position for rendering. */
+export function splitAtCursor(
+  value: string,
+  cursor: number,
+): { before: string; at: string; after: string } {
+  const charAtCursor = value[cursor];
+  // Newlines and end-of-value are invisible — show a space block instead.
+  // When on a newline, keep it in after so line breaks aren't lost.
+  const showPlaceholder = charAtCursor === undefined || charAtCursor === "\n";
+  return {
+    before: value.slice(0, cursor),
+    at: showPlaceholder ? " " : charAtCursor,
+    after: showPlaceholder ? value.slice(cursor) : value.slice(cursor + 1),
+  };
+}
+
 /** Chat input with bordered text area. */
 export function ChatInput(props: ChatInputProps) {
   const { value, cursor } = useChatInput(props);
-
-  const beforeCursor = value.slice(0, cursor);
-  const atCursor = value[cursor] ?? " ";
-  const afterCursor = value.slice(cursor + 1);
+  const { before, at, after } = splitAtCursor(value, cursor);
 
   return (
     <Box flexDirection="column" paddingTop={1}>
       <Text color={theme.brand}>{buildBorder()}</Text>
       <Text>
         <Text color={theme.brand}>{"❯ "}</Text>
-        {beforeCursor}
-        <Text inverse>{atCursor}</Text>
-        {afterCursor}
+        {before}
+        <Text inverse>{at}</Text>
+        {after}
       </Text>
       <Text color={theme.brand}>{buildBorder()}</Text>
     </Box>

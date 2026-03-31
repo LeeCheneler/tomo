@@ -66,6 +66,36 @@ function findNextWordBoundary(value: string, pos: number): number {
   return i;
 }
 
+/** Returns the line index and column offset for a cursor position within a value. */
+function getCursorLineInfo(value: string, pos: number) {
+  const lines = value.split("\n");
+  let remaining = pos;
+  for (const [i, line] of lines.entries()) {
+    if (remaining <= line.length) {
+      return { lineIndex: i, column: remaining, lines };
+    }
+    // +1 accounts for the \n character.
+    remaining -= line.length + 1;
+  }
+  // Unreachable when cursor is clamped correctly — the loop always matches
+  // because the last line's length equals remaining when pos === value.length.
+  /* v8 ignore next */
+  throw new Error("Cursor position out of bounds");
+}
+
+/** Converts a line index and column back to an absolute cursor position. */
+function lineColumnToPos(
+  lines: string[],
+  lineIndex: number,
+  column: number,
+): number {
+  let pos = 0;
+  for (let i = 0; i < lineIndex; i++) {
+    pos += lines[i].length + 1;
+  }
+  return pos + Math.min(column, lines[lineIndex].length);
+}
+
 /** Tracks cursor position within the input value using a ref for immediate access in callbacks. */
 function useCursor(valueLength: number) {
   const ref = useRef(valueLength);
@@ -165,19 +195,31 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     }
 
     if (key.upArrow) {
-      if (pos === 0) {
-        options.onUp?.();
+      const { lineIndex, column, lines } = getCursorLineInfo(value, pos);
+      if (lineIndex === 0) {
+        // On first line: move to start, or fire boundary callback if already there.
+        if (pos === 0) {
+          options.onUp?.();
+        } else {
+          setCursor(0);
+        }
       } else {
-        setCursor(0);
+        setCursor(lineColumnToPos(lines, lineIndex - 1, column));
       }
       return;
     }
 
     if (key.downArrow) {
-      if (pos === value.length) {
-        options.onDown?.();
+      const { lineIndex, column, lines } = getCursorLineInfo(value, pos);
+      if (lineIndex === lines.length - 1) {
+        // On last line: move to end, or fire boundary callback if already there.
+        if (pos === value.length) {
+          options.onDown?.();
+        } else {
+          setCursor(value.length);
+        }
       } else {
-        setCursor(value.length);
+        setCursor(lineColumnToPos(lines, lineIndex + 1, column));
       }
       return;
     }

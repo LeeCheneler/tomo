@@ -249,21 +249,78 @@ describe("useTextInput", () => {
       expect(onChange).toHaveBeenCalledWith("axyz!c");
     });
 
-    it("up arrow moves cursor to start", () => {
+    it("up arrow on first line moves cursor to start of line", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
+      // Cursor at end (5), up moves to start (0)
       stdin.write("\x1b[A");
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("xhello");
     });
 
-    it("down arrow moves cursor to end", () => {
+    it("down arrow on last line moves cursor to end of line", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
+      // Move to start, down moves to end
       stdin.write("\x1b[A");
       stdin.write("\x1b[B");
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hellox");
+    });
+
+    it("up arrow moves to same column on previous line", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "abc\ndef", onChange });
+      // Cursor at end (7), which is column 3 on line 2.
+      // Up should go to column 3 on line 1 (position 3).
+      stdin.write("\x1b[A");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("abcx\ndef");
+    });
+
+    it("up arrow clamps to end of shorter previous line", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "ab\ndefgh", onChange });
+      // Cursor at end (8), column 5 on line 2. Line 1 is "ab" (length 2).
+      // Up clamps to column 2 (position 2).
+      stdin.write("\x1b[A");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("abx\ndefgh");
+    });
+
+    it("down arrow moves to same column on next line", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "abc\ndef", onChange });
+      // Move to position 2 (column 2 on line 1).
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      // Cursor at 2. Down should go to column 2 on line 2 (position 6).
+      stdin.write("\x1b[B");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("abc\ndexf");
+    });
+
+    it("down arrow clamps to end of shorter next line", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "abcde\nfg", onChange });
+      // Cursor at end of line 1 (5), column 5. Move to position 3 (column 3).
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      // Cursor at 0, move right to 3
+      stdin.write("\x1b[C");
+      stdin.write("\x1b[C");
+      stdin.write("\x1b[C");
+      // Cursor at 3, column 3 on line 1. Line 2 is "fg" (length 2).
+      // Down clamps to column 2 (position 8).
+      stdin.write("\x1b[B");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("abcde\nfgx");
     });
 
     it("option+left jumps to start of previous word", () => {
@@ -395,35 +452,38 @@ describe("useTextInput", () => {
       expect(onChange).toHaveBeenCalledWith("hellox world");
     });
 
-    it("fires onUp when up arrow pressed at start", () => {
+    it("fires onUp when up arrow pressed at start of first line", () => {
       const onUp = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onUp });
-      // Move to start first, then press up again
+      // First up moves to start, second up fires onUp
       stdin.write("\x1b[A");
       stdin.write("\x1b[A");
       expect(onUp).toHaveBeenCalledOnce();
     });
 
-    it("does not fire onUp when cursor is not at start", () => {
+    it("does not fire onUp on multi-line value when not on first line", () => {
       const onUp = vi.fn();
-      const { stdin } = renderHarness({ value: "hello", onUp });
-      // Cursor at end, up moves to start — should not fire onUp
+      const { stdin } = renderHarness({ value: "abc\ndef", onUp });
+      // Cursor at end (line 2). Up goes to line 1, not onUp.
       stdin.write("\x1b[A");
       expect(onUp).not.toHaveBeenCalled();
     });
 
-    it("fires onDown when down arrow pressed at end", () => {
+    it("fires onDown when down arrow pressed at end of last line", () => {
       const onDown = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onDown });
-      // Already at end, press down
+      // Move to start, then down moves to end, second down fires onDown.
+      stdin.write("\x1b[A");
+      stdin.write("\x1b[A");
+      stdin.write("\x1b[B");
       stdin.write("\x1b[B");
       expect(onDown).toHaveBeenCalledOnce();
     });
 
-    it("does not fire onDown when cursor is not at end", () => {
+    it("does not fire onDown on multi-line value when not on last line", () => {
       const onDown = vi.fn();
-      const { stdin } = renderHarness({ value: "hello", onDown });
-      // Move to start, then down moves to end — should not fire onDown
+      const { stdin } = renderHarness({ value: "abc\ndef", onDown });
+      // Move to start (line 1). Down goes to line 2, not onDown.
       stdin.write("\x1b[A");
       stdin.write("\x1b[B");
       expect(onDown).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 import { render } from "ink-testing-library";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ChatInput } from "./chat-input";
+import { ChatInput, splitAtCursor } from "./chat-input";
 
 const COLUMNS = 40;
 
@@ -86,5 +86,32 @@ describe("ChatInput", () => {
       stdin.write("\r");
       expect(onMessage).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe("splitAtCursor", () => {
+  it("splits at a normal character", () => {
+    const result = splitAtCursor("hello", 2);
+    expect(result).toEqual({ before: "he", at: "l", after: "lo" });
+  });
+
+  it("shows space placeholder at end of value", () => {
+    const result = splitAtCursor("hello", 5);
+    expect(result).toEqual({ before: "hello", at: " ", after: "" });
+  });
+
+  it("shows space placeholder on newline and preserves it in after", () => {
+    const result = splitAtCursor("abc\ndef", 3);
+    expect(result).toEqual({ before: "abc", at: " ", after: "\ndef" });
+  });
+
+  it("handles cursor at start", () => {
+    const result = splitAtCursor("hello", 0);
+    expect(result).toEqual({ before: "", at: "h", after: "ello" });
+  });
+
+  it("handles empty value", () => {
+    const result = splitAtCursor("", 0);
+    expect(result).toEqual({ before: "", at: " ", after: "" });
   });
 });
