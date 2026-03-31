@@ -155,8 +155,18 @@ function useChatInputKeys(
       return;
     }
 
+    if (key.upArrow) {
+      setCursor(0);
+      return;
+    }
+
+    if (key.downArrow) {
+      setCursor(props.value.length);
+      return;
+    }
+
     // Ignore remaining meta combinations or special keys
-    if (key.meta || key.upArrow || key.downArrow || key.tab) {
+    if (key.meta || key.tab) {
       return;
     }
 

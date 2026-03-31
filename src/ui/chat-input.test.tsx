@@ -180,12 +180,23 @@ describe("ChatInput", () => {
       expect(onChange).not.toHaveBeenCalled();
     });
 
-    it("ignores up and down arrow keys", () => {
+    it("up arrow moves cursor to start of input", () => {
       const onChange = vi.fn();
       const { stdin } = renderInput({ value: "hello", onChange });
+      // Cursor at end (5). Up arrow → position 0.
+      stdin.write("\x1b[A");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("xhello");
+    });
+
+    it("down arrow moves cursor to end of input", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      // Move cursor to start via up, then down → back to end.
       stdin.write("\x1b[A");
       stdin.write("\x1b[B");
-      expect(onChange).not.toHaveBeenCalled();
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hellox");
     });
 
     it("ignores tab key", () => {
