@@ -1,8 +1,7 @@
-import { parse } from "yaml";
 import { afterEach, describe, expect, it } from "vitest";
 import { mockConfig } from "../test-utils/mock-config";
-import { type MockFsState, mockFs } from "../test-utils/mock-fs";
-import { GLOBAL_CONFIG_PATH, LOCAL_CONFIG_PATH, loadConfig } from "./file";
+import type { MockFsState } from "../test-utils/mock-fs";
+import { loadConfig } from "./file";
 import {
   addProvider,
   removeProvider,
@@ -23,8 +22,8 @@ describe("updateActiveModel", () => {
   it("sets activeModel in global config", () => {
     state = mockConfig({ global: { activeModel: "old" } });
     updateActiveModel("qwen3:8b");
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.activeModel).toBe("qwen3:8b");
+    const config = loadConfig();
+    expect(config.activeModel).toBe("qwen3:8b");
   });
 
   it("preserves other fields", () => {
@@ -32,8 +31,8 @@ describe("updateActiveModel", () => {
       global: { activeModel: "old", activeProvider: "ollama" },
     });
     updateActiveModel("new");
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.activeProvider).toBe("ollama");
+    const config = loadConfig();
+    expect(config.activeProvider).toBe("ollama");
   });
 });
 
@@ -47,8 +46,8 @@ describe("updateActiveProvider", () => {
   it("sets activeProvider in global config", () => {
     state = mockConfig({ global: { activeProvider: "old" } });
     updateActiveProvider("openrouter");
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.activeProvider).toBe("openrouter");
+    const config = loadConfig();
+    expect(config.activeProvider).toBe("openrouter");
   });
 });
 
@@ -66,9 +65,9 @@ describe("addProvider", () => {
       type: "ollama",
       baseUrl: "http://localhost:11434",
     });
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.providers).toHaveLength(1);
-    expect(raw.providers[0].name).toBe("ollama");
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(1);
+    expect(config.providers[0].name).toBe("ollama");
   });
 
   it("handles missing providers array", () => {
@@ -78,8 +77,8 @@ describe("addProvider", () => {
       type: "ollama",
       baseUrl: "http://localhost:11434",
     });
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.providers).toHaveLength(1);
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(1);
   });
 
   it("appends to existing providers", () => {
@@ -95,8 +94,8 @@ describe("addProvider", () => {
       type: "openrouter",
       baseUrl: "https://openrouter.ai/api",
     });
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.providers).toHaveLength(2);
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(2);
   });
 });
 
@@ -121,16 +120,16 @@ describe("removeProvider", () => {
       },
     });
     removeProvider("ollama");
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.providers).toHaveLength(1);
-    expect(raw.providers[0].name).toBe("openrouter");
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(1);
+    expect(config.providers[0].name).toBe("openrouter");
   });
 
   it("handles missing providers array", () => {
     state = mockConfig({ global: {} });
     removeProvider("ollama");
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.providers).toEqual([]);
+    const config = loadConfig();
+    expect(config.providers).toEqual([]);
   });
 
   it("no-ops when provider not found", () => {
@@ -142,8 +141,8 @@ describe("removeProvider", () => {
       },
     });
     removeProvider("nonexistent");
-    const raw = parse(state.getFile(GLOBAL_CONFIG_PATH)!);
-    expect(raw.providers).toHaveLength(1);
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(1);
   });
 });
 
@@ -157,9 +156,9 @@ describe("updatePermissions", () => {
   it("sets permissions in local config", () => {
     state = mockConfig({ global: {} });
     updatePermissions({ cwdReadFile: true, cwdWriteFile: true });
-    const raw = parse(state.getFile(LOCAL_CONFIG_PATH)!);
-    expect(raw.permissions.cwdReadFile).toBe(true);
-    expect(raw.permissions.cwdWriteFile).toBe(true);
+    const config = loadConfig();
+    expect(config.permissions.cwdReadFile).toBe(true);
+    expect(config.permissions.cwdWriteFile).toBe(true);
   });
 });
 
@@ -173,8 +172,8 @@ describe("updateAllowedCommands", () => {
   it("sets allowedCommands in local config", () => {
     state = mockConfig({ global: {} });
     updateAllowedCommands(["git:*", "npm test"]);
-    const raw = parse(state.getFile(LOCAL_CONFIG_PATH)!);
-    expect(raw.allowedCommands).toEqual(["git:*", "npm test"]);
+    const config = loadConfig();
+    expect(config.allowedCommands).toEqual(["git:*", "npm test"]);
   });
 });
 
@@ -199,8 +198,8 @@ describe("updateTools", () => {
       webSearch: { enabled: true, apiKey: "tvly-123" },
       writeFile: { enabled: true },
     });
-    const raw = parse(state.getFile(LOCAL_CONFIG_PATH)!);
-    expect(raw.tools.webSearch.enabled).toBe(true);
-    expect(raw.tools.webSearch.apiKey).toBe("tvly-123");
+    const config = loadConfig();
+    expect(config.tools.webSearch.enabled).toBe(true);
+    expect(config.tools.webSearch.apiKey).toBe("tvly-123");
   });
 });
