@@ -7,6 +7,8 @@ import {
   loadConfig,
   saveGlobalConfig,
   saveLocalConfig,
+  updateGlobalConfig,
+  updateLocalConfig,
 } from "./file";
 
 describe("loadConfig", () => {
@@ -139,5 +141,61 @@ describe("saveLocalConfig", () => {
     saveLocalConfig({ activeModel: "llama3:70b" });
     const config = loadConfig();
     expect(config.activeModel).toBe("llama3:70b");
+  });
+});
+
+describe("updateGlobalConfig", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("reads existing config, applies updater, and writes back", () => {
+    state = mockConfig({
+      global: { activeModel: "old", activeProvider: "ollama" },
+    });
+    updateGlobalConfig((raw) => ({ ...raw, activeModel: "new" }));
+    const config = loadConfig();
+    expect(config.activeModel).toBe("new");
+    expect(config.activeProvider).toBe("ollama");
+  });
+
+  it("creates file if it does not exist", () => {
+    state = mockConfig();
+    updateGlobalConfig((raw) => ({ ...raw, activeModel: "qwen3:8b" }));
+    expect(state.getFile(GLOBAL_CONFIG_PATH)).toContain(
+      "activeModel: qwen3:8b",
+    );
+  });
+});
+
+describe("updateLocalConfig", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("reads existing config, applies updater, and writes back", () => {
+    state = mockConfig({
+      global: {},
+      local: { allowedCommands: ["git:*"] },
+    });
+    updateLocalConfig((raw) => ({
+      ...raw,
+      allowedCommands: [...(raw.allowedCommands as string[]), "npm test"],
+    }));
+    const written = state.getFile(LOCAL_CONFIG_PATH);
+    expect(written).toContain("git:*");
+    expect(written).toContain("npm test");
+  });
+
+  it("creates file if it does not exist", () => {
+    state = mockConfig({ global: {} });
+    updateLocalConfig((raw) => ({ ...raw, activeModel: "llama3:70b" }));
+    expect(state.getFile(LOCAL_CONFIG_PATH)).toContain(
+      "activeModel: llama3:70b",
+    );
   });
 });

@@ -66,3 +66,21 @@ export function saveLocalConfig(config: Partial<Config>): void {
   ensureDir(dirname(LOCAL_CONFIG_PATH));
   writeFile(LOCAL_CONFIG_PATH, stringify(config));
 }
+
+/** Reads the global config file, applies an updater, and writes the result back. */
+export function updateGlobalConfig(
+  updater: (raw: Record<string, unknown>) => Record<string, unknown>,
+): void {
+  ensureDir(dirname(GLOBAL_CONFIG_PATH));
+  const raw = loadYaml(GLOBAL_CONFIG_PATH) ?? {};
+  writeFile(GLOBAL_CONFIG_PATH, stringify(updater(raw)));
+}
+
+/** Reads the local config file, applies an updater, and writes the result back. */
+export function updateLocalConfig(
+  updater: (raw: Record<string, unknown>) => Record<string, unknown>,
+): void {
+  ensureDir(dirname(LOCAL_CONFIG_PATH));
+  const raw = loadYaml(LOCAL_CONFIG_PATH) ?? {};
+  writeFile(LOCAL_CONFIG_PATH, stringify(updater(raw)));
+}
