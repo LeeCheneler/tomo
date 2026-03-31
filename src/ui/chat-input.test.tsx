@@ -282,5 +282,95 @@ describe("ChatInput", () => {
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("abx");
     });
+
+    it("option+left jumps to start of previous word", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello world", onChange });
+      // Cursor starts at end (11). Option+Left jumps to start of "world" (6).
+      stdin.write("\x1b[1;3D");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hello xworld");
+    });
+
+    it("option+left jumps across multiple words", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "one two three", onChange });
+      // Option+Left twice: end(13) → start of "three"(8) → start of "two"(4)
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("one xtwo three");
+    });
+
+    it("option+left from start stays at 0", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      // Move to start, then option+left again
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("xhello");
+    });
+
+    it("option+right jumps to end of next word", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello world", onChange });
+      // Move to start first, then option+right jumps to end of "hello" (5)
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3C");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hellox world");
+    });
+
+    it("option+right from end stays at end", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      // Already at end, option+right should stay at end
+      stdin.write("\x1b[1;3C");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hellox");
+    });
+
+    it("option+left skips multiple spaces between words", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello  world", onChange });
+      // Cursor at end (12). Option+Left skips "world" then the double space → 0
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("xhello  world");
+    });
+
+    it("option+right skips multiple spaces between words", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello  world", onChange });
+      // Move to start, option+right lands at 5 (end of "hello"),
+      // then second option+right skips double space + "world" → 12
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3D");
+      stdin.write("\x1b[1;3C");
+      stdin.write("\x1b[1;3C");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hello  worldx");
+    });
+
+    it("ESC+b jumps to start of previous word (readline binding)", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello world", onChange });
+      stdin.write("\x1bb");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hello xworld");
+    });
+
+    it("ESC+f jumps to end of next word (readline binding)", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello world", onChange });
+      stdin.write("\x1bb");
+      stdin.write("\x1bb");
+      stdin.write("\x1bf");
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hellox world");
+    });
   });
 });

@@ -39,6 +39,37 @@ function buildBottomBorder(statusText: string): string {
   return `${"─".repeat(leadingLength)}${statusSegment}`;
 }
 
+/** Finds the start of the previous word from the given position. */
+function findPreviousWordBoundary(value: string, pos: number): number {
+  if (pos <= 0) {
+    return 0;
+  }
+  let i = pos - 1;
+  // Skip whitespace before the word.
+  while (i > 0 && value[i - 1] === " ") {
+    i--;
+  }
+  // Skip the word itself.
+  while (i > 0 && value[i - 1] !== " ") {
+    i--;
+  }
+  return i;
+}
+
+/** Finds the end of the next word from the given position. */
+function findNextWordBoundary(value: string, pos: number): number {
+  let i = pos;
+  // Skip whitespace first.
+  while (i < value.length && value[i] === " ") {
+    i++;
+  }
+  // Skip the word itself to land at end of word.
+  while (i < value.length && value[i] !== " ") {
+    i++;
+  }
+  return i;
+}
+
 /** Tracks cursor position within the input value using a ref for immediate access in callbacks. */
 function useCursor(valueLength: number) {
   const ref = useRef(valueLength);
@@ -87,7 +118,20 @@ function useChatInputKeys(
     }
 
     // Ignore control sequences that aren't printable characters.
-    if (key.ctrl || key.meta || key.escape) {
+    if (key.ctrl || key.escape) {
+      return;
+    }
+
+    // Word jump: Option+Left/Right sends CSI meta+arrow (\x1b[1;3D / \x1b[1;3C)
+    // in most terminals. Some terminals (and readline) send ESC+b / ESC+f instead.
+    // We handle both so word-jump works regardless of terminal configuration.
+    if (key.meta && (input === "b" || key.leftArrow)) {
+      setCursor(findPreviousWordBoundary(props.value, cursor));
+      return;
+    }
+
+    if (key.meta && (input === "f" || key.rightArrow)) {
+      setCursor(findNextWordBoundary(props.value, cursor));
       return;
     }
 
@@ -101,8 +145,8 @@ function useChatInputKeys(
       return;
     }
 
-    // Ignore remaining special keys.
-    if (key.upArrow || key.downArrow || key.tab) {
+    // Ignore remaining meta combinations or special keys
+    if (key.meta || key.upArrow || key.downArrow || key.tab) {
       return;
     }
 
