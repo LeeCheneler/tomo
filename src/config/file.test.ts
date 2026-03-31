@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mockConfig } from "../test-utils/mock-config";
 import { type MockFsState, mockFs } from "../test-utils/mock-fs";
-import { GLOBAL_CONFIG_PATH, loadConfig } from "./file";
+import {
+  GLOBAL_CONFIG_PATH,
+  LOCAL_CONFIG_PATH,
+  loadConfig,
+  saveGlobalConfig,
+  saveLocalConfig,
+} from "./file";
 
 describe("loadConfig", () => {
   let state: MockFsState;
@@ -72,5 +78,66 @@ describe("loadConfig", () => {
       },
     });
     expect(() => loadConfig()).toThrow("Config validation failed");
+  });
+});
+
+describe("saveGlobalConfig", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("writes config to global config path as YAML", () => {
+    state = mockConfig();
+    saveGlobalConfig({ activeModel: "qwen3:8b" });
+    const written = state.getFile(GLOBAL_CONFIG_PATH);
+    expect(written).toBeDefined();
+    expect(written).toContain("activeModel: qwen3:8b");
+  });
+
+  it("overwrites existing global config", () => {
+    state = mockConfig({ global: { activeModel: "old" } });
+    saveGlobalConfig({ activeModel: "new" });
+    const written = state.getFile(GLOBAL_CONFIG_PATH);
+    expect(written).toContain("activeModel: new");
+    expect(written).not.toContain("activeModel: old");
+  });
+
+  it("round-trips through loadConfig", () => {
+    state = mockConfig();
+    saveGlobalConfig({
+      activeModel: "qwen3:8b",
+      activeProvider: "ollama",
+      providers: [
+        { name: "ollama", type: "ollama", baseUrl: "http://localhost:11434" },
+      ],
+    });
+    const config = loadConfig();
+    expect(config.activeModel).toBe("qwen3:8b");
+    expect(config.providers).toHaveLength(1);
+  });
+});
+
+describe("saveLocalConfig", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("writes config to local config path as YAML", () => {
+    state = mockConfig({ global: {} });
+    saveLocalConfig({ activeModel: "llama3:70b" });
+    const written = state.getFile(LOCAL_CONFIG_PATH);
+    expect(written).toBeDefined();
+    expect(written).toContain("activeModel: llama3:70b");
+  });
+
+  it("local save overrides global on next load", () => {
+    state = mockConfig({ global: { activeModel: "qwen3:8b" } });
+    saveLocalConfig({ activeModel: "llama3:70b" });
+    const config = loadConfig();
+    expect(config.activeModel).toBe("llama3:70b");
   });
 });

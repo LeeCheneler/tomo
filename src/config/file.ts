@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
 import { ensureDir, fileExists, readFile, writeFile } from "../utils/fs";
 import { type Config, configSchema } from "./schema";
 
@@ -53,4 +53,16 @@ export function loadConfig(): Config {
   }
 
   return result.data;
+}
+
+/** Writes a partial config object to the global config file as YAML. */
+export function saveGlobalConfig(config: Partial<Config>): void {
+  ensureDir(dirname(GLOBAL_CONFIG_PATH));
+  writeFile(GLOBAL_CONFIG_PATH, stringify(config));
+}
+
+/** Writes a partial config object to the local config file as YAML. */
+export function saveLocalConfig(config: Partial<Config>): void {
+  ensureDir(dirname(LOCAL_CONFIG_PATH));
+  writeFile(LOCAL_CONFIG_PATH, stringify(config));
 }
