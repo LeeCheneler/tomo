@@ -141,6 +141,30 @@ describe("ChatInput", () => {
       expect(onSubmit).toHaveBeenCalledWith("hello");
     });
 
+    it("inserts newline on shift+enter", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      stdin.write("\x1b[13;2u");
+      expect(onChange).toHaveBeenCalledWith("hello\n");
+    });
+
+    it("inserts newline at cursor position on shift+enter", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onChange });
+      // Move cursor left twice, then shift+enter
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[D");
+      stdin.write("\x1b[13;2u");
+      expect(onChange).toHaveBeenCalledWith("hel\nlo");
+    });
+
+    it("does not call onSubmit on shift+enter", () => {
+      const onSubmit = vi.fn();
+      const { stdin } = renderInput({ value: "hello", onSubmit });
+      stdin.write("\x1b[13;2u");
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
     it("ignores ctrl key combinations", () => {
       const onChange = vi.fn();
       const { stdin } = renderInput({ value: "hello", onChange });

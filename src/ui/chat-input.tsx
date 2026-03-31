@@ -101,8 +101,18 @@ function useChatInputKeys(
   useInput((input, key) => {
     const cursor = getCursor();
 
+    // Shift+Enter inserts a newline. Plain Enter submits.
+    // Not all macOS terminals distinguish Shift+Enter from Enter — iTerm2 and
+    // Kitty do, but Terminal.app sends the same \r for both.
     if (key.return) {
-      props.onSubmit(props.value);
+      if (key.shift) {
+        const before = props.value.slice(0, cursor);
+        const after = props.value.slice(cursor);
+        props.onChange(`${before}\n${after}`);
+        setCursor(cursor + 1);
+      } else {
+        props.onSubmit(props.value);
+      }
       return;
     }
 
