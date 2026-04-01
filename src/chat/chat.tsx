@@ -11,10 +11,12 @@ function useChat() {
   const history = useHistory();
   const [mode, setMode] = useState<ChatMode>({ kind: "input" });
   const [draft, setDraft] = useState("");
+  const [hasHistory, setHasHistory] = useState(false);
 
   /** Pushes a message to history (called on submit). */
   function handleMessage(message: string) {
     history.push(message);
+    setHasHistory(true);
   }
 
   /** Saves the draft and switches to history mode if there are entries. */
@@ -36,13 +38,28 @@ function useChat() {
     setMode({ kind: "input", initialValue: draft });
   }
 
-  return { mode, history, handleMessage, handleUp, handleSelected, handleExit };
+  return {
+    mode,
+    history,
+    hasHistory,
+    handleMessage,
+    handleUp,
+    handleSelected,
+    handleExit,
+  };
 }
 
 /** Chat router — renders ChatInput or MessageHistory based on mode. */
 export function Chat() {
-  const { mode, history, handleMessage, handleUp, handleSelected, handleExit } =
-    useChat();
+  const {
+    mode,
+    history,
+    hasHistory,
+    handleMessage,
+    handleUp,
+    handleSelected,
+    handleExit,
+  } = useChat();
 
   if (mode.kind === "history") {
     return (
@@ -59,7 +76,7 @@ export function Chat() {
       onMessage={handleMessage}
       onUp={handleUp}
       initialValue={mode.initialValue}
-      hasHistory={history.entries.length > 0}
+      hasHistory={hasHistory}
     />
   );
 }

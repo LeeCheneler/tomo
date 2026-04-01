@@ -198,10 +198,25 @@ describe("ChatInput", () => {
       expect(frame).not.toContain("confirm");
     });
 
-    it("shows up history when hasHistory is true", () => {
+    it("shows up history when hasHistory is true and cursor is at start", () => {
       const { lastFrame } = renderInput({ hasHistory: true });
       const frame = lastFrame() ?? "";
       expect(frame).toContain("up");
+      expect(frame).toContain("history");
+    });
+
+    it("hides up history when cursor moves away from start", async () => {
+      const { stdin, lastFrame } = renderInput({ hasHistory: true });
+      await stdin.write("hello");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("history");
+    });
+
+    it("shows up history again when cursor returns to start", async () => {
+      const { stdin, lastFrame } = renderInput({ hasHistory: true });
+      await stdin.write("hi");
+      await stdin.write(keys.up);
+      const frame = lastFrame() ?? "";
       expect(frame).toContain("history");
     });
 

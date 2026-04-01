@@ -47,6 +47,15 @@ describe("Chat", () => {
       expect(frame).not.toContain("hello");
       expect(frame).toContain("❯");
     });
+
+    it("shows up history instruction after first message", async () => {
+      const { stdin, lastFrame } = renderChat();
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("up");
+      expect(frame).toContain("history");
+    });
   });
 
   describe("history navigation", () => {

@@ -1,5 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
+import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
 
 /** Props for the MessageHistory component. */
@@ -52,12 +53,28 @@ function useMessageHistory(props: MessageHistoryProps) {
     }
   });
 
-  return { selectedEntry: props.entries[index] };
+  return {
+    selectedEntry: props.entries[index],
+    canGoUp: index > 0,
+    canGoDown: index < props.entries.length - 1,
+  };
 }
 
 /** Displays a single history entry with bordered layout for browsing. */
 export function MessageHistory(props: MessageHistoryProps) {
-  const { selectedEntry } = useMessageHistory(props);
+  const { selectedEntry, canGoUp, canGoDown } = useMessageHistory(props);
+
+  const instructions = [];
+  if (canGoUp) {
+    instructions.push({ key: "up", description: "next" });
+  }
+  if (canGoDown) {
+    instructions.push({ key: "down", description: "previous" });
+  }
+  instructions.push(
+    { key: canGoDown ? "esc" : "esc/down", description: "return to draft" },
+    { key: "enter", description: "replace draft" },
+  );
 
   return (
     <Box flexDirection="column" paddingTop={1}>
@@ -67,6 +84,9 @@ export function MessageHistory(props: MessageHistoryProps) {
         {selectedEntry}
       </Text>
       <Text color={theme.history}>{buildBorder()}</Text>
+      <Box justifyContent="flex-end" height={1}>
+        <KeyInstructions items={instructions} />
+      </Box>
     </Box>
   );
 }

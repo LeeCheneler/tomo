@@ -112,7 +112,7 @@ export function ChatInput(props: ChatInputProps) {
       description: escPending ? "confirm" : "clear",
     });
   }
-  if (props.hasHistory) {
+  if (props.hasHistory && cursor === 0) {
     instructions.push({ key: "up", description: "history" });
   }
 
