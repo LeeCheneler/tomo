@@ -59,6 +59,7 @@ export function Chat() {
       onMessage={handleMessage}
       onUp={handleUp}
       initialValue={mode.initialValue}
+      hasHistory={history.entries.length > 0}
     />
   );
 }

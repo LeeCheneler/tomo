@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { renderInk } from "../test-utils/ink";
-import { InstructionBar } from "./instruction-bar";
+import { KeyInstructions } from "./key-instructions";
 
-describe("InstructionBar", () => {
+describe("KeyInstructions", () => {
   it("renders a key in yellow followed by a dim description", () => {
     const { lastFrame } = renderInk(
-      <InstructionBar items={[{ key: "enter", description: "submit" }]} />,
+      <KeyInstructions items={[{ key: "enter", description: "submit" }]} />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("enter");
@@ -14,7 +14,7 @@ describe("InstructionBar", () => {
 
   it("renders multiple items separated by a divider", () => {
     const { lastFrame } = renderInk(
-      <InstructionBar
+      <KeyInstructions
         items={[
           { key: "enter", description: "submit" },
           { key: "escape", description: "clear" },
@@ -30,7 +30,7 @@ describe("InstructionBar", () => {
   });
 
   it("renders nothing when items array is empty", () => {
-    const { lastFrame } = renderInk(<InstructionBar items={[]} />);
+    const { lastFrame } = renderInk(<KeyInstructions items={[]} />);
     expect(lastFrame()).toBe("");
   });
 });

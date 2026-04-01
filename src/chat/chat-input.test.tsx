@@ -25,6 +25,7 @@ describe("ChatInput", () => {
       onMessage: (message: string) => void;
       onUp: () => void;
       initialValue: string;
+      hasHistory: boolean;
     }> = {},
   ) {
     setColumns(COLUMNS);
@@ -34,6 +35,7 @@ describe("ChatInput", () => {
         onMessage={overrides.onMessage ?? (() => {})}
         onUp={overrides.onUp}
         initialValue={overrides.initialValue}
+        hasHistory={overrides.hasHistory}
       />,
     );
   }
@@ -138,50 +140,75 @@ describe("ChatInput", () => {
     });
   });
 
-  describe("escape to clear", () => {
-    it("shows hint after first escape when input has content", async () => {
+  describe("instruction bar", () => {
+    it("shows no instructions when input is empty", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("enter");
+      expect(frame).not.toContain("escape");
+    });
+
+    it("does not show confirm after escape on empty input", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("confirm");
+      expect(frame).not.toContain("escape");
+    });
+
+    it("shows enter submit and escape clear when input has content", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("enter");
+      expect(frame).toContain("submit");
+      expect(frame).toContain("escape");
+      expect(frame).toContain("clear");
+    });
+
+    it("switches escape instruction to confirm after first escape", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
-      expect(lastFrame()).toContain("Escape again to clear");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("escape");
+      expect(frame).toContain("confirm");
+      expect(frame).not.toContain("clear");
     });
 
-    it("clears input and hides hint on second escape", async () => {
+    it("reverts escape instruction to clear after second escape", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
       expect(frame).not.toContain("hello");
-      expect(frame).not.toContain("Escape again to clear");
+      expect(frame).not.toContain("escape");
     });
 
-    it("hides hint when user types after first escape", async () => {
+    it("reverts escape instruction to clear when user types", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
       await stdin.write("x");
       const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("Escape again to clear");
       expect(frame).toContain("hellox");
+      expect(frame).toContain("escape");
+      expect(frame).toContain("clear");
+      expect(frame).not.toContain("confirm");
     });
 
-    it("does not show hint when input is empty", async () => {
-      const { stdin, lastFrame } = renderInput();
-      await stdin.write(keys.escape);
-      expect(lastFrame()).not.toContain("Escape again to clear");
-    });
-
-    it("renders hint right-aligned below bottom border", async () => {
-      const { stdin, lastFrame } = renderInput();
-      await stdin.write("hello");
-      await stdin.write(keys.escape);
+    it("shows up history when hasHistory is true", () => {
+      const { lastFrame } = renderInput({ hasHistory: true });
       const frame = lastFrame() ?? "";
-      const lines = frame.split("\n");
-      const hintLine = lines[lines.length - 1];
-      // Hint should be right-aligned: padded spaces + hint text = terminal width.
-      expect(hintLine).toHaveLength(COLUMNS);
-      expect(hintLine.trimStart()).toBe("Escape again to clear");
+      expect(frame).toContain("up");
+      expect(frame).toContain("history");
+    });
+
+    it("does not show up history when hasHistory is false", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("history");
     });
   });
 });

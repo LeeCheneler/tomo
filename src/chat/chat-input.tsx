@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { useRef, useState } from "react";
 import { useTextInput } from "../input/text";
+import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
 
 /** Props for the ChatInput component. */
@@ -11,6 +12,8 @@ export interface ChatInputProps {
   onUp?: (draft: string) => void;
   /** Initial text to populate the input with on mount. */
   initialValue?: string;
+  /** Whether message history is available for browsing. */
+  hasHistory?: boolean;
 }
 
 /** Returns the terminal width, defaulting to 80 if unavailable. */
@@ -95,18 +98,23 @@ export function splitAtCursor(
   };
 }
 
-/** Builds a right-aligned hint string padded to the terminal width. */
-function buildEscapeHint(): string {
-  const hint = "Escape again to clear";
-  const width = getTerminalWidth();
-  const padding = Math.max(0, width - hint.length);
-  return " ".repeat(padding) + hint;
-}
-
 /** Chat input with bordered text area. */
 export function ChatInput(props: ChatInputProps) {
   const { value, cursor, escPending } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
+
+  const hasContent = value.length > 0;
+  const instructions = [];
+  if (hasContent || escPending) {
+    instructions.push({ key: "enter", description: "submit" });
+    instructions.push({
+      key: "escape",
+      description: escPending ? "confirm" : "clear",
+    });
+  }
+  if (props.hasHistory) {
+    instructions.push({ key: "up", description: "history" });
+  }
 
   return (
     <Box flexDirection="column" paddingTop={1}>
@@ -118,7 +126,9 @@ export function ChatInput(props: ChatInputProps) {
         {after}
       </Text>
       <Text color={theme.brand}>{buildBorder()}</Text>
-      {escPending && <Text dimColor>{buildEscapeHint()}</Text>}
+      <Box justifyContent="flex-end" height={1}>
+        <KeyInstructions items={instructions} />
+      </Box>
     </Box>
   );
 }

@@ -6,13 +6,13 @@ export interface InstructionItem {
   description: string;
 }
 
-/** Props for InstructionBar. */
-interface InstructionBarProps {
+/** Props for KeyInstructions. */
+interface KeyInstructionsProps {
   items: InstructionItem[];
 }
 
 /** Renders a row of key–description pairs, yellow key followed by dim description. */
-export function InstructionBar(props: InstructionBarProps) {
+export function KeyInstructions(props: KeyInstructionsProps) {
   if (props.items.length === 0) {
     return null;
   }
