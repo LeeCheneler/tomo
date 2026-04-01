@@ -1,6 +1,6 @@
-import { render } from "ink-testing-library";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { flushInkFrames } from "../test-utils/flush-ink";
+import { renderInk } from "../test-utils/ink";
+import { keys } from "../test-utils/keys";
 import { ChatInput, splitAtCursor } from "./chat-input";
 
 const COLUMNS = 40;
@@ -29,7 +29,7 @@ describe("ChatInput", () => {
   ) {
     setColumns(COLUMNS);
 
-    return render(
+    return renderInk(
       <ChatInput
         onMessage={overrides.onMessage ?? (() => {})}
         onUp={overrides.onUp}
@@ -55,7 +55,7 @@ describe("ChatInput", () => {
     it("falls back to 80 columns when stdout.columns is undefined", () => {
       setColumns(undefined);
 
-      const { lastFrame } = render(<ChatInput onMessage={() => {}} />);
+      const { lastFrame } = renderInk(<ChatInput onMessage={() => {}} />);
 
       const frame = lastFrame() ?? "";
       const lines = frame.split("\n");
@@ -64,52 +64,52 @@ describe("ChatInput", () => {
   });
 
   describe("submit", () => {
-    it("calls onMessage with value on enter", () => {
+    it("calls onMessage with value on enter", async () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({ onMessage });
-      stdin.write("hello");
-      stdin.write("\r");
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
       expect(onMessage).toHaveBeenCalledWith("hello");
     });
 
-    it("does not call onMessage when value is empty", () => {
+    it("does not call onMessage when value is empty", async () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({ onMessage });
-      stdin.write("\r");
+      await stdin.write(keys.enter);
       expect(onMessage).not.toHaveBeenCalled();
     });
 
-    it("does not call onMessage when value is only whitespace", () => {
+    it("does not call onMessage when value is only whitespace", async () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({ onMessage });
-      stdin.write("   ");
-      stdin.write("\r");
+      await stdin.write("   ");
+      await stdin.write(keys.enter);
       expect(onMessage).not.toHaveBeenCalled();
     });
 
-    it("clears input after submit so next submit requires new input", () => {
+    it("clears input after submit so next submit requires new input", async () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({ onMessage });
-      stdin.write("hello");
-      stdin.write("\r");
-      stdin.write("\r");
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
+      await stdin.write(keys.enter);
       expect(onMessage).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("onUp", () => {
-    it("calls onUp when up arrow is pressed with cursor at start", () => {
+    it("calls onUp when up arrow is pressed with cursor at start", async () => {
       const onUp = vi.fn();
       const { stdin } = renderInput({ onUp });
-      stdin.write("\x1B[A");
+      await stdin.write(keys.up);
       expect(onUp).toHaveBeenCalledOnce();
     });
 
-    it("does not call onUp when cursor is not at start", () => {
+    it("does not call onUp when cursor is not at start", async () => {
       const onUp = vi.fn();
       const { stdin } = renderInput({ onUp });
-      stdin.write("hello");
-      stdin.write("\x1B[A");
+      await stdin.write("hello");
+      await stdin.write(keys.up);
       expect(onUp).not.toHaveBeenCalled();
     });
   });
@@ -131,19 +131,16 @@ describe("ChatInput", () => {
   describe("escape to clear", () => {
     it("shows hint after first escape when input has content", async () => {
       const { stdin, lastFrame } = renderInput();
-      stdin.write("hello");
-      stdin.write("\x1b");
-      await flushInkFrames();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
       expect(lastFrame()).toContain("Escape again to clear");
     });
 
     it("clears input and hides hint on second escape", async () => {
       const { stdin, lastFrame } = renderInput();
-      stdin.write("hello");
-      stdin.write("\x1b");
-      await flushInkFrames();
-      stdin.write("\x1b");
-      await flushInkFrames();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
       expect(frame).not.toContain("hello");
       expect(frame).not.toContain("Escape again to clear");
@@ -151,11 +148,9 @@ describe("ChatInput", () => {
 
     it("hides hint when user types after first escape", async () => {
       const { stdin, lastFrame } = renderInput();
-      stdin.write("hello");
-      stdin.write("\x1b");
-      await flushInkFrames();
-      stdin.write("x");
-      await flushInkFrames();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write("x");
       const frame = lastFrame() ?? "";
       expect(frame).not.toContain("Escape again to clear");
       expect(frame).toContain("hellox");
@@ -163,16 +158,14 @@ describe("ChatInput", () => {
 
     it("does not show hint when input is empty", async () => {
       const { stdin, lastFrame } = renderInput();
-      stdin.write("\x1b");
-      await flushInkFrames();
+      await stdin.write(keys.escape);
       expect(lastFrame()).not.toContain("Escape again to clear");
     });
 
     it("renders hint right-aligned below bottom border", async () => {
       const { stdin, lastFrame } = renderInput();
-      stdin.write("hello");
-      stdin.write("\x1b");
-      await flushInkFrames();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
       const lines = frame.split("\n");
       const hintLine = lines[lines.length - 1];

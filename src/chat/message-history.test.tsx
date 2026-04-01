@@ -1,6 +1,6 @@
-import { render } from "ink-testing-library";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { flushInkFrames } from "../test-utils/flush-ink";
+import { renderInk } from "../test-utils/ink";
+import { keys } from "../test-utils/keys";
 import { MessageHistory } from "./message-history";
 
 const COLUMNS = 40;
@@ -29,7 +29,7 @@ describe("MessageHistory", () => {
   ) {
     setColumns(COLUMNS);
 
-    return render(
+    return renderInk(
       <MessageHistory
         entries={overrides.entries ?? ["first", "second", "third"]}
         onSelected={overrides.onSelected ?? (() => {})}
@@ -60,7 +60,7 @@ describe("MessageHistory", () => {
     it("falls back to 80 columns when stdout.columns is undefined", () => {
       setColumns(undefined);
 
-      const { lastFrame } = render(
+      const { lastFrame } = renderInk(
         <MessageHistory
           entries={["hello"]}
           onSelected={() => {}}
@@ -77,27 +77,23 @@ describe("MessageHistory", () => {
   describe("navigation", () => {
     it("navigates to previous entry on up arrow", async () => {
       const { stdin, lastFrame } = renderHistory();
-      stdin.write("\x1b[A");
-      await flushInkFrames();
+      await stdin.write(keys.up);
       expect(lastFrame()).toContain("second");
     });
 
     it("navigates to next entry on down arrow", async () => {
       const { stdin, lastFrame } = renderHistory();
-      stdin.write("\x1b[A");
-      await flushInkFrames();
-      stdin.write("\x1b[B");
-      await flushInkFrames();
+      await stdin.write(keys.up);
+      await stdin.write(keys.down);
       expect(lastFrame()).toContain("third");
     });
 
     it("does not navigate past the first entry", async () => {
       const { stdin, lastFrame } = renderHistory();
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
-      await flushInkFrames();
+      await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      await stdin.write(keys.up);
       expect(lastFrame()).toContain("first");
     });
 
@@ -105,8 +101,7 @@ describe("MessageHistory", () => {
       const onExit = vi.fn();
       const onSelected = vi.fn();
       const { stdin, lastFrame } = renderHistory({ onExit, onSelected });
-      stdin.write("x");
-      await flushInkFrames();
+      await stdin.write("x");
       expect(lastFrame()).toContain("third");
       expect(onExit).not.toHaveBeenCalled();
       expect(onSelected).not.toHaveBeenCalled();
@@ -115,48 +110,43 @@ describe("MessageHistory", () => {
     it("navigates down through middle entries without exiting", async () => {
       const onExit = vi.fn();
       const { stdin, lastFrame } = renderHistory({ onExit });
-      // Navigate to first entry, then back down to second.
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
-      await flushInkFrames();
-      stdin.write("\x1b[B");
-      await flushInkFrames();
+      await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      await stdin.write(keys.down);
       expect(lastFrame()).toContain("second");
       expect(onExit).not.toHaveBeenCalled();
     });
   });
 
   describe("exit", () => {
-    it("calls onExit when down arrow pressed on last entry", () => {
+    it("calls onExit when down arrow pressed on last entry", async () => {
       const onExit = vi.fn();
       const { stdin } = renderHistory({ onExit });
-      stdin.write("\x1b[B");
+      await stdin.write(keys.down);
       expect(onExit).toHaveBeenCalledOnce();
     });
 
     it("calls onExit when escape is pressed", async () => {
       const onExit = vi.fn();
       const { stdin } = renderHistory({ onExit });
-      stdin.write("\x1b");
-      await flushInkFrames();
+      await stdin.write(keys.escape);
       expect(onExit).toHaveBeenCalledOnce();
     });
   });
 
   describe("selection", () => {
-    it("calls onSelected with current entry on enter", () => {
+    it("calls onSelected with current entry on enter", async () => {
       const onSelected = vi.fn();
       const { stdin } = renderHistory({ onSelected });
-      stdin.write("\r");
+      await stdin.write(keys.enter);
       expect(onSelected).toHaveBeenCalledWith("third");
     });
 
     it("calls onSelected with navigated entry on enter", async () => {
       const onSelected = vi.fn();
       const { stdin } = renderHistory({ onSelected });
-      stdin.write("\x1b[A");
-      await flushInkFrames();
-      stdin.write("\r");
+      await stdin.write(keys.up);
+      await stdin.write(keys.enter);
       expect(onSelected).toHaveBeenCalledWith("second");
     });
   });

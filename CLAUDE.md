@@ -163,8 +163,14 @@ If a test is hard to write without mocking internals, that's a signal the code n
 
 - Test what a function returns or what a component renders, not how it gets there.
 - For hooks: test the state transitions through the returned values.
-- For components: render with ink-testing-library, simulate input, assert on `lastFrame()`.
+- For components: render with `renderInk` from `src/test-utils/ink`, simulate input, assert on `lastFrame()`.
 - Do not assert on internal state or implementation details.
+
+### Test Utilities
+
+- **Rendering:** Use `renderInk()` from `src/test-utils/ink` instead of `render` from `ink-testing-library`. It wraps `stdin.write()` to auto-flush Ink's input parser and React re-renders, so every `stdin.write()` returns a `Promise` and should be awaited.
+- **Key constants:** Use `keys` from `src/test-utils/keys` for special key inputs instead of raw escape sequences. Write `stdin.write(keys.up)` not `stdin.write("\x1b[A")`.
+- Never import directly from `ink-testing-library` in test files.
 
 ### Integration Tests
 

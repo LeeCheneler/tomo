@@ -1,4 +1,4 @@
-import { render } from "ink-testing-library";
+import { renderInk } from "../test-utils/ink";
 import { describe, expect, it } from "vitest";
 import { useHistory } from "./use-history";
 
@@ -12,7 +12,7 @@ function renderHistory() {
     return null;
   }
 
-  render(<Harness />);
+  renderInk(<Harness />);
 
   return {
     get current() {
