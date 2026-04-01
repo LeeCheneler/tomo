@@ -1,5 +1,6 @@
 import { render } from "ink-testing-library";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { flushInkFrames } from "../test-utils/flush-ink";
 import { ChatInput, splitAtCursor } from "./chat-input";
 
 const COLUMNS = 40;
@@ -124,6 +125,60 @@ describe("ChatInput", () => {
       const frame = lastFrame() ?? "";
       // Only the prompt marker and cursor placeholder should be between borders.
       expect(frame).not.toContain("hello");
+    });
+  });
+
+  describe("escape to clear", () => {
+    it("shows hint after first escape when input has content", async () => {
+      const { stdin, lastFrame } = renderInput();
+      stdin.write("hello");
+      stdin.write("\x1b");
+      await flushInkFrames();
+      expect(lastFrame()).toContain("Escape again to clear");
+    });
+
+    it("clears input and hides hint on second escape", async () => {
+      const { stdin, lastFrame } = renderInput();
+      stdin.write("hello");
+      stdin.write("\x1b");
+      await flushInkFrames();
+      stdin.write("\x1b");
+      await flushInkFrames();
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("hello");
+      expect(frame).not.toContain("Escape again to clear");
+    });
+
+    it("hides hint when user types after first escape", async () => {
+      const { stdin, lastFrame } = renderInput();
+      stdin.write("hello");
+      stdin.write("\x1b");
+      await flushInkFrames();
+      stdin.write("x");
+      await flushInkFrames();
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("Escape again to clear");
+      expect(frame).toContain("hellox");
+    });
+
+    it("does not show hint when input is empty", async () => {
+      const { stdin, lastFrame } = renderInput();
+      stdin.write("\x1b");
+      await flushInkFrames();
+      expect(lastFrame()).not.toContain("Escape again to clear");
+    });
+
+    it("renders hint right-aligned below bottom border", async () => {
+      const { stdin, lastFrame } = renderInput();
+      stdin.write("hello");
+      stdin.write("\x1b");
+      await flushInkFrames();
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      const hintLine = lines[lines.length - 1];
+      // Hint should be right-aligned: padded spaces + hint text = terminal width.
+      expect(hintLine).toHaveLength(COLUMNS);
+      expect(hintLine.trimStart()).toBe("Escape again to clear");
     });
   });
 });

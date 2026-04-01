@@ -1,6 +1,7 @@
 import { render } from "ink-testing-library";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { flushInkFrames } from "../test-utils/flush-ink";
 import { type LineMode, useTextInput } from "./text";
 
 /** Test harness that renders useTextInput and exposes cursor position. */
@@ -11,6 +12,7 @@ function Harness(props: {
   lineMode: LineMode;
   onUp?: () => void;
   onDown?: () => void;
+  onEscape?: () => void;
   onCursor?: (cursor: number) => void;
   onSetCursor?: (setCursor: (pos: number) => void) => void;
 }) {
@@ -21,6 +23,7 @@ function Harness(props: {
     lineMode: props.lineMode,
     onUp: props.onUp,
     onDown: props.onDown,
+    onEscape: props.onEscape,
   });
   props.onCursor?.(cursor);
   props.onSetCursor?.(setCursor);
@@ -36,6 +39,7 @@ function renderHarness(
     lineMode: LineMode;
     onUp: () => void;
     onDown: () => void;
+    onEscape: () => void;
     onCursor: (cursor: number) => void;
     onSetCursor: (setCursor: (pos: number) => void) => void;
   }> = {},
@@ -48,6 +52,7 @@ function renderHarness(
       lineMode: overrides.lineMode ?? "multi",
       onUp: overrides.onUp,
       onDown: overrides.onDown,
+      onEscape: overrides.onEscape,
       onCursor: overrides.onCursor,
       onSetCursor: overrides.onSetCursor,
     }),
@@ -148,6 +153,16 @@ describe("useTextInput", () => {
       const { stdin } = renderHarness({ value: "hello", onChange });
       stdin.write("\x1b");
       expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("calls onEscape when escape key is pressed", async () => {
+      const onEscape = vi.fn();
+      const { stdin } = renderHarness({ value: "hello", onEscape });
+      stdin.write("\x1b");
+      // Ink's input parser holds standalone ESC as pending and flushes
+      // it via setImmediate, so we need to wait for frames to flush.
+      await flushInkFrames();
+      expect(onEscape).toHaveBeenCalledOnce();
     });
 
     it("ignores tab key", () => {
