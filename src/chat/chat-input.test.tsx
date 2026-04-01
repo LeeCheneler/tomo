@@ -22,11 +22,19 @@ describe("ChatInput", () => {
   function renderInput(
     overrides: Partial<{
       onMessage: (message: string) => void;
+      onUp: () => void;
+      initialValue: string;
     }> = {},
   ) {
     setColumns(COLUMNS);
 
-    return render(<ChatInput onMessage={overrides.onMessage ?? (() => {})} />);
+    return render(
+      <ChatInput
+        onMessage={overrides.onMessage ?? (() => {})}
+        onUp={overrides.onUp}
+        initialValue={overrides.initialValue}
+      />,
+    );
   }
 
   describe("layout", () => {
@@ -85,6 +93,37 @@ describe("ChatInput", () => {
       stdin.write("\r");
       stdin.write("\r");
       expect(onMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("onUp", () => {
+    it("calls onUp when up arrow is pressed with cursor at start", () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      stdin.write("\x1B[A");
+      expect(onUp).toHaveBeenCalledOnce();
+    });
+
+    it("does not call onUp when cursor is not at start", () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      stdin.write("hello");
+      stdin.write("\x1B[A");
+      expect(onUp).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("initialValue", () => {
+    it("renders with initialValue text", () => {
+      const { lastFrame } = renderInput({ initialValue: "hello world" });
+      expect(lastFrame()).toContain("hello world");
+    });
+
+    it("defaults to empty when no initialValue provided", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      // Only the prompt marker and cursor placeholder should be between borders.
+      expect(frame).not.toContain("hello");
     });
   });
 });

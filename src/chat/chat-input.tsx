@@ -7,6 +7,10 @@ import { theme } from "../ui/theme";
 export interface ChatInputProps {
   /** Called when the user submits a message. */
   onMessage: (message: string) => void;
+  /** Called when up arrow is pressed at the start of the input. */
+  onUp?: () => void;
+  /** Initial text to populate the input with on mount. */
+  initialValue?: string;
 }
 
 /** Returns the terminal width, defaulting to 80 if unavailable. */
@@ -21,10 +25,11 @@ function buildBorder(): string {
 
 /** Manages chat input state and submission. */
 function useChatInput(props: ChatInputProps) {
-  const [value, setValue] = useState("");
+  const initial = props.initialValue ?? "";
+  const [value, setValue] = useState(initial);
   // Ref keeps value fresh across batched React updates so submit
   // always sees the latest input even before re-render.
-  const valueRef = useRef("");
+  const valueRef = useRef(initial);
 
   /** Updates value in both state (for rendering) and ref (for callbacks). */
   function handleChange(newValue: string) {
@@ -48,6 +53,7 @@ function useChatInput(props: ChatInputProps) {
     onChange: handleChange,
     onSubmit: handleSubmit,
     lineMode: "multi",
+    onUp: props.onUp,
   });
 
   return { value, cursor };
