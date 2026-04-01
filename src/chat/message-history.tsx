@@ -1,5 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
+import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
 
@@ -53,28 +54,22 @@ function useMessageHistory(props: MessageHistoryProps) {
     }
   });
 
-  return {
-    selectedEntry: props.entries[index],
-    canGoUp: index > 0,
-    canGoDown: index < props.entries.length - 1,
-  };
+  const canGoUp = index > 0;
+  const canGoDown = index < props.entries.length - 1;
+
+  const instructions = [
+    canGoUp && { key: "up", description: "next" },
+    canGoDown && { key: "down", description: "previous" },
+    { key: canGoDown ? "esc" : "esc/down", description: "return to draft" },
+    { key: "enter", description: "replace draft" },
+  ].filter((i): i is InstructionItem => Boolean(i));
+
+  return { selectedEntry: props.entries[index], instructions };
 }
 
 /** Displays a single history entry with bordered layout for browsing. */
 export function MessageHistory(props: MessageHistoryProps) {
-  const { selectedEntry, canGoUp, canGoDown } = useMessageHistory(props);
-
-  const instructions = [];
-  if (canGoUp) {
-    instructions.push({ key: "up", description: "next" });
-  }
-  if (canGoDown) {
-    instructions.push({ key: "down", description: "previous" });
-  }
-  instructions.push(
-    { key: canGoDown ? "esc" : "esc/down", description: "return to draft" },
-    { key: "enter", description: "replace draft" },
-  );
+  const { selectedEntry, instructions } = useMessageHistory(props);
 
   return (
     <Box flexDirection="column" paddingTop={1}>

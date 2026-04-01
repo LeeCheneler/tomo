@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { useRef, useState } from "react";
 import { useTextInput } from "../input/text";
+import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
 
@@ -79,7 +80,17 @@ function useChatInput(props: ChatInputProps) {
     onEscape: handleEscape,
   });
 
-  return { value, cursor, escPending };
+  const hasContent = value.length > 0;
+  const instructions = [
+    (hasContent || escPending) && { key: "enter", description: "submit" },
+    (hasContent || escPending) && {
+      key: "escape",
+      description: escPending ? "confirm" : "clear",
+    },
+    props.hasHistory && cursor === 0 && { key: "up", description: "history" },
+  ].filter((i): i is InstructionItem => Boolean(i));
+
+  return { value, cursor, instructions };
 }
 
 /** Splits a value around a cursor position for rendering. */
@@ -100,21 +111,8 @@ export function splitAtCursor(
 
 /** Chat input with bordered text area. */
 export function ChatInput(props: ChatInputProps) {
-  const { value, cursor, escPending } = useChatInput(props);
+  const { value, cursor, instructions } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
-
-  const hasContent = value.length > 0;
-  const instructions = [];
-  if (hasContent || escPending) {
-    instructions.push({ key: "enter", description: "submit" });
-    instructions.push({
-      key: "escape",
-      description: escPending ? "confirm" : "clear",
-    });
-  }
-  if (props.hasHistory && cursor === 0) {
-    instructions.push({ key: "up", description: "history" });
-  }
 
   return (
     <Box flexDirection="column" paddingTop={1}>
