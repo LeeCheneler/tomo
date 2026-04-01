@@ -1,6 +1,7 @@
-import { render } from "ink-testing-library";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { renderInk } from "../test-utils/ink";
+import { keys } from "../test-utils/keys";
 import { type LineMode, useTextInput } from "./text";
 
 /** Test harness that renders useTextInput and exposes cursor position. */
@@ -11,6 +12,7 @@ function Harness(props: {
   lineMode: LineMode;
   onUp?: () => void;
   onDown?: () => void;
+  onEscape?: () => void;
   onCursor?: (cursor: number) => void;
   onSetCursor?: (setCursor: (pos: number) => void) => void;
 }) {
@@ -21,6 +23,7 @@ function Harness(props: {
     lineMode: props.lineMode,
     onUp: props.onUp,
     onDown: props.onDown,
+    onEscape: props.onEscape,
   });
   props.onCursor?.(cursor);
   props.onSetCursor?.(setCursor);
@@ -36,11 +39,12 @@ function renderHarness(
     lineMode: LineMode;
     onUp: () => void;
     onDown: () => void;
+    onEscape: () => void;
     onCursor: (cursor: number) => void;
     onSetCursor: (setCursor: (pos: number) => void) => void;
   }> = {},
 ) {
-  return render(
+  return renderInk(
     createElement(Harness, {
       value: overrides.value ?? "",
       onChange: overrides.onChange ?? (() => {}),
@@ -48,6 +52,7 @@ function renderHarness(
       lineMode: overrides.lineMode ?? "multi",
       onUp: overrides.onUp,
       onDown: overrides.onDown,
+      onEscape: overrides.onEscape,
       onCursor: overrides.onCursor,
       onSetCursor: overrides.onSetCursor,
     }),
@@ -66,51 +71,51 @@ describe("useTextInput", () => {
     it("removes character on backspace (ctrl+h)", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x08");
+      stdin.write(keys.backspace);
       expect(onChange).toHaveBeenCalledWith("hell");
     });
 
     it("removes character on backspace (macOS delete)", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x7f");
+      stdin.write(keys.delete);
       expect(onChange).toHaveBeenCalledWith("hell");
     });
 
     it("does not call onChange on backspace when empty", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "", onChange });
-      stdin.write("\x08");
+      stdin.write(keys.backspace);
       expect(onChange).not.toHaveBeenCalled();
     });
 
     it("calls onSubmit on enter", () => {
       const onSubmit = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onSubmit });
-      stdin.write("\r");
+      stdin.write(keys.enter);
       expect(onSubmit).toHaveBeenCalledWith("hello");
     });
 
     it("inserts newline on shift+enter", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x1b[13;2u");
+      stdin.write(keys.shiftEnter);
       expect(onChange).toHaveBeenCalledWith("hello\n");
     });
 
     it("inserts newline at cursor position on shift+enter", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[13;2u");
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.shiftEnter);
       expect(onChange).toHaveBeenCalledWith("hel\nlo");
     });
 
     it("does not call onSubmit on shift+enter in multi mode", () => {
       const onSubmit = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onSubmit });
-      stdin.write("\x1b[13;2u");
+      stdin.write(keys.shiftEnter);
       expect(onSubmit).not.toHaveBeenCalled();
     });
 
@@ -121,7 +126,7 @@ describe("useTextInput", () => {
         onSubmit,
         lineMode: "single",
       });
-      stdin.write("\x1b[13;2u");
+      stdin.write(keys.shiftEnter);
       expect(onSubmit).toHaveBeenCalledWith("hello");
     });
 
@@ -132,28 +137,35 @@ describe("useTextInput", () => {
         onChange,
         lineMode: "single",
       });
-      stdin.write("\x1b[13;2u");
+      stdin.write(keys.shiftEnter);
       expect(onChange).not.toHaveBeenCalled();
     });
 
     it("ignores ctrl key combinations", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x01");
+      stdin.write(keys.ctrlA);
       expect(onChange).not.toHaveBeenCalled();
     });
 
     it("ignores escape key", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x1b");
+      stdin.write(keys.escape);
       expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("calls onEscape when escape key is pressed", async () => {
+      const onEscape = vi.fn();
+      const { stdin } = renderHarness({ value: "hello", onEscape });
+      await stdin.write(keys.escape);
+      expect(onEscape).toHaveBeenCalledOnce();
     });
 
     it("ignores tab key", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\t");
+      stdin.write(keys.tab);
       expect(onChange).not.toHaveBeenCalled();
     });
   });
@@ -162,7 +174,7 @@ describe("useTextInput", () => {
     it("inserts at cursor position after moving left", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "helo", onChange });
-      stdin.write("\x1b[D");
+      stdin.write(keys.left);
       stdin.write("l");
       expect(onChange).toHaveBeenCalledWith("hello");
     });
@@ -170,25 +182,25 @@ describe("useTextInput", () => {
     it("deletes before cursor position after moving left", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x1b[D");
-      stdin.write("\x08");
+      stdin.write(keys.left);
+      stdin.write(keys.backspace);
       expect(onChange).toHaveBeenCalledWith("helo");
     });
 
     it("does not backspace past the beginning", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "a", onChange });
-      stdin.write("\x1b[D");
-      stdin.write("\x08");
+      stdin.write(keys.left);
+      stdin.write(keys.backspace);
       expect(onChange).not.toHaveBeenCalled();
     });
 
     it("moves cursor left and right", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "abc", onChange });
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[C");
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.right);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("abxc");
     });
@@ -196,11 +208,11 @@ describe("useTextInput", () => {
     it("does not move cursor left past beginning", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "ab", onChange });
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("xab");
     });
@@ -208,9 +220,9 @@ describe("useTextInput", () => {
     it("does not move cursor right past end", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "ab", onChange });
-      stdin.write("\x1b[C");
-      stdin.write("\x1b[C");
-      stdin.write("\x1b[C");
+      stdin.write(keys.right);
+      stdin.write(keys.right);
+      stdin.write(keys.right);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("abx");
     });
@@ -233,7 +245,7 @@ describe("useTextInput", () => {
     it("advances cursor to end of pasted text", () => {
       const onChange = vi.fn();
       const { stdin, rerender } = renderHarness({ value: "ac", onChange });
-      stdin.write("\x1b[D");
+      stdin.write(keys.left);
       stdin.write("xyz");
       expect(onChange).toHaveBeenCalledWith("axyzc");
       onChange.mockClear();
@@ -253,7 +265,7 @@ describe("useTextInput", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
       // Cursor at end (5), up moves to start (0)
-      stdin.write("\x1b[A");
+      stdin.write(keys.up);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("xhello");
     });
@@ -262,8 +274,8 @@ describe("useTextInput", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
       // Move to start, down moves to end
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[B");
+      stdin.write(keys.up);
+      stdin.write(keys.down);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hellox");
     });
@@ -273,7 +285,7 @@ describe("useTextInput", () => {
       const { stdin } = renderHarness({ value: "abc\ndef", onChange });
       // Cursor at end (7), which is column 3 on line 2.
       // Up should go to column 3 on line 1 (position 3).
-      stdin.write("\x1b[A");
+      stdin.write(keys.up);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("abcx\ndef");
     });
@@ -283,7 +295,7 @@ describe("useTextInput", () => {
       const { stdin } = renderHarness({ value: "ab\ndefgh", onChange });
       // Cursor at end (8), column 5 on line 2. Line 1 is "ab" (length 2).
       // Up clamps to column 2 (position 2).
-      stdin.write("\x1b[A");
+      stdin.write(keys.up);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("abx\ndefgh");
     });
@@ -292,13 +304,13 @@ describe("useTextInput", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "abc\ndef", onChange });
       // Move to position 2 (column 2 on line 1).
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
       // Cursor at 2. Down should go to column 2 on line 2 (position 6).
-      stdin.write("\x1b[B");
+      stdin.write(keys.down);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("abc\ndexf");
     });
@@ -307,18 +319,18 @@ describe("useTextInput", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "abcde\nfg", onChange });
       // Cursor at end of line 1 (5), column 5. Move to position 3 (column 3).
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
-      stdin.write("\x1b[D");
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.left);
       // Cursor at 0, move right to 3
-      stdin.write("\x1b[C");
-      stdin.write("\x1b[C");
-      stdin.write("\x1b[C");
+      stdin.write(keys.right);
+      stdin.write(keys.right);
+      stdin.write(keys.right);
       // Cursor at 3, column 3 on line 1. Line 2 is "fg" (length 2).
       // Down clamps to column 2 (position 8).
-      stdin.write("\x1b[B");
+      stdin.write(keys.down);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("abcde\nfgx");
     });
@@ -326,7 +338,7 @@ describe("useTextInput", () => {
     it("option+left jumps to start of previous word", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello world", onChange });
-      stdin.write("\x1b[1;3D");
+      stdin.write(keys.optionLeft);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hello xworld");
     });
@@ -334,8 +346,8 @@ describe("useTextInput", () => {
     it("option+left jumps across multiple words", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "one two three", onChange });
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("one xtwo three");
     });
@@ -343,8 +355,8 @@ describe("useTextInput", () => {
     it("option+left from start stays at 0", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("xhello");
     });
@@ -352,9 +364,9 @@ describe("useTextInput", () => {
     it("option+right jumps to end of next word", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello world", onChange });
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3C");
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionRight);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hellox world");
     });
@@ -362,7 +374,7 @@ describe("useTextInput", () => {
     it("option+right from end stays at end", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onChange });
-      stdin.write("\x1b[1;3C");
+      stdin.write(keys.optionRight);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hellox");
     });
@@ -370,8 +382,8 @@ describe("useTextInput", () => {
     it("option+left skips multiple spaces between words", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello  world", onChange });
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("xhello  world");
     });
@@ -379,10 +391,10 @@ describe("useTextInput", () => {
     it("option+right skips multiple spaces between words", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello  world", onChange });
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3C");
-      stdin.write("\x1b[1;3C");
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionRight);
+      stdin.write(keys.optionRight);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hello  worldx");
     });
@@ -390,7 +402,7 @@ describe("useTextInput", () => {
     it("option+left stops at newline boundary", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello\nworld", onChange });
-      stdin.write("\x1b[1;3D");
+      stdin.write(keys.optionLeft);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hello\nxworld");
     });
@@ -398,9 +410,9 @@ describe("useTextInput", () => {
     it("option+right stops at newline boundary", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello\nworld", onChange });
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3C");
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionRight);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hellox\nworld");
     });
@@ -408,7 +420,7 @@ describe("useTextInput", () => {
     it("option+left stops at punctuation boundary", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello-world", onChange });
-      stdin.write("\x1b[1;3D");
+      stdin.write(keys.optionLeft);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hello-xworld");
     });
@@ -416,9 +428,9 @@ describe("useTextInput", () => {
     it("option+right stops at punctuation boundary", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello-world", onChange });
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3C");
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionRight);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hellox-world");
     });
@@ -427,9 +439,9 @@ describe("useTextInput", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "https://example", onChange });
       // From end: "example"(8) → skip "://"(5) → "https"(0)
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
-      stdin.write("\x1b[1;3D");
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("xhttps://example");
     });
@@ -437,7 +449,7 @@ describe("useTextInput", () => {
     it("option+left via readline sequence jumps to start of previous word", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello world", onChange });
-      stdin.write("\x1bb");
+      stdin.write(keys.readlineWordLeft);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hello xworld");
     });
@@ -445,9 +457,9 @@ describe("useTextInput", () => {
     it("option+right via readline sequence jumps to end of next word", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello world", onChange });
-      stdin.write("\x1bb");
-      stdin.write("\x1bb");
-      stdin.write("\x1bf");
+      stdin.write(keys.readlineWordLeft);
+      stdin.write(keys.readlineWordLeft);
+      stdin.write(keys.readlineWordRight);
       stdin.write("x");
       expect(onChange).toHaveBeenCalledWith("hellox world");
     });
@@ -456,8 +468,8 @@ describe("useTextInput", () => {
       const onUp = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onUp });
       // First up moves to start, second up fires onUp
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
+      stdin.write(keys.up);
+      stdin.write(keys.up);
       expect(onUp).toHaveBeenCalledOnce();
     });
 
@@ -465,7 +477,7 @@ describe("useTextInput", () => {
       const onUp = vi.fn();
       const { stdin } = renderHarness({ value: "abc\ndef", onUp });
       // Cursor at end (line 2). Up goes to line 1, not onUp.
-      stdin.write("\x1b[A");
+      stdin.write(keys.up);
       expect(onUp).not.toHaveBeenCalled();
     });
 
@@ -473,10 +485,10 @@ describe("useTextInput", () => {
       const onDown = vi.fn();
       const { stdin } = renderHarness({ value: "hello", onDown });
       // Move to start, then down moves to end, second down fires onDown.
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[B");
-      stdin.write("\x1b[B");
+      stdin.write(keys.up);
+      stdin.write(keys.up);
+      stdin.write(keys.down);
+      stdin.write(keys.down);
       expect(onDown).toHaveBeenCalledOnce();
     });
 
@@ -484,8 +496,8 @@ describe("useTextInput", () => {
       const onDown = vi.fn();
       const { stdin } = renderHarness({ value: "abc\ndef", onDown });
       // Move to start (line 1). Down goes to line 2, not onDown.
-      stdin.write("\x1b[A");
-      stdin.write("\x1b[B");
+      stdin.write(keys.up);
+      stdin.write(keys.down);
       expect(onDown).not.toHaveBeenCalled();
     });
 

@@ -1,11 +1,11 @@
-import { render } from "ink-testing-library";
 import { Box, Text } from "ink";
 import { describe, expect, it } from "vitest";
+import { renderInk } from "../../test-utils/ink";
 import { BlankLine } from "./blank-line";
 
 describe("BlankLine", () => {
   it("renders a blank line between content", () => {
-    const { lastFrame } = render(
+    const { lastFrame } = renderInk(
       <Box flexDirection="column">
         <Text>above</Text>
         <BlankLine />

@@ -1,5 +1,5 @@
 import { Box, Static } from "ink";
-import { ChatInput } from "./chat/chat-input";
+import { Chat } from "./chat/chat";
 import { useConfig } from "./config/hook";
 import { AppHeader } from "./ui/app-header";
 import { version } from "./utils/version";
@@ -22,7 +22,7 @@ export function App() {
           </Box>
         )}
       </Static>
-      <ChatInput onMessage={() => {}} />
+      <Chat />
     </>
   );
 }

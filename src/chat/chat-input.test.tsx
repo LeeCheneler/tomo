@@ -1,5 +1,6 @@
-import { render } from "ink-testing-library";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderInk } from "../test-utils/ink";
+import { keys } from "../test-utils/keys";
 import { ChatInput, splitAtCursor } from "./chat-input";
 
 const COLUMNS = 40;
@@ -22,11 +23,19 @@ describe("ChatInput", () => {
   function renderInput(
     overrides: Partial<{
       onMessage: (message: string) => void;
+      onUp: () => void;
+      initialValue: string;
     }> = {},
   ) {
     setColumns(COLUMNS);
 
-    return render(<ChatInput onMessage={overrides.onMessage ?? (() => {})} />);
+    return renderInk(
+      <ChatInput
+        onMessage={overrides.onMessage ?? (() => {})}
+        onUp={overrides.onUp}
+        initialValue={overrides.initialValue}
+      />,
+    );
   }
 
   describe("layout", () => {
@@ -46,7 +55,7 @@ describe("ChatInput", () => {
     it("falls back to 80 columns when stdout.columns is undefined", () => {
       setColumns(undefined);
 
-      const { lastFrame } = render(<ChatInput onMessage={() => {}} />);
+      const { lastFrame } = renderInk(<ChatInput onMessage={() => {}} />);
 
       const frame = lastFrame() ?? "";
       const lines = frame.split("\n");
@@ -55,36 +64,124 @@ describe("ChatInput", () => {
   });
 
   describe("submit", () => {
-    it("calls onMessage with value on enter", () => {
+    it("calls onMessage with value on enter", async () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({ onMessage });
-      stdin.write("hello");
-      stdin.write("\r");
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
       expect(onMessage).toHaveBeenCalledWith("hello");
     });
 
-    it("does not call onMessage when value is empty", () => {
+    it("does not call onMessage when value is empty", async () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({ onMessage });
-      stdin.write("\r");
+      await stdin.write(keys.enter);
       expect(onMessage).not.toHaveBeenCalled();
     });
 
-    it("does not call onMessage when value is only whitespace", () => {
+    it("does not call onMessage when value is only whitespace", async () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({ onMessage });
-      stdin.write("   ");
-      stdin.write("\r");
+      await stdin.write("   ");
+      await stdin.write(keys.enter);
       expect(onMessage).not.toHaveBeenCalled();
     });
 
-    it("clears input after submit so next submit requires new input", () => {
+    it("clears input after submit so next submit requires new input", async () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({ onMessage });
-      stdin.write("hello");
-      stdin.write("\r");
-      stdin.write("\r");
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
+      await stdin.write(keys.enter);
       expect(onMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("onUp", () => {
+    it("calls onUp with current value when up arrow is pressed at cursor start", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      await stdin.write("my draft");
+      await stdin.write(keys.up);
+      // First up moves cursor to start, second up fires onUp.
+      await stdin.write(keys.up);
+      expect(onUp).toHaveBeenCalledWith("my draft");
+    });
+
+    it("calls onUp with empty string when input is empty", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      await stdin.write(keys.up);
+      expect(onUp).toHaveBeenCalledWith("");
+    });
+
+    it("does not call onUp when cursor is not at start", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      await stdin.write("hello");
+      await stdin.write(keys.up);
+      expect(onUp).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("initialValue", () => {
+    it("renders with initialValue text", () => {
+      const { lastFrame } = renderInput({ initialValue: "hello world" });
+      expect(lastFrame()).toContain("hello world");
+    });
+
+    it("defaults to empty when no initialValue provided", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      // Only the prompt marker and cursor placeholder should be between borders.
+      expect(frame).not.toContain("hello");
+    });
+  });
+
+  describe("escape to clear", () => {
+    it("shows hint after first escape when input has content", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      expect(lastFrame()).toContain("Escape again to clear");
+    });
+
+    it("clears input and hides hint on second escape", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("hello");
+      expect(frame).not.toContain("Escape again to clear");
+    });
+
+    it("hides hint when user types after first escape", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write("x");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("Escape again to clear");
+      expect(frame).toContain("hellox");
+    });
+
+    it("does not show hint when input is empty", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("Escape again to clear");
+    });
+
+    it("renders hint right-aligned below bottom border", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      const hintLine = lines[lines.length - 1];
+      // Hint should be right-aligned: padded spaces + hint text = terminal width.
+      expect(hintLine).toHaveLength(COLUMNS);
+      expect(hintLine.trimStart()).toBe("Escape again to clear");
     });
   });
 });

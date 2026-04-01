@@ -1,4 +1,4 @@
-import { render } from "ink-testing-library";
+import { renderInk } from "../test-utils/ink";
 import { describe, expect, it } from "vitest";
 import type { Config } from "./schema";
 import { useConfig } from "./hook";
@@ -13,7 +13,7 @@ describe("useConfig", () => {
       return null;
     }
 
-    render(<Harness />);
+    renderInk(<Harness />);
 
     expect(captured).toBeDefined();
     expect(captured?.activeModel).toBeNull();

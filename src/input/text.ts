@@ -18,6 +18,8 @@ export interface TextInputOptions {
   onUp?: () => void;
   /** Called when down arrow is pressed and cursor is already at the end. */
   onDown?: () => void;
+  /** Called when the escape key is pressed. */
+  onEscape?: () => void;
 }
 
 /** Return value of useTextInput. */
@@ -166,8 +168,13 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
       return;
     }
 
+    if (key.escape) {
+      options.onEscape?.();
+      return;
+    }
+
     // Ignore control sequences that aren't printable characters.
-    if (key.ctrl || key.escape) {
+    if (key.ctrl) {
       return;
     }
 

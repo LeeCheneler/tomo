@@ -7,6 +7,10 @@ import { theme } from "../ui/theme";
 export interface ChatInputProps {
   /** Called when the user submits a message. */
   onMessage: (message: string) => void;
+  /** Called when up arrow is pressed at the start of the input. Receives the current draft value. */
+  onUp?: (draft: string) => void;
+  /** Initial text to populate the input with on mount. */
+  initialValue?: string;
 }
 
 /** Returns the terminal width, defaulting to 80 if unavailable. */
@@ -21,15 +25,18 @@ function buildBorder(): string {
 
 /** Manages chat input state and submission. */
 function useChatInput(props: ChatInputProps) {
-  const [value, setValue] = useState("");
+  const initial = props.initialValue ?? "";
+  const [value, setValue] = useState(initial);
+  const [escPending, setEscPending] = useState(false);
   // Ref keeps value fresh across batched React updates so submit
   // always sees the latest input even before re-render.
-  const valueRef = useRef("");
+  const valueRef = useRef(initial);
 
   /** Updates value in both state (for rendering) and ref (for callbacks). */
   function handleChange(newValue: string) {
     valueRef.current = newValue;
     setValue(newValue);
+    setEscPending(false);
   }
 
   /** Submits the current value if non-empty, then clears the input. */
@@ -43,14 +50,33 @@ function useChatInput(props: ChatInputProps) {
     setCursorPos(0);
   }
 
+  /** Handles escape: first press shows hint, second press clears input. */
+  function handleEscape() {
+    if (escPending) {
+      handleChange("");
+      setCursorPos(0);
+      return;
+    }
+    if (valueRef.current.length > 0) {
+      setEscPending(true);
+    }
+  }
+
+  /** Passes the current draft value to the onUp callback. */
+  function handleUp() {
+    props.onUp?.(valueRef.current);
+  }
+
   const { cursor, setCursor: setCursorPos } = useTextInput({
     value,
     onChange: handleChange,
     onSubmit: handleSubmit,
     lineMode: "multi",
+    onUp: handleUp,
+    onEscape: handleEscape,
   });
 
-  return { value, cursor };
+  return { value, cursor, escPending };
 }
 
 /** Splits a value around a cursor position for rendering. */
@@ -69,9 +95,17 @@ export function splitAtCursor(
   };
 }
 
+/** Builds a right-aligned hint string padded to the terminal width. */
+function buildEscapeHint(): string {
+  const hint = "Escape again to clear";
+  const width = getTerminalWidth();
+  const padding = Math.max(0, width - hint.length);
+  return " ".repeat(padding) + hint;
+}
+
 /** Chat input with bordered text area. */
 export function ChatInput(props: ChatInputProps) {
-  const { value, cursor } = useChatInput(props);
+  const { value, cursor, escPending } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
   return (
@@ -84,6 +118,7 @@ export function ChatInput(props: ChatInputProps) {
         {after}
       </Text>
       <Text color={theme.brand}>{buildBorder()}</Text>
+      {escPending && <Text dimColor>{buildEscapeHint()}</Text>}
     </Box>
   );
 }
