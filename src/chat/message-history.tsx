@@ -61,18 +61,12 @@ export function MessageHistory(props: MessageHistoryProps) {
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text bold color={theme.brand}>
-        {buildBorder()}
-      </Text>
+      <Text color={theme.history}>{buildBorder()}</Text>
       <Text>
-        <Text bold color={theme.brand}>
-          {"↑ "}
-        </Text>
+        <Text color={theme.history}>{"❯ "}</Text>
         {selectedEntry}
       </Text>
-      <Text bold color={theme.brand}>
-        {buildBorder()}
-      </Text>
+      <Text color={theme.history}>{buildBorder()}</Text>
     </Box>
   );
 }

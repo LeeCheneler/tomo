@@ -52,6 +52,11 @@ describe("MessageHistory", () => {
       expect(lastFrame()).toContain("third");
     });
 
+    it("renders the prompt marker", () => {
+      const { lastFrame } = renderHistory();
+      expect(lastFrame()).toContain("❯");
+    });
+
     it("falls back to 80 columns when stdout.columns is undefined", () => {
       setColumns(undefined);
 
