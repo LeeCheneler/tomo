@@ -1,6 +1,8 @@
 import { Box, Text } from "ink";
 import { useRef, useState } from "react";
 import { useTextInput } from "../input/text";
+import type { InstructionItem } from "../ui/key-instructions";
+import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
 
 /** Props for the ChatInput component. */
@@ -11,6 +13,8 @@ export interface ChatInputProps {
   onUp?: (draft: string) => void;
   /** Initial text to populate the input with on mount. */
   initialValue?: string;
+  /** Whether message history is available for browsing. */
+  hasHistory?: boolean;
 }
 
 /** Returns the terminal width, defaulting to 80 if unavailable. */
@@ -76,7 +80,17 @@ function useChatInput(props: ChatInputProps) {
     onEscape: handleEscape,
   });
 
-  return { value, cursor, escPending };
+  const hasContent = value.length > 0;
+  const instructions = [
+    (hasContent || escPending) && { key: "enter", description: "submit" },
+    (hasContent || escPending) && {
+      key: "escape",
+      description: escPending ? "confirm" : "clear",
+    },
+    props.hasHistory && cursor === 0 && { key: "up", description: "history" },
+  ].filter((i): i is InstructionItem => Boolean(i));
+
+  return { value, cursor, instructions };
 }
 
 /** Splits a value around a cursor position for rendering. */
@@ -95,17 +109,9 @@ export function splitAtCursor(
   };
 }
 
-/** Builds a right-aligned hint string padded to the terminal width. */
-function buildEscapeHint(): string {
-  const hint = "Escape again to clear";
-  const width = getTerminalWidth();
-  const padding = Math.max(0, width - hint.length);
-  return " ".repeat(padding) + hint;
-}
-
 /** Chat input with bordered text area. */
 export function ChatInput(props: ChatInputProps) {
-  const { value, cursor, escPending } = useChatInput(props);
+  const { value, cursor, instructions } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
   return (
@@ -118,7 +124,9 @@ export function ChatInput(props: ChatInputProps) {
         {after}
       </Text>
       <Text color={theme.brand}>{buildBorder()}</Text>
-      {escPending && <Text dimColor>{buildEscapeHint()}</Text>}
+      <Box justifyContent="flex-end" height={1}>
+        <KeyInstructions items={instructions} />
+      </Box>
     </Box>
   );
 }

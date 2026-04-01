@@ -36,7 +36,14 @@ function useChat() {
     setMode({ kind: "input", initialValue: draft });
   }
 
-  return { mode, history, handleMessage, handleUp, handleSelected, handleExit };
+  return {
+    mode,
+    history,
+    handleMessage,
+    handleUp,
+    handleSelected,
+    handleExit,
+  };
 }
 
 /** Chat router — renders ChatInput or MessageHistory based on mode. */
@@ -59,6 +66,7 @@ export function Chat() {
       onMessage={handleMessage}
       onUp={handleUp}
       initialValue={mode.initialValue}
+      hasHistory={history.entries.length > 0}
     />
   );
 }

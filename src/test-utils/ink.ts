@@ -9,7 +9,7 @@ import type { ReactElement } from "react";
  * commit the resulting state updates. This helper waits long enough for both
  * to complete so `lastFrame()` reflects the post-escape state.
  */
-async function flushInkFrames(): Promise<void> {
+export async function flushInkFrames(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
