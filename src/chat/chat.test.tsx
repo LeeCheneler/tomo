@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { flushInkFrames } from "../test-utils/flush-ink";
 import { Chat } from "./chat";
 
