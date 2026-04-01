@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useState } from "react";
 
 /** Return value of useHistory. */
 export interface HistoryResult {
@@ -8,24 +8,14 @@ export interface HistoryResult {
   push: (entry: string) => void;
 }
 
-/** Manages an append-only list of history entries via a ref. Does not trigger re-renders — the consuming component re-renders from its own state changes. */
+/** Manages an append-only list of history entries. Triggers re-renders on push. */
 export function useHistory(): HistoryResult {
-  const ref = useRef(new HistoryApi());
-  return ref.current;
-}
-
-/** Append-only history list. Getter on entries ensures callers always see the latest array. */
-class HistoryApi implements HistoryResult {
-  /** Internal mutable array. */
-  private _entries: string[] = [];
-
-  /** Read-only list of history entries in chronological order. */
-  get entries(): readonly string[] {
-    return this._entries;
-  }
+  const [entries, setEntries] = useState<string[]>([]);
 
   /** Appends an entry to the history. */
-  push(entry: string) {
-    this._entries = [...this._entries, entry];
-  }
+  const push = useCallback((entry: string) => {
+    setEntries((prev) => [...prev, entry]);
+  }, []);
+
+  return { entries, push };
 }
