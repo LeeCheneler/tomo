@@ -7,8 +7,8 @@ import { theme } from "../ui/theme";
 export interface ChatInputProps {
   /** Called when the user submits a message. */
   onMessage: (message: string) => void;
-  /** Called when up arrow is pressed at the start of the input. */
-  onUp?: () => void;
+  /** Called when up arrow is pressed at the start of the input. Receives the current draft value. */
+  onUp?: (draft: string) => void;
   /** Initial text to populate the input with on mount. */
   initialValue?: string;
 }
@@ -62,12 +62,17 @@ function useChatInput(props: ChatInputProps) {
     }
   }
 
+  /** Passes the current draft value to the onUp callback. */
+  function handleUp() {
+    props.onUp?.(valueRef.current);
+  }
+
   const { cursor, setCursor: setCursorPos } = useTextInput({
     value,
     onChange: handleChange,
     onSubmit: handleSubmit,
     lineMode: "multi",
-    onUp: props.onUp,
+    onUp: handleUp,
     onEscape: handleEscape,
   });
 

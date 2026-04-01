@@ -10,27 +10,30 @@ type ChatMode = { kind: "input"; initialValue?: string } | { kind: "history" };
 function useChat() {
   const history = useHistory();
   const [mode, setMode] = useState<ChatMode>({ kind: "input" });
+  const [draft, setDraft] = useState("");
 
   /** Pushes a message to history (called on submit). */
   function handleMessage(message: string) {
     history.push(message);
   }
 
-  /** Switches to history mode if there are entries. */
-  function handleUp() {
+  /** Saves the draft and switches to history mode if there are entries. */
+  function handleUp(currentDraft: string) {
     if (history.entries.length > 0) {
+      setDraft(currentDraft);
       setMode({ kind: "history" });
     }
   }
 
-  /** Returns to input mode with the selected entry for editing. */
+  /** Clears the draft and returns to input mode with the selected entry. */
   function handleSelected(entry: string) {
+    setDraft("");
     setMode({ kind: "input", initialValue: entry });
   }
 
-  /** Returns to input mode with empty input. */
+  /** Returns to input mode with the saved draft restored. */
   function handleExit() {
-    setMode({ kind: "input" });
+    setMode({ kind: "input", initialValue: draft });
   }
 
   return { mode, history, handleMessage, handleUp, handleSelected, handleExit };

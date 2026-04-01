@@ -58,37 +58,50 @@ describe("Chat", () => {
       expect(lastFrame()).toContain("hello");
     });
 
-    it("returns to input mode on exit from history", async () => {
+    it("returns to input mode with draft on exit from history", async () => {
       const { stdin, lastFrame } = renderChat();
-      await stdin.write("hello");
+      await stdin.write("sent");
       await stdin.write(keys.enter);
+      // Type a draft, then enter history (two ups: first moves cursor to start, second triggers onUp).
+      await stdin.write("my draft");
       await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      // Exit history via escape — draft should be restored.
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("❯");
-      expect(frame).not.toContain("hello");
+      expect(frame).toContain("my draft");
     });
 
-    it("loads selected entry into input on enter in history", async () => {
+    it("loads selected entry into input replacing draft", async () => {
       const { stdin, lastFrame } = renderChat();
-      await stdin.write("hello");
+      await stdin.write("sent");
       await stdin.write(keys.enter);
+      // Type a draft, then enter history.
+      await stdin.write("my draft");
       await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      // Select entry with enter — replaces draft.
       await stdin.write(keys.enter);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("❯");
-      expect(frame).toContain("hello");
+      expect(frame).toContain("sent");
+      expect(frame).not.toContain("my draft");
     });
 
-    it("returns to empty input on exit via down arrow past last entry", async () => {
+    it("restores draft on exit via down arrow past last entry", async () => {
       const { stdin, lastFrame } = renderChat();
-      await stdin.write("hello");
+      await stdin.write("sent");
       await stdin.write(keys.enter);
+      // Type a draft, then enter history.
+      await stdin.write("my draft");
       await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      // Exit via down arrow — draft should be restored.
       await stdin.write(keys.down);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("❯");
-      expect(frame).not.toContain("hello");
+      expect(frame).toContain("my draft");
     });
   });
 });

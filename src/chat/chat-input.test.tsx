@@ -98,11 +98,21 @@ describe("ChatInput", () => {
   });
 
   describe("onUp", () => {
-    it("calls onUp when up arrow is pressed with cursor at start", async () => {
+    it("calls onUp with current value when up arrow is pressed at cursor start", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      await stdin.write("my draft");
+      await stdin.write(keys.up);
+      // First up moves cursor to start, second up fires onUp.
+      await stdin.write(keys.up);
+      expect(onUp).toHaveBeenCalledWith("my draft");
+    });
+
+    it("calls onUp with empty string when input is empty", async () => {
       const onUp = vi.fn();
       const { stdin } = renderInput({ onUp });
       await stdin.write(keys.up);
-      expect(onUp).toHaveBeenCalledOnce();
+      expect(onUp).toHaveBeenCalledWith("");
     });
 
     it("does not call onUp when cursor is not at start", async () => {
