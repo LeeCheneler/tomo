@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { isCommand } from "../commands/is-command";
 import type { CommandRegistry } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
+import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
 import { ChatList } from "./chat-list";
 import type { ChatMessage } from "./message";
@@ -59,10 +60,19 @@ function useChat(props: UseChatProps) {
     setMode({ kind: "input", initialValue: draft });
   }
 
+  /** Maps registry commands to autocomplete items. */
+  const autocompleteItems: readonly AutocompleteItem[] = useMemo(() => {
+    const registry = props.commandRegistry ?? createCommandRegistry();
+    return registry
+      .list()
+      .map((cmd) => ({ name: cmd.name, description: cmd.description }));
+  }, [props.commandRegistry]);
+
   return {
     mode,
     history,
     messages,
+    autocompleteItems,
     handleMessage,
     handleUp,
     handleSelected,
@@ -81,6 +91,7 @@ export function Chat(props: ChatProps) {
     mode,
     history,
     messages,
+    autocompleteItems,
     handleMessage,
     handleUp,
     handleSelected,
@@ -108,6 +119,7 @@ export function Chat(props: ChatProps) {
         onUp={handleUp}
         initialValue={mode.initialValue}
         hasHistory={history.entries.length > 0}
+        autocompleteItems={autocompleteItems}
       />
     </>
   );

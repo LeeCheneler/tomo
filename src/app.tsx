@@ -10,6 +10,36 @@ import { version } from "./utils/version";
 function buildCommandRegistry() {
   const registry = createCommandRegistry();
   registry.register(pingCommand);
+  registry.register({
+    name: "pong",
+    description: "Responds with ping",
+    handler: () => "ping",
+  });
+  registry.register({
+    name: "hello",
+    description: "Greets you",
+    handler: () => "Hello there!",
+  });
+  registry.register({
+    name: "goodbye",
+    description: "Says farewell",
+    handler: () => "Goodbye!",
+  });
+  registry.register({
+    name: "pong1",
+    description: "Responds with ping",
+    handler: () => "ping",
+  });
+  registry.register({
+    name: "hello1",
+    description: "Greets you",
+    handler: () => "Hello there!",
+  });
+  registry.register({
+    name: "goodbye1",
+    description: "Says farewell",
+    handler: () => "Goodbye!",
+  });
   return registry;
 }
 

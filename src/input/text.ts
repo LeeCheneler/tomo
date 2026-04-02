@@ -20,6 +20,8 @@ export interface TextInputOptions {
   onDown?: () => void;
   /** Called when the escape key is pressed. */
   onEscape?: () => void;
+  /** When true, onUp/onDown fire on every press regardless of cursor position. */
+  captureUpDown?: boolean;
 }
 
 /** Return value of useTextInput. */
@@ -202,6 +204,10 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     }
 
     if (key.upArrow) {
+      if (options.captureUpDown) {
+        options.onUp?.();
+        return;
+      }
       const { lineIndex, column, lines } = getCursorLineInfo(value, pos);
       if (lineIndex === 0) {
         // On first line: move to start, or fire boundary callback if already there.
@@ -217,6 +223,10 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
     }
 
     if (key.downArrow) {
+      if (options.captureUpDown) {
+        options.onDown?.();
+        return;
+      }
       const { lineIndex, column, lines } = getCursorLineInfo(value, pos);
       if (lineIndex === lines.length - 1) {
         // On last line: move to end, or fire boundary callback if already there.

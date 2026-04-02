@@ -71,7 +71,7 @@ describe("Chat", () => {
         handler: () => "pong",
       });
       const { stdin, lastFrame } = renderChat(commandRegistry);
-      await stdin.write("/ping");
+      await stdin.write("/ping ");
       await stdin.write(keys.enter);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("/ping");
@@ -80,7 +80,7 @@ describe("Chat", () => {
 
     it("shows error for unknown command", async () => {
       const { stdin, lastFrame } = renderChat();
-      await stdin.write("/nope");
+      await stdin.write("/nope ");
       await stdin.write(keys.enter);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("/nope");
@@ -95,12 +95,91 @@ describe("Chat", () => {
         handler: () => "pong",
       });
       const { stdin, lastFrame } = renderChat(commandRegistry);
-      await stdin.write("/ping");
+      await stdin.write("/ping ");
       await stdin.write(keys.enter);
       // Up arrow should not enter history mode since commands aren't in input history.
       await stdin.write(keys.up);
       const frame = lastFrame() ?? "";
       expect(frame).not.toContain("❯ /ping");
+    });
+  });
+
+  describe("autocomplete", () => {
+    it("shows autocomplete list when typing a command", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "ping",
+        description: "Responds with pong",
+        handler: () => "pong",
+      });
+      const { stdin, lastFrame } = renderChat(commandRegistry);
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("/ping");
+      expect(frame).toContain("Responds with pong");
+    });
+
+    it("navigates autocomplete with up/down and shows navigate instruction", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "aaa",
+        description: "First",
+        handler: () => "a",
+      });
+      commandRegistry.register({
+        name: "bbb",
+        description: "Second",
+        handler: () => "b",
+      });
+      const { stdin, lastFrame } = renderChat(commandRegistry);
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("navigate");
+      // Down should move selection.
+      await stdin.write(keys.down);
+      expect(lastFrame()).toContain("bbb");
+    });
+
+    it("fills input with selected command on enter and dismisses autocomplete", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "ping",
+        description: "Responds with pong",
+        handler: () => "pong",
+      });
+      const { stdin, lastFrame } = renderChat(commandRegistry);
+      await stdin.write("/");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("❯");
+      expect(frame).toContain("/ping");
+      // Autocomplete should be dismissed (space appended).
+      expect(frame).not.toContain("Responds with pong");
+    });
+
+    it("hides autocomplete after space", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "ping",
+        description: "Responds with pong",
+        handler: () => "pong",
+      });
+      const { stdin, lastFrame } = renderChat(commandRegistry);
+      await stdin.write("/ping");
+      await stdin.write(" ");
+      expect(lastFrame()).not.toContain("Responds with pong");
+    });
+
+    it("does not show autocomplete for regular messages", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "ping",
+        description: "Responds with pong",
+        handler: () => "pong",
+      });
+      const { stdin, lastFrame } = renderChat(commandRegistry);
+      await stdin.write("hello");
+      expect(lastFrame()).not.toContain("Responds with pong");
     });
   });
 
