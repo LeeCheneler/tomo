@@ -28,6 +28,16 @@ describe("ChatList", () => {
     expect(frame).toContain("second");
   });
 
+  it("renders a command message with command name and result", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "command", command: "ping", result: "pong" },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("/ping");
+    expect(frame).toContain("pong");
+  });
+
   it("skips unknown message roles", () => {
     const messages = [
       { id: "1", role: "unknown", content: "should not render" },
