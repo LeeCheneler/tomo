@@ -117,12 +117,14 @@ export function ChatInput(props: ChatInputProps) {
   return (
     <Box flexDirection="column" paddingTop={1}>
       <Text color={theme.brand}>{buildBorder()}</Text>
-      <Text>
+      <Box>
         <Text color={theme.brand}>{"❯ "}</Text>
-        {before}
-        <Text inverse>{at}</Text>
-        {after}
-      </Text>
+        <Text>
+          {before}
+          <Text inverse>{at}</Text>
+          {after}
+        </Text>
+      </Box>
       <Text color={theme.brand}>{buildBorder()}</Text>
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />

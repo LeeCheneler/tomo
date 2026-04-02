@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { ChatInput } from "./chat-input";
+import { ChatList } from "./chat-list";
+import type { ChatMessage } from "./message";
 import { MessageHistory } from "./message-history";
 import { useHistory } from "./use-history";
 
@@ -11,9 +13,14 @@ function useChat() {
   const history = useHistory();
   const [mode, setMode] = useState<ChatMode>({ kind: "input" });
   const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  /** Pushes a message to history (called on submit). */
+  /** Creates a user message, adds it to the list, and pushes to input history. */
   function handleMessage(message: string) {
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", content: message },
+    ]);
     history.push(message);
   }
 
@@ -39,6 +46,7 @@ function useChat() {
   return {
     mode,
     history,
+    messages,
     handleMessage,
     handleUp,
     handleSelected,
@@ -48,25 +56,38 @@ function useChat() {
 
 /** Chat router — renders ChatInput or MessageHistory based on mode. */
 export function Chat() {
-  const { mode, history, handleMessage, handleUp, handleSelected, handleExit } =
-    useChat();
+  const {
+    mode,
+    history,
+    messages,
+    handleMessage,
+    handleUp,
+    handleSelected,
+    handleExit,
+  } = useChat();
 
   if (mode.kind === "history") {
     return (
-      <MessageHistory
-        entries={history.entries}
-        onSelected={handleSelected}
-        onExit={handleExit}
-      />
+      <>
+        <ChatList messages={messages} />
+        <MessageHistory
+          entries={history.entries}
+          onSelected={handleSelected}
+          onExit={handleExit}
+        />
+      </>
     );
   }
 
   return (
-    <ChatInput
-      onMessage={handleMessage}
-      onUp={handleUp}
-      initialValue={mode.initialValue}
-      hasHistory={history.entries.length > 0}
-    />
+    <>
+      <ChatList messages={messages} />
+      <ChatInput
+        onMessage={handleMessage}
+        onUp={handleUp}
+        initialValue={mode.initialValue}
+        hasHistory={history.entries.length > 0}
+      />
+    </>
   );
 }

@@ -13,7 +13,7 @@ export function App() {
     <>
       <Static items={staticItems}>
         {(item) => (
-          <Box key={item.id} flexDirection="column">
+          <Box key={item.id} flexDirection="column" paddingBottom={1}>
             <AppHeader
               version={version}
               model={config.activeModel}
