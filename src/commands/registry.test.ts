@@ -63,4 +63,50 @@ describe("createCommandRegistry", () => {
     const command = registry.get("ping");
     expect(command?.handler()).toBe("pong");
   });
+
+  describe("invoke", () => {
+    it("parses command name and returns a CommandMessage", async () => {
+      const registry = createCommandRegistry();
+      registry.register({
+        name: "ping",
+        description: "Responds with pong",
+        handler: () => "pong",
+      });
+      const message = await registry.invoke("/ping");
+      expect(message.role).toBe("command");
+      expect(message.command).toBe("ping");
+      expect(message.result).toBe("pong");
+      expect(message.id).toBeDefined();
+    });
+
+    it("parses command name from first word", async () => {
+      const registry = createCommandRegistry();
+      registry.register({
+        name: "echo",
+        description: "Echoes input",
+        handler: () => "echoed",
+      });
+      const message = await registry.invoke("/echo hello world");
+      expect(message.command).toBe("echo");
+      expect(message.result).toBe("echoed");
+    });
+
+    it("returns an error message for unknown commands", async () => {
+      const registry = createCommandRegistry();
+      const message = await registry.invoke("/nope");
+      expect(message.command).toBe("nope");
+      expect(message.result).toContain("Unknown command");
+    });
+
+    it("handles async handlers", async () => {
+      const registry = createCommandRegistry();
+      registry.register({
+        name: "slow",
+        description: "Async command",
+        handler: async () => "done",
+      });
+      const message = await registry.invoke("/slow");
+      expect(message.result).toBe("done");
+    });
+  });
 });

@@ -1,8 +1,12 @@
+import chalk from "chalk";
+import type { CommandMessage } from "../chat/message";
+import { theme } from "../ui/theme";
+
 /** Defines a slash command. */
 export interface CommandDefinition {
   name: string;
   description: string;
-  handler: () => string;
+  handler: () => string | Promise<string>;
 }
 
 /** Registry for looking up and listing commands. */
@@ -13,6 +17,13 @@ export interface CommandRegistry {
   get: (name: string) => CommandDefinition | undefined;
   /** Returns all registered commands in registration order. */
   list: () => readonly CommandDefinition[];
+  /** Parses and executes a slash command input, returning a CommandMessage. */
+  invoke: (input: string) => Promise<CommandMessage>;
+}
+
+/** Parses the command name from a slash command input. */
+function parseCommandName(input: string): string {
+  return input.slice(1).split(" ")[0];
 }
 
 /** Creates a new command registry. */
@@ -28,6 +39,25 @@ export function createCommandRegistry(): CommandRegistry {
     },
     list() {
       return [...commands.values()];
+    },
+    async invoke(input: string) {
+      const name = parseCommandName(input);
+      const command = commands.get(name);
+      if (command) {
+        const result = await command.handler();
+        return {
+          id: crypto.randomUUID(),
+          role: "command" as const,
+          command: name,
+          result,
+        };
+      }
+      return {
+        id: crypto.randomUUID(),
+        role: "command" as const,
+        command: name,
+        result: chalk[theme.error](`Unknown command: /${name}`),
+      };
     },
   };
 }
