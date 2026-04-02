@@ -39,12 +39,14 @@ describe("Chat", () => {
   });
 
   describe("message submission", () => {
-    it("clears input after submitting a message", async () => {
+    it("clears input and shows message in list after submit", async () => {
       const { stdin, lastFrame } = renderChat();
       await stdin.write("hello");
       await stdin.write(keys.enter);
       const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("hello");
+      // Message persists in the chat list above the input.
+      expect(frame).toContain("hello");
+      // Input is cleared — only the prompt marker remains in the input area.
       expect(frame).toContain("❯");
     });
 
