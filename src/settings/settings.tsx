@@ -71,9 +71,9 @@ function useSettings(props: SettingsProps) {
       ? [
           { key: "up/down", description: "navigate" },
           { key: "enter", description: "select" },
-          { key: "escape", description: "exit" },
+          { key: "esc", description: "exit" },
         ]
-      : [{ key: "escape", description: "back" }];
+      : [{ key: "esc", description: "back" }];
 
   return { step, instructions, handleSelect, handleBack, handleExit };
 }
@@ -144,7 +144,7 @@ function SettingsPlaceholder(props: SettingsPlaceholderProps) {
       </Indent>
       <Text color={theme.settings}>{buildBorder()}</Text>
       <Box justifyContent="flex-end" height={1}>
-        <KeyInstructions items={[{ key: "escape", description: "back" }]} />
+        <KeyInstructions items={[{ key: "esc", description: "back" }]} />
       </Box>
     </Box>
   );

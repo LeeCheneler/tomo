@@ -17,14 +17,14 @@ describe("KeyInstructions", () => {
       <KeyInstructions
         items={[
           { key: "enter", description: "submit" },
-          { key: "escape", description: "clear" },
+          { key: "esc", description: "clear" },
         ]}
       />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("enter");
     expect(frame).toContain("submit");
-    expect(frame).toContain("escape");
+    expect(frame).toContain("esc");
     expect(frame).toContain("clear");
     expect(frame).toContain("·");
   });

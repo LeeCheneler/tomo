@@ -164,12 +164,12 @@ describe("ChatInput", () => {
   });
 
   describe("instruction bar", () => {
-    it("always shows enter submit, escape clear, and / command", () => {
+    it("always shows enter submit, esc clear, and / command", () => {
       const { lastFrame } = renderInput();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("enter");
       expect(frame).toContain("submit");
-      expect(frame).toContain("escape");
+      expect(frame).toContain("esc");
       expect(frame).toContain("clear");
       expect(frame).toContain("/");
       expect(frame).toContain("command");
@@ -179,43 +179,35 @@ describe("ChatInput", () => {
       const { lastFrame } = renderInput();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("enter");
-      expect(frame).toContain("escape");
+      expect(frame).toContain("esc");
     });
 
-    it("does not switch to confirm on escape when input is empty", async () => {
+    it("keeps esc clear static after first escape with empty input", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
+      expect(frame).toContain("esc");
+      expect(frame).toContain("clear");
+    });
+
+    it("keeps esc clear static after first escape with text", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("esc");
       expect(frame).toContain("clear");
       expect(frame).not.toContain("confirm");
     });
 
-    it("switches escape to confirm after first escape", async () => {
-      const { stdin, lastFrame } = renderInput();
-      await stdin.write("hello");
-      await stdin.write(keys.escape);
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("confirm");
-      expect(frame).not.toContain("clear");
-    });
-
-    it("reverts escape to clear after second escape", async () => {
+    it("keeps esc clear static after second escape clears input", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
+      expect(frame).toContain("esc");
       expect(frame).toContain("clear");
-    });
-
-    it("reverts escape to clear when user types", async () => {
-      const { stdin, lastFrame } = renderInput();
-      await stdin.write("hello");
-      await stdin.write(keys.escape);
-      await stdin.write("x");
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("clear");
-      expect(frame).not.toContain("confirm");
     });
 
     it("always shows up history", () => {
@@ -223,6 +215,47 @@ describe("ChatInput", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("up");
       expect(frame).toContain("history");
+    });
+  });
+
+  describe("escape highlight", () => {
+    it("highlights text in dim yellow after first escape", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      // Text should still be visible but styled differently.
+      expect(frame).toContain("hello");
+      // Cursor should not be rendered as inverse when escPending.
+      expect(frame).not.toContain("[7m");
+    });
+
+    it("removes highlight after second escape clears input", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("hello");
+    });
+
+    it("removes highlight when user types", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write("x");
+      const frame = lastFrame() ?? "";
+      // Text should be back to normal rendering with inverse cursor.
+      expect(frame).toContain("hellox");
+    });
+
+    it("does not highlight when escape pressed with empty input", async () => {
+      const { stdin, lastFrame } = renderInput();
+      const frameBefore = lastFrame() ?? "";
+      await stdin.write(keys.escape);
+      const frameAfter = lastFrame() ?? "";
+      // escPending stays false on empty input — rendering unchanged.
+      expect(frameAfter).toBe(frameBefore);
     });
   });
 

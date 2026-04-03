@@ -25,7 +25,7 @@ const PERMISSION_ITEMS: readonly { key: PermissionKey; label: string }[] = [
 const INSTRUCTIONS: InstructionItem[] = [
   { key: "up/down", description: "navigate" },
   { key: "space", description: "toggle" },
-  { key: "escape", description: "back" },
+  { key: "esc", description: "back" },
 ];
 
 /** Returns the terminal width, defaulting to 80 if unavailable. */

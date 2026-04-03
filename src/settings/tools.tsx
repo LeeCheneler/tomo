@@ -41,7 +41,7 @@ const LIST_INSTRUCTIONS: InstructionItem[] = [
   { key: "up/down", description: "navigate" },
   { key: "space", description: "toggle" },
   { key: "tab", description: "options" },
-  { key: "escape", description: "back" },
+  { key: "esc", description: "back" },
 ];
 
 /** Key instructions for the tool options form. */
@@ -49,7 +49,7 @@ const OPTIONS_INSTRUCTIONS: InstructionItem[] = [
   { key: "up/down", description: "navigate" },
   { key: "space", description: "toggle" },
   { key: "enter", description: "save" },
-  { key: "escape", description: "cancel" },
+  { key: "esc", description: "cancel" },
 ];
 
 /** Returns the terminal width, defaulting to 80 if unavailable. */

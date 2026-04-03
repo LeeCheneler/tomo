@@ -141,12 +141,16 @@ function useChatInput(props: ChatInputProps) {
         { key: "up", description: "history" },
       ];
 
-  instructions.push({
-    key: "escape",
-    description: escPending ? "confirm" : "clear",
-  });
+  instructions.push({ key: "esc", description: "clear" });
 
-  return { value, cursor, instructions, showAutocomplete, autocomplete };
+  return {
+    value,
+    cursor,
+    escPending,
+    instructions,
+    showAutocomplete,
+    autocomplete,
+  };
 }
 
 /** Splits a value around a cursor position for rendering. */
@@ -165,8 +169,14 @@ export function splitAtCursor(
 
 /** Chat input with bordered text area and inline autocomplete. */
 export function ChatInput(props: ChatInputProps) {
-  const { value, cursor, instructions, showAutocomplete, autocomplete } =
-    useChatInput(props);
+  const {
+    value,
+    cursor,
+    escPending,
+    instructions,
+    showAutocomplete,
+    autocomplete,
+  } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
   return (
@@ -174,11 +184,19 @@ export function ChatInput(props: ChatInputProps) {
       <Text color={theme.brand}>{buildBorder()}</Text>
       <Box>
         <Text color={theme.brand}>{"❯ "}</Text>
-        <Text>
-          {before}
-          <Text inverse>{at}</Text>
-          {after}
-        </Text>
+        {escPending ? (
+          <Text color={theme.warning} inverse>
+            {before}
+            {at}
+            {after}
+          </Text>
+        ) : (
+          <Text>
+            {before}
+            <Text inverse>{at}</Text>
+            {after}
+          </Text>
+        )}
       </Box>
       <Text color={theme.brand}>{buildBorder()}</Text>
       <Box justifyContent="flex-end" height={1}>
