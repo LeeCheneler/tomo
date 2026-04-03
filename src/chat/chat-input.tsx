@@ -130,21 +130,21 @@ function useChatInput(props: ChatInputProps) {
     captureUpDown: showAutocomplete,
   });
 
-  const hasContent = value.length > 0;
-  const instructions = [
-    (hasContent || escPending) && {
-      key: "enter",
-      description: showAutocomplete ? "select" : "submit",
-    },
-    (hasContent || escPending) && {
-      key: "escape",
-      description: escPending ? "confirm" : "clear",
-    },
-    showAutocomplete && { key: "up/down", description: "navigate" },
-    !showAutocomplete &&
-      props.hasHistory &&
-      cursor === 0 && { key: "up", description: "history" },
-  ].filter((i): i is InstructionItem => Boolean(i));
+  const instructions: InstructionItem[] = showAutocomplete
+    ? [
+        { key: "enter", description: "select" },
+        { key: "up/down", description: "navigate" },
+      ]
+    : [
+        { key: "/", description: "command" },
+        { key: "enter", description: "submit" },
+        { key: "up", description: "history" },
+      ];
+
+  instructions.push({
+    key: "escape",
+    description: escPending ? "confirm" : "clear",
+  });
 
   return { value, cursor, instructions, showAutocomplete, autocomplete };
 }
