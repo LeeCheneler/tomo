@@ -1,12 +1,8 @@
 import { Box, Text } from "ink";
 import { useRef, useState } from "react";
 import { useTextInput } from "../input/text";
-import type { AutocompleteItem } from "./autocomplete";
-import {
-  AutocompleteList,
-  filterAutocompleteItems,
-  getWindowStart,
-} from "./autocomplete";
+import type { AutocompleteItem, AutocompleteNavigation } from "./autocomplete";
+import { AutocompleteList, useAutocompleteNavigation } from "./autocomplete";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
@@ -38,24 +34,19 @@ function buildBorder(): string {
 /** Returns true when autocomplete should be visible for the given input and items. */
 function shouldShowAutocomplete(
   value: string,
-  items?: readonly AutocompleteItem[],
+  items: readonly AutocompleteItem[],
 ): boolean {
-  if (!items || items.length === 0) return false;
-  // Show when starts with / but not // (skills), and no space yet (still typing command name).
+  if (items.length === 0) return false;
   return (
     value.startsWith("/") && !value.startsWith("//") && !value.includes(" ")
   );
 }
 
-/** Manages chat input state, submission, and autocomplete navigation. */
+/** Manages chat input state and submission. Delegates autocomplete to its own hook. */
 function useChatInput(props: ChatInputProps) {
   const initial = props.initialValue ?? "";
   const [value, setValue] = useState(initial);
   const [escPending, setEscPending] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [windowStart, setWindowStart] = useState(0);
-  // Ref keeps value fresh across batched React updates so submit
-  // always sees the latest input even before re-render.
   const valueRef = useRef(initial);
 
   const showAutocomplete = shouldShowAutocomplete(
@@ -63,25 +54,28 @@ function useChatInput(props: ChatInputProps) {
     props.autocompleteItems,
   );
 
-  /** Returns the filtered autocomplete items for the current input. */
-  function getFiltered(): readonly AutocompleteItem[] {
-    return filterAutocompleteItems(props.autocompleteItems, value.slice(1));
-  }
+  const autocomplete = useAutocompleteNavigation(
+    props.autocompleteItems,
+    value.startsWith("/") ? value.slice(1) : "",
+    showAutocomplete,
+  );
 
   /** Updates value in both state (for rendering) and ref (for callbacks). */
   function handleChange(newValue: string) {
     valueRef.current = newValue;
     setValue(newValue);
     setEscPending(false);
-    setSelectedIndex(0);
-    setWindowStart(0);
+    autocomplete.reset();
   }
 
   /** Submits the current value if non-empty, then clears the input. */
   function handleSubmit() {
     if (showAutocomplete) {
-      const filtered = getFiltered();
-      const filled = `/${filtered[selectedIndex].name} `;
+      // showAutocomplete guarantees filtered items exist and selectedIndex is valid.
+      const selected = autocomplete.select();
+      /* v8 ignore next -- selectedIndex is always in bounds */
+      if (!selected) return;
+      const filled = `/${selected.name} `;
       handleChange(filled);
       setCursorPos(filled.length);
       return;
@@ -111,13 +105,7 @@ function useChatInput(props: ChatInputProps) {
   /** Navigates autocomplete up or passes to history. */
   function handleUp() {
     if (showAutocomplete) {
-      const filtered = getFiltered();
-      const count = filtered.length;
-      setSelectedIndex((i) => {
-        const next = (i - 1 + count) % count;
-        setWindowStart((ws) => getWindowStart(next, count, ws));
-        return next;
-      });
+      autocomplete.moveUp();
       return;
     }
     props.onUp?.(valueRef.current);
@@ -127,13 +115,7 @@ function useChatInput(props: ChatInputProps) {
   function handleDown() {
     /* v8 ignore next -- showAutocomplete gates all callers */
     if (showAutocomplete) {
-      const filtered = getFiltered();
-      const count = filtered.length;
-      setSelectedIndex((i) => {
-        const next = (i + 1) % count;
-        setWindowStart((ws) => getWindowStart(next, count, ws));
-        return next;
-      });
+      autocomplete.moveDown();
     }
   }
 
@@ -164,14 +146,7 @@ function useChatInput(props: ChatInputProps) {
       cursor === 0 && { key: "up", description: "history" },
   ].filter((i): i is InstructionItem => Boolean(i));
 
-  return {
-    value,
-    cursor,
-    instructions,
-    showAutocomplete,
-    selectedIndex,
-    windowStart,
-  };
+  return { value, cursor, instructions, showAutocomplete, autocomplete };
 }
 
 /** Splits a value around a cursor position for rendering. */
@@ -180,8 +155,6 @@ export function splitAtCursor(
   cursor: number,
 ): { before: string; at: string; after: string } {
   const charAtCursor = value[cursor];
-  // Newlines and end-of-value are invisible — show a space block instead.
-  // When on a newline, keep it in after so line breaks aren't lost.
   const showPlaceholder = charAtCursor === undefined || charAtCursor === "\n";
   return {
     before: value.slice(0, cursor),
@@ -192,14 +165,8 @@ export function splitAtCursor(
 
 /** Chat input with bordered text area and inline autocomplete. */
 export function ChatInput(props: ChatInputProps) {
-  const {
-    value,
-    cursor,
-    instructions,
-    showAutocomplete,
-    selectedIndex,
-    windowStart,
-  } = useChatInput(props);
+  const { value, cursor, instructions, showAutocomplete, autocomplete } =
+    useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
   return (
@@ -217,14 +184,7 @@ export function ChatInput(props: ChatInputProps) {
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
       </Box>
-      {showAutocomplete && (
-        <AutocompleteList
-          items={props.autocompleteItems}
-          filter={value.slice(1)}
-          selectedIndex={selectedIndex}
-          windowStart={windowStart}
-        />
-      )}
+      {showAutocomplete && <AutocompleteList autocomplete={autocomplete} />}
     </Box>
   );
 }
