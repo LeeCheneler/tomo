@@ -8,6 +8,7 @@ import type { NavigationMenuItem } from "../ui/navigation-menu";
 import { NavigationMenu } from "../ui/navigation-menu";
 import { theme } from "../ui/theme";
 import { PermissionsScreen } from "./permissions";
+import { ToolsScreen } from "./tools";
 
 /** Settings section identifiers. */
 export type SettingsSection =
@@ -84,6 +85,10 @@ export function Settings(props: SettingsProps) {
 
   if (step === "permissions") {
     return <PermissionsScreen onBack={handleBack} />;
+  }
+
+  if (step === "tools") {
+    return <ToolsScreen onBack={handleBack} />;
   }
 
   if (step !== "menu") {

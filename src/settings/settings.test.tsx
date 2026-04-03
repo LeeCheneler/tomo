@@ -143,6 +143,33 @@ describe("Settings", () => {
     });
   });
 
+  describe("tools screen", () => {
+    it("enters the tools screen instead of placeholder", async () => {
+      const { stdin, lastFrame } = renderSettings();
+      // Navigate to Tools (fourth item)
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Tools");
+      expect(frame).toContain("Agent");
+      expect(frame).not.toContain("Coming soon");
+    });
+
+    it("returns to menu from tools screen", async () => {
+      const { stdin, lastFrame } = renderSettings();
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Settings");
+      expect(frame).toContain("Providers");
+    });
+  });
+
   describe("exit message", () => {
     it("always calls onDone with settings updated message", async () => {
       const { stdin, onDone } = renderSettings();
