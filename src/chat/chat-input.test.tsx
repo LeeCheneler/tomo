@@ -253,7 +253,7 @@ describe("ChatInput", () => {
         autocompleteItems: testItems,
       });
       await stdin.write("/ping");
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       const frame = lastFrame() ?? "";
       expect(frame).not.toContain("Responds with pong");
     });

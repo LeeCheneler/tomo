@@ -170,7 +170,7 @@ describe("Chat", () => {
       });
       const { stdin, lastFrame } = renderChat(commandRegistry);
       await stdin.write("/ping");
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       expect(lastFrame()).not.toContain("Responds with pong");
     });
 

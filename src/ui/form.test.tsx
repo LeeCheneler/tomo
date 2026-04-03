@@ -60,7 +60,7 @@ describe("Form", () => {
     it("ignores input when no fields provided", async () => {
       const { stdin, onSubmit, onCancel } = renderForm([]);
       await stdin.write(keys.down);
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       expect(onSubmit).not.toHaveBeenCalled();
       expect(onCancel).not.toHaveBeenCalled();
     });
@@ -102,7 +102,7 @@ describe("Form", () => {
   describe("toggle fields", () => {
     it("toggles on space", async () => {
       const { stdin, lastFrame } = renderForm();
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       expect(lastFrame()).toContain("[ ] Enabled");
     });
 
@@ -114,8 +114,8 @@ describe("Form", () => {
 
     it("toggles back on second space", async () => {
       const { stdin, lastFrame } = renderForm();
-      await stdin.write(" ");
-      await stdin.write(" ");
+      await stdin.write(keys.space);
+      await stdin.write(keys.space);
       expect(lastFrame()).toContain("[✓] Enabled");
     });
   });
@@ -211,7 +211,7 @@ describe("Form", () => {
     it("calls onSubmit with modified values", async () => {
       const { stdin, onSubmit } = renderForm();
       // Toggle first field off
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       // Navigate to text field and edit
       await stdin.write(keys.down);
       await stdin.write("-new");

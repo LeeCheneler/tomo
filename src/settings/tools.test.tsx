@@ -89,7 +89,7 @@ describe("ToolsScreen", () => {
     it("toggles a tool on space and persists to config", async () => {
       const { stdin, lastFrame } = renderTools({ global: {} });
       // Agent is first and enabled by default, toggle it off
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       expect(lastFrame()).toContain("[ ] Agent");
       const config = loadConfig();
       expect(config.tools.agent.enabled).toBe(false);
@@ -97,8 +97,8 @@ describe("ToolsScreen", () => {
 
     it("toggles back on second space", async () => {
       const { stdin, lastFrame } = renderTools({ global: {} });
-      await stdin.write(" ");
-      await stdin.write(" ");
+      await stdin.write(keys.space);
+      await stdin.write(keys.space);
       expect(lastFrame()).toContain("[✓] Agent");
     });
 
@@ -123,7 +123,7 @@ describe("ToolsScreen", () => {
       for (let i = 0; i < 8; i++) {
         await stdin.write(keys.down);
       }
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       const config = loadConfig();
       expect(config.tools.webSearch.enabled).toBe(false);
       expect(config.tools.webSearch.apiKey).toBe("tvly-123");
@@ -208,7 +208,7 @@ describe("ToolsScreen", () => {
       const { stdin } = renderTools({ global: {} });
       await openWebSearchOptions(stdin);
       // Enabled is first field, toggle it with space
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.tools.webSearch.enabled).toBe(true);

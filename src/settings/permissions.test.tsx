@@ -95,7 +95,7 @@ describe("PermissionsScreen", () => {
     it("toggles a permission on space and persists to config", async () => {
       const { stdin, lastFrame } = renderPermissions({ global: {} });
       // cwdReadFile starts as true, toggle it off
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       expect(lastFrame()).toContain("[ ] Read files (current directory)");
       // Verify persisted
       const config = loadConfig();
@@ -105,7 +105,7 @@ describe("PermissionsScreen", () => {
     it("toggles a permission on space", async () => {
       const { stdin, lastFrame } = renderPermissions({ global: {} });
       await stdin.write(keys.down);
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       expect(lastFrame()).toContain("[✓] Write files (current directory)");
     });
 
@@ -113,7 +113,7 @@ describe("PermissionsScreen", () => {
       const { stdin } = renderPermissions({ global: {} });
       // Navigate to cwdWriteFile and enable it
       await stdin.write(keys.down);
-      await stdin.write(" ");
+      await stdin.write(keys.space);
       const config = loadConfig();
       expect(config.permissions.cwdWriteFile).toBe(true);
     });
