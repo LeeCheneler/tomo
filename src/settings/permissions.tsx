@@ -24,7 +24,7 @@ const PERMISSION_ITEMS: readonly { key: PermissionKey; label: string }[] = [
 /** Key instructions for the permissions screen. */
 const INSTRUCTIONS: InstructionItem[] = [
   { key: "up/down", description: "navigate" },
-  { key: "space/enter", description: "toggle" },
+  { key: "space", description: "toggle" },
   { key: "escape", description: "back" },
 ];
 

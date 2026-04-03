@@ -91,12 +91,6 @@ describe("ToggleList", () => {
   });
 
   describe("toggling", () => {
-    it("calls onToggle with inverted value on enter", async () => {
-      const { stdin, onToggle } = renderToggleList();
-      await stdin.write(keys.enter);
-      expect(onToggle).toHaveBeenCalledWith("a", false);
-    });
-
     it("calls onToggle with inverted value on space", async () => {
       const { stdin, onToggle } = renderToggleList();
       await stdin.write(" ");
@@ -106,7 +100,7 @@ describe("ToggleList", () => {
     it("toggles the navigated item", async () => {
       const { stdin, onToggle } = renderToggleList();
       await stdin.write(keys.down);
-      await stdin.write(keys.enter);
+      await stdin.write(" ");
       expect(onToggle).toHaveBeenCalledWith("b", true);
     });
 
@@ -116,6 +110,12 @@ describe("ToggleList", () => {
       await stdin.write(keys.down);
       await stdin.write(" ");
       expect(onToggle).toHaveBeenCalledWith("c", false);
+    });
+
+    it("does not toggle on enter", async () => {
+      const { stdin, onToggle } = renderToggleList();
+      await stdin.write(keys.enter);
+      expect(onToggle).not.toHaveBeenCalled();
     });
   });
 

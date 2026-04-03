@@ -59,12 +59,20 @@ describe("ToolsScreen", () => {
       expect(frame).toContain("Write File");
     });
 
-    it("shows key instructions", () => {
+    it("shows key instructions including options", () => {
       const { lastFrame } = renderTools();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("navigate");
       expect(frame).toContain("toggle");
+      expect(frame).toContain("options");
       expect(frame).toContain("back");
+    });
+
+    it("shows options indicator on web search", () => {
+      const { lastFrame } = renderTools();
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Web Search ›");
+      expect(frame).not.toContain("Agent ›");
     });
 
     it("reflects config values in toggle state", () => {
@@ -78,19 +86,18 @@ describe("ToolsScreen", () => {
   });
 
   describe("toggling", () => {
-    it("toggles a tool on enter and persists to config", async () => {
+    it("toggles a tool on space and persists to config", async () => {
       const { stdin, lastFrame } = renderTools({ global: {} });
       // Agent is first and enabled by default, toggle it off
-      await stdin.write(keys.enter);
+      await stdin.write(" ");
       expect(lastFrame()).toContain("[ ] Agent");
       const config = loadConfig();
       expect(config.tools.agent.enabled).toBe(false);
     });
 
-    it("toggles a tool on space", async () => {
+    it("toggles back on second space", async () => {
       const { stdin, lastFrame } = renderTools({ global: {} });
-      await stdin.write(keys.enter);
-      // Toggle it back on
+      await stdin.write(" ");
       await stdin.write(" ");
       expect(lastFrame()).toContain("[✓] Agent");
     });
@@ -116,7 +123,7 @@ describe("ToolsScreen", () => {
       for (let i = 0; i < 8; i++) {
         await stdin.write(keys.down);
       }
-      await stdin.write(keys.enter);
+      await stdin.write(" ");
       const config = loadConfig();
       expect(config.tools.webSearch.enabled).toBe(false);
       expect(config.tools.webSearch.apiKey).toBe("tvly-123");
@@ -128,6 +135,92 @@ describe("ToolsScreen", () => {
       const { stdin, onBack } = renderTools();
       await stdin.write(keys.escape);
       expect(onBack).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("options form", () => {
+    /** Navigates to Web Search and opens the options form. */
+    async function openWebSearchOptions(stdin: {
+      write: (s: string) => Promise<void>;
+    }) {
+      for (let i = 0; i < 8; i++) {
+        await stdin.write(keys.down);
+      }
+      await stdin.write(keys.tab);
+    }
+
+    it("opens options form on tab for web search", async () => {
+      const { stdin, lastFrame } = renderTools({ global: {} });
+      await openWebSearchOptions(stdin);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Web Search Options");
+      expect(frame).toContain("Enabled");
+      expect(frame).toContain("API Key:");
+    });
+
+    it("shows form instructions", async () => {
+      const { stdin, lastFrame } = renderTools({ global: {} });
+      await openWebSearchOptions(stdin);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("save");
+      expect(frame).toContain("cancel");
+    });
+
+    it("cancels and returns to tools list on escape", async () => {
+      const { stdin, lastFrame } = renderTools({ global: {} });
+      await openWebSearchOptions(stdin);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Tools");
+      expect(frame).toContain("Agent");
+    });
+
+    it("does not save on escape", async () => {
+      const { stdin } = renderTools({ global: {} });
+      await openWebSearchOptions(stdin);
+      // Navigate to API Key field and type
+      await stdin.write(keys.down);
+      await stdin.write("tvly-unsaved");
+      await stdin.write(keys.escape);
+      const config = loadConfig();
+      expect(config.tools.webSearch.apiKey).toBeUndefined();
+    });
+
+    it("does not open options for tools without hasOptions", async () => {
+      const { stdin, lastFrame } = renderTools({ global: {} });
+      await stdin.write(keys.tab);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Tools");
+      expect(frame).not.toContain("Options");
+    });
+
+    it("saves api key on enter", async () => {
+      const { stdin } = renderTools({ global: {} });
+      await openWebSearchOptions(stdin);
+      await stdin.write(keys.down);
+      await stdin.write("tvly-saved");
+      await stdin.write(keys.enter);
+      const config = loadConfig();
+      expect(config.tools.webSearch.apiKey).toBe("tvly-saved");
+    });
+
+    it("saves enabled toggle from form", async () => {
+      const { stdin } = renderTools({ global: {} });
+      await openWebSearchOptions(stdin);
+      // Enabled is first field, toggle it with space
+      await stdin.write(" ");
+      await stdin.write(keys.enter);
+      const config = loadConfig();
+      expect(config.tools.webSearch.enabled).toBe(true);
+    });
+
+    it("returns to tools list after saving", async () => {
+      const { stdin, lastFrame } = renderTools({ global: {} });
+      await openWebSearchOptions(stdin);
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Tools");
+      expect(frame).toContain("Agent");
     });
   });
 

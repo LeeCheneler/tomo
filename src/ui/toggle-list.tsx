@@ -55,7 +55,7 @@ function useToggleList(props: ToggleListProps) {
       return;
     }
 
-    if (key.return || input === " ") {
+    if (input === " ") {
       const item = props.items[cursor];
       props.onToggle(item.key, !item.value);
       return;
