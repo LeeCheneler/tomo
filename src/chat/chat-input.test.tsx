@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AutocompleteItem } from "./autocomplete";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
-import { ChatInput, splitAtCursor } from "./chat-input";
+import { splitAtCursor } from "../input/cursor";
+import { ChatInput } from "./chat-input";
 
 const COLUMNS = 40;
 

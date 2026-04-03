@@ -1,5 +1,6 @@
 import { Text, useInput } from "ink";
 import { useRef, useState } from "react";
+import { splitAtCursor } from "../input/cursor";
 import { Indent } from "./layout/indent";
 import { theme } from "./theme";
 
@@ -44,20 +45,6 @@ function buildInitialValues(fields: readonly FormField[]): FormValues {
     values[field.key] = field.initialValue;
   }
   return values;
-}
-
-/** Splits a value around a cursor position for rendering with an inverse block cursor. */
-function splitAtCursor(
-  value: string,
-  cursor: number,
-): { before: string; at: string; after: string } {
-  const ch = value[cursor];
-  const placeholder = ch === undefined || ch === "\n";
-  return {
-    before: value.slice(0, cursor),
-    at: placeholder ? " " : ch,
-    after: placeholder ? value.slice(cursor) : value.slice(cursor + 1),
-  };
 }
 
 /** Manages form field navigation, values, and text editing. */

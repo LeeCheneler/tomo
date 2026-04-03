@@ -1,5 +1,11 @@
 import { useInput } from "ink";
 import { useRef, useState } from "react";
+import {
+  findNextWordBoundary,
+  findPreviousWordBoundary,
+  getCursorLineInfo,
+  lineColumnToPos,
+} from "./cursor";
 
 /** Controls newline behaviour. "multi" allows Shift+Enter newlines, "single" does not. */
 export type LineMode = "single" | "multi";
@@ -30,74 +36,6 @@ export interface TextInputResult {
   cursor: number;
   /** Sets the cursor position directly. Useful for resetting after programmatic value changes. */
   setCursor: (pos: number) => void;
-}
-
-const WORD_CHAR = /\w/;
-
-/** Returns true if the character is a word character (alphanumeric or underscore). */
-function isWordChar(ch: string): boolean {
-  return WORD_CHAR.test(ch);
-}
-
-/** Finds the start of the previous word from the given position. */
-function findPreviousWordBoundary(value: string, pos: number): number {
-  if (pos <= 0) {
-    return 0;
-  }
-  let i = pos - 1;
-  // Skip non-word characters (whitespace, punctuation).
-  while (i > 0 && !isWordChar(value[i - 1])) {
-    i--;
-  }
-  // Skip the word itself.
-  while (i > 0 && isWordChar(value[i - 1])) {
-    i--;
-  }
-  return i;
-}
-
-/** Finds the end of the next word from the given position. */
-function findNextWordBoundary(value: string, pos: number): number {
-  let i = pos;
-  // Skip non-word characters (whitespace, punctuation).
-  while (i < value.length && !isWordChar(value[i])) {
-    i++;
-  }
-  // Skip the word itself to land at end of word.
-  while (i < value.length && isWordChar(value[i])) {
-    i++;
-  }
-  return i;
-}
-
-/** Returns the line index and column offset for a cursor position within a value. */
-function getCursorLineInfo(value: string, pos: number) {
-  const lines = value.split("\n");
-  let remaining = pos;
-  for (const [i, line] of lines.entries()) {
-    if (remaining <= line.length) {
-      return { lineIndex: i, column: remaining, lines };
-    }
-    // +1 accounts for the \n character.
-    remaining -= line.length + 1;
-  }
-  // Unreachable when cursor is clamped correctly — the loop always matches
-  // because the last line's length equals remaining when pos === value.length.
-  /* v8 ignore next */
-  throw new Error("Cursor position out of bounds");
-}
-
-/** Converts a line index and column back to an absolute cursor position. */
-function lineColumnToPos(
-  lines: string[],
-  lineIndex: number,
-  column: number,
-): number {
-  let pos = 0;
-  for (let i = 0; i < lineIndex; i++) {
-    pos += lines[i].length + 1;
-  }
-  return pos + Math.min(column, lines[lineIndex].length);
 }
 
 /** Tracks cursor position within the input value using a ref for immediate access in callbacks. */

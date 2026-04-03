@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { useRef, useState } from "react";
-import { useTextInput } from "../input/text";
+import { splitAtCursor } from "../input/cursor";
+import { useTextInput } from "../input/text-input";
 import type { AutocompleteItem } from "./autocomplete";
 import { AutocompleteList, useAutocompleteNavigation } from "./autocomplete";
 import { Border } from "../ui/border";
@@ -138,20 +139,6 @@ function useChatInput(props: ChatInputProps) {
     instructions,
     showAutocomplete,
     autocomplete,
-  };
-}
-
-/** Splits a value around a cursor position for rendering. */
-export function splitAtCursor(
-  value: string,
-  cursor: number,
-): { before: string; at: string; after: string } {
-  const charAtCursor = value[cursor];
-  const showPlaceholder = charAtCursor === undefined || charAtCursor === "\n";
-  return {
-    before: value.slice(0, cursor),
-    at: showPlaceholder ? " " : charAtCursor,
-    after: showPlaceholder ? value.slice(cursor) : value.slice(cursor + 1),
   };
 }
 

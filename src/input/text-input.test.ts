@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
-import { type LineMode, useTextInput } from "./text";
+import { type LineMode, useTextInput } from "./text-input";
 
 /** Test harness that renders useTextInput and exposes cursor position. */
 function Harness(props: {
