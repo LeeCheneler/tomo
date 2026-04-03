@@ -7,6 +7,7 @@ import { Indent } from "../ui/layout/indent";
 import type { NavigationMenuItem } from "../ui/navigation-menu";
 import { NavigationMenu } from "../ui/navigation-menu";
 import { theme } from "../ui/theme";
+import { AllowedCommandsScreen } from "./allowed-commands";
 import { PermissionsScreen } from "./permissions";
 import { ToolsScreen } from "./tools";
 
@@ -89,6 +90,10 @@ export function Settings(props: SettingsProps) {
 
   if (step === "tools") {
     return <ToolsScreen onBack={handleBack} />;
+  }
+
+  if (step === "allowed-commands") {
+    return <AllowedCommandsScreen onBack={handleBack} />;
   }
 
   if (step !== "menu") {

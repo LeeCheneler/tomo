@@ -96,11 +96,14 @@ describe("Settings", () => {
 
     it("enters the correct sub-screen based on selection", async () => {
       const { stdin, lastFrame } = renderSettings();
+      // Navigate to MCP Servers (5th item, index 4)
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.enter);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("Allowed Commands");
+      expect(frame).toContain("MCP Servers");
       expect(frame).toContain("Coming soon");
     });
 
@@ -160,6 +163,29 @@ describe("Settings", () => {
     it("returns to menu from tools screen", async () => {
       const { stdin, lastFrame } = renderSettings();
       await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Settings");
+      expect(frame).toContain("Providers");
+    });
+  });
+
+  describe("allowed commands screen", () => {
+    it("enters the allowed commands screen instead of placeholder", async () => {
+      const { stdin, lastFrame } = renderSettings();
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Allowed Commands");
+      expect(frame).not.toContain("Coming soon");
+    });
+
+    it("returns to menu from allowed commands screen", async () => {
+      const { stdin, lastFrame } = renderSettings();
       await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.enter);
