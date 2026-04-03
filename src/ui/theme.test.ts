@@ -8,5 +8,6 @@ describe("theme", () => {
     expect(theme.error).toBe("red");
     expect(theme.warning).toBe("yellow");
     expect(theme.success).toBe("green");
+    expect(theme.settings).toBe("green");
   });
 });

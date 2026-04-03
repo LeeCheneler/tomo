@@ -1,9 +1,11 @@
+import { createElement } from "react";
+import { Text, useInput } from "ink";
 import { afterEach, describe, expect, it } from "vitest";
+import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { Chat } from "./chat";
-import type { CommandRegistry } from "../commands/registry";
 
 const COLUMNS = 40;
 
@@ -180,6 +182,81 @@ describe("Chat", () => {
       const { stdin, lastFrame } = renderChat(commandRegistry);
       await stdin.write("hello");
       expect(lastFrame()).not.toContain("Responds with pong");
+    });
+  });
+
+  describe("takeover", () => {
+    /** Stub takeover component that renders text and exits on escape. */
+    function StubTakeover(props: { onDone: TakeoverDone }) {
+      useInput((_input, key) => {
+        if (key.escape) {
+          props.onDone("Stub result");
+        }
+      });
+      return createElement(Text, null, "STUB_TAKEOVER");
+    }
+
+    /** Creates a registry with a takeover command that renders StubTakeover. */
+    function createTakeoverRegistry(): CommandRegistry {
+      const registry = createCommandRegistry();
+      registry.register({
+        name: "test",
+        description: "Test takeover",
+        takeover: (onDone) => createElement(StubTakeover, { onDone }),
+      });
+      return registry;
+    }
+
+    it("switches to takeover screen on takeover command", async () => {
+      const { stdin, lastFrame } = renderChat(createTakeoverRegistry());
+      await stdin.write("/test ");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("STUB_TAKEOVER");
+      // ChatInput is not rendered
+      expect(frame).not.toContain("command");
+    });
+
+    it("returns to input mode when takeover calls onDone", async () => {
+      const { stdin, lastFrame } = renderChat(createTakeoverRegistry());
+      await stdin.write("/test ");
+      await stdin.write(keys.enter);
+      // Escape triggers StubTakeover's onDone
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("❯");
+      // Result message appears in chat list
+      expect(frame).toContain("Stub result");
+    });
+
+    it("does not append a message when takeover calls onDone with no result", async () => {
+      const registry = createCommandRegistry();
+      registry.register({
+        name: "silent",
+        description: "Silent takeover",
+        takeover: (onDone) => {
+          // Immediately done with no result
+          setTimeout(() => onDone(), 0);
+          return createElement(Text, null, "SILENT");
+        },
+      });
+      const { stdin, lastFrame } = renderChat(registry);
+      await stdin.write("/silent ");
+      await stdin.write(keys.enter);
+      // Wait for the setTimeout to fire
+      await new Promise((r) => setTimeout(r, 50));
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("❯");
+      // No command message in the list (only the input prompt)
+      expect(frame).not.toContain("/silent");
+    });
+
+    it("shows takeover in autocomplete", async () => {
+      const { stdin, lastFrame } = renderChat(createTakeoverRegistry());
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("test");
+      expect(frame).toContain("Test takeover");
     });
   });
 

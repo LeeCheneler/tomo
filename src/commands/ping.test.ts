@@ -7,6 +7,6 @@ describe("pingCommand", () => {
   });
 
   it("returns pong", () => {
-    expect(pingCommand.handler()).toBe("pong");
+    expect(pingCommand.handler?.()).toBe("pong");
   });
 });

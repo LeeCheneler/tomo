@@ -61,22 +61,23 @@ describe("createCommandRegistry", () => {
       handler: () => "pong",
     });
     const command = registry.get("ping");
-    expect(command?.handler()).toBe("pong");
+    expect(command?.handler?.()).toBe("pong");
   });
 
   describe("invoke", () => {
-    it("parses command name and returns a CommandMessage", async () => {
+    it("returns an inline result for handler commands", async () => {
       const registry = createCommandRegistry();
       registry.register({
         name: "ping",
         description: "Responds with pong",
         handler: () => "pong",
       });
-      const message = await registry.invoke("/ping");
-      expect(message.role).toBe("command");
-      expect(message.command).toBe("ping");
-      expect(message.result).toBe("pong");
-      expect(message.id).toBeDefined();
+      const result = await registry.invoke("/ping");
+      expect(result.type).toBe("inline");
+      expect(result.name).toBe("ping");
+      if (result.type === "inline") {
+        expect(result.output).toBe("pong");
+      }
     });
 
     it("parses command name from first word", async () => {
@@ -86,16 +87,21 @@ describe("createCommandRegistry", () => {
         description: "Echoes input",
         handler: () => "echoed",
       });
-      const message = await registry.invoke("/echo hello world");
-      expect(message.command).toBe("echo");
-      expect(message.result).toBe("echoed");
+      const result = await registry.invoke("/echo hello world");
+      expect(result.name).toBe("echo");
+      if (result.type === "inline") {
+        expect(result.output).toBe("echoed");
+      }
     });
 
-    it("returns an error message for unknown commands", async () => {
+    it("returns an inline error for unknown commands", async () => {
       const registry = createCommandRegistry();
-      const message = await registry.invoke("/nope");
-      expect(message.command).toBe("nope");
-      expect(message.result).toContain("Unknown command");
+      const result = await registry.invoke("/nope");
+      expect(result.type).toBe("inline");
+      expect(result.name).toBe("nope");
+      if (result.type === "inline") {
+        expect(result.output).toContain("Unknown command");
+      }
     });
 
     it("handles async handlers", async () => {
@@ -105,8 +111,26 @@ describe("createCommandRegistry", () => {
         description: "Async command",
         handler: async () => "done",
       });
-      const message = await registry.invoke("/slow");
-      expect(message.result).toBe("done");
+      const result = await registry.invoke("/slow");
+      if (result.type === "inline") {
+        expect(result.output).toBe("done");
+      }
+    });
+
+    it("returns a takeover result for takeover commands", async () => {
+      const render = () => null;
+      const registry = createCommandRegistry();
+      registry.register({
+        name: "settings",
+        description: "Manage settings",
+        takeover: render,
+      });
+      const result = await registry.invoke("/settings");
+      expect(result.type).toBe("takeover");
+      expect(result.name).toBe("settings");
+      if (result.type === "takeover") {
+        expect(result.render).toBe(render);
+      }
     });
   });
 });

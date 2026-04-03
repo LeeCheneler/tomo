@@ -2,6 +2,7 @@ import { Box, Static } from "ink";
 import { Chat } from "./chat/chat";
 import { pingCommand } from "./commands/ping";
 import { createCommandRegistry } from "./commands/registry";
+import { settingsCommand } from "./commands/settings";
 import { useConfig } from "./config/hook";
 import { AppHeader } from "./ui/app-header";
 import { version } from "./utils/version";
@@ -10,6 +11,7 @@ import { version } from "./utils/version";
 function buildCommandRegistry() {
   const registry = createCommandRegistry();
   registry.register(pingCommand);
+  registry.register(settingsCommand);
   return registry;
 }
 

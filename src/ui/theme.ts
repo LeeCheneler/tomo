@@ -5,4 +5,5 @@ export const theme = {
   error: "red",
   warning: "yellow",
   success: "green",
+  settings: "green",
 } as const;

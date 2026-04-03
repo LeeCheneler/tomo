@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { isCommand } from "../commands/is-command";
-import type { CommandRegistry } from "../commands/registry";
+import type {
+  CommandRegistry,
+  InvokeResult,
+  TakeoverRender,
+} from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
 import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
@@ -9,15 +13,18 @@ import type { ChatMessage } from "./message";
 import { MessageHistory } from "./message-history";
 import { useHistory } from "./use-history";
 
-/** Chat mode — either typing input or browsing history. */
-type ChatMode = { kind: "input"; initialValue?: string } | { kind: "history" };
+/** Chat mode — typing input, browsing history, or a takeover screen. */
+type ChatMode =
+  | { kind: "input"; initialValue?: string }
+  | { kind: "history" }
+  | { kind: "takeover"; render: TakeoverRender };
 
 /** Props for useChat. */
 interface UseChatProps {
   commandRegistry?: CommandRegistry;
 }
 
-/** Manages mode switching between input and history. */
+/** Manages mode switching between input, history, and takeover screens. */
 function useChat(props: UseChatProps) {
   const history = useHistory();
   const [mode, setMode] = useState<ChatMode>({ kind: "input" });
@@ -29,16 +36,43 @@ function useChat(props: UseChatProps) {
     setMessages((prev) => [...prev, msg]);
   }
 
+  /** Handles an invoke result — either enters takeover mode or appends an inline message. */
+  function handleInvokeResult(result: InvokeResult) {
+    if (result.type === "takeover") {
+      setMode({ kind: "takeover", render: result.render });
+      return;
+    }
+    appendMessage({
+      id: crypto.randomUUID(),
+      role: "command",
+      command: result.name,
+      result: result.output,
+    });
+  }
+
   /** Handles submitted input — dispatches commands or creates user messages. */
   async function handleMessage(message: string) {
     const commandRegistry = props.commandRegistry ?? createCommandRegistry();
     if (isCommand(message)) {
-      appendMessage(await commandRegistry.invoke(message));
+      handleInvokeResult(await commandRegistry.invoke(message));
       return;
     }
 
     appendMessage({ id: crypto.randomUUID(), role: "user", content: message });
     history.push(message);
+  }
+
+  /** Handles a takeover screen completing. Drops an optional result message and returns to input. */
+  function handleTakeoverDone(result?: string) {
+    if (result) {
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "command",
+        command: "",
+        result,
+      });
+    }
+    setMode({ kind: "input" });
   }
 
   /** Saves the draft and switches to history mode if there are entries. */
@@ -77,6 +111,7 @@ function useChat(props: UseChatProps) {
     handleUp,
     handleSelected,
     handleExit,
+    handleTakeoverDone,
   };
 }
 
@@ -85,7 +120,7 @@ interface ChatProps {
   commandRegistry?: CommandRegistry;
 }
 
-/** Chat router — renders ChatInput or MessageHistory based on mode. */
+/** Chat router — renders ChatInput, MessageHistory, or takeover content based on mode. */
 export function Chat(props: ChatProps) {
   const {
     mode,
@@ -96,7 +131,17 @@ export function Chat(props: ChatProps) {
     handleUp,
     handleSelected,
     handleExit,
+    handleTakeoverDone,
   } = useChat({ commandRegistry: props.commandRegistry });
+
+  if (mode.kind === "takeover") {
+    return (
+      <>
+        <ChatList messages={messages} />
+        {mode.render(handleTakeoverDone)}
+      </>
+    );
+  }
 
   if (mode.kind === "history") {
     return (
