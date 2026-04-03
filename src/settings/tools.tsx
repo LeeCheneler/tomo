@@ -15,9 +15,6 @@ import { theme } from "../ui/theme";
 /** Tool keys matching the config schema. */
 type ToolKey = keyof Tools;
 
-/** Tool keys that have additional options accessible via Tab. */
-const TOOLS_WITH_OPTIONS = new Set<ToolKey>(["webSearch"]);
-
 /** Display order and labels for tools. */
 const TOOL_ITEMS: readonly {
   key: ToolKey;
@@ -72,49 +69,35 @@ function buildToggleItems(tools: Tools): ToggleListItem[] {
   }));
 }
 
-/** Builds form fields for a tool's options. */
-function buildFormFields(toolKey: ToolKey, tools: Tools): FormField[] {
-  /* v8 ignore next -- only webSearch is routed here for now */
-  if (toolKey === "webSearch") {
-    return [
-      {
-        type: "toggle",
-        key: "enabled",
-        label: "Enabled",
-        initialValue: tools.webSearch.enabled,
-      },
-      {
-        type: "text",
-        key: "apiKey",
-        label: "API Key",
-        initialValue: tools.webSearch.apiKey ?? "",
-      },
-    ];
-  }
-  /* v8 ignore next -- only webSearch is routed here for now */
-  return [];
+/** Builds form fields for a tool's options. Only webSearch has options currently. */
+function buildFormFields(tools: Tools): FormField[] {
+  return [
+    {
+      type: "toggle",
+      key: "enabled",
+      label: "Enabled",
+      initialValue: tools.webSearch.enabled,
+    },
+    {
+      type: "text",
+      key: "apiKey",
+      label: "API Key",
+      initialValue: tools.webSearch.apiKey ?? "",
+    },
+  ];
 }
 
-/** Applies form values back to the tools config. */
-function applyFormValues(
-  toolKey: ToolKey,
-  tools: Tools,
-  formValues: FormValues,
-): Tools {
-  /* v8 ignore next -- only webSearch is routed here for now */
-  if (toolKey === "webSearch") {
-    const apiKey = formValues.apiKey as string;
-    return {
-      ...tools,
-      webSearch: {
-        ...tools.webSearch,
-        enabled: formValues.enabled as boolean,
-        apiKey: apiKey || undefined,
-      },
-    };
-  }
-  /* v8 ignore next -- only webSearch is routed here for now */
-  return tools;
+/** Applies form values back to the tools config. Only webSearch has options currently. */
+function applyFormValues(tools: Tools, formValues: FormValues): Tools {
+  const apiKey = formValues.apiKey as string;
+  return {
+    ...tools,
+    webSearch: {
+      ...tools.webSearch,
+      enabled: formValues.enabled as boolean,
+      apiKey: apiKey || undefined,
+    },
+  };
 }
 
 /** Props for ToolsScreen. */
@@ -151,8 +134,6 @@ function useToolsScreen(props: ToolsScreenProps) {
   /** Opens the options form for a tool. */
   function handleOptions(key: string) {
     const toolKey = key as ToolKey;
-    /* v8 ignore next -- ToggleList guards via hasOptions before calling onOptions */
-    if (!TOOLS_WITH_OPTIONS.has(toolKey)) return;
     const item = TOOL_ITEMS.find((t) => t.key === toolKey);
     /* v8 ignore next -- toolKey always matches a TOOL_ITEMS entry */
     if (!item) return;
@@ -163,7 +144,7 @@ function useToolsScreen(props: ToolsScreenProps) {
   function handleOptionsSubmit(formValues: FormValues) {
     /* v8 ignore next -- activeOptions is always set when this fires */
     if (!activeOptions) return;
-    const updated = applyFormValues(activeOptions.key, tools, formValues);
+    const updated = applyFormValues(tools, formValues);
     setTools(updated);
     updateTools(updated);
     setActiveOptions(null);
@@ -200,7 +181,7 @@ export function ToolsScreen(props: ToolsScreenProps) {
   } = useToolsScreen(props);
 
   if (activeOptions) {
-    const fields = buildFormFields(activeOptions.key, tools);
+    const fields = buildFormFields(tools);
     return (
       <Box flexDirection="column" paddingTop={1}>
         <Text color={theme.settings}>{buildBorder()}</Text>

@@ -111,12 +111,9 @@ function useChatInput(props: ChatInputProps) {
     props.onUp?.(valueRef.current);
   }
 
-  /** Navigates autocomplete down. */
+  /** Navigates autocomplete down. Only called when captureUpDown (showAutocomplete) is true. */
   function handleDown() {
-    /* v8 ignore next -- showAutocomplete gates all callers */
-    if (showAutocomplete) {
-      autocomplete.moveDown();
-    }
+    autocomplete.moveDown();
   }
 
   const { cursor, setCursor: setCursorPos } = useTextInput({

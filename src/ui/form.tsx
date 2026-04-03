@@ -138,8 +138,8 @@ function useForm(props: FormProps) {
       return;
     }
 
-    /* v8 ignore next -- only toggle and text types exist */
-    if (field.type === "text") {
+    // After handling toggle above, the remaining type is always text.
+    {
       const value = valuesRef.current[field.key] as string;
       const tc = textCursorRef.current;
 
