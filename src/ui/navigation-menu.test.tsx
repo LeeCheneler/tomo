@@ -64,19 +64,18 @@ describe("NavigationMenu", () => {
       expect(lastFrame()).toContain("❯ Bravo");
     });
 
-    it("clamps cursor at the top", async () => {
+    it("loops from top to bottom on up", async () => {
       const { stdin, lastFrame } = renderMenu();
       await stdin.write(keys.up);
-      await stdin.write(keys.up);
-      expect(lastFrame()).toContain("❯ Alpha");
+      expect(lastFrame()).toContain("❯ Charlie");
     });
 
-    it("clamps cursor at the bottom", async () => {
+    it("loops from bottom to top on down", async () => {
       const { stdin, lastFrame } = renderMenu();
-      for (let i = 0; i < 10; i++) {
-        await stdin.write(keys.down);
-      }
-      expect(lastFrame()).toContain("❯ Charlie");
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      expect(lastFrame()).toContain("❯ Alpha");
     });
 
     it("navigates through all items sequentially", async () => {
@@ -86,6 +85,8 @@ describe("NavigationMenu", () => {
       expect(lastFrame()).toContain("❯ Bravo");
       await stdin.write(keys.down);
       expect(lastFrame()).toContain("❯ Charlie");
+      await stdin.write(keys.down);
+      expect(lastFrame()).toContain("❯ Alpha");
     });
   });
 

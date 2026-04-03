@@ -32,12 +32,13 @@ function useNavigationMenu(props: NavigationMenuProps) {
     }
 
     if (key.upArrow) {
-      setCursor((i) => Math.max(0, i - 1));
+      const count = props.items.length;
+      setCursor((i) => (i - 1 + count) % count);
       return;
     }
 
     if (key.downArrow) {
-      setCursor((i) => Math.min(props.items.length - 1, i + 1));
+      setCursor((i) => (i + 1) % props.items.length);
       return;
     }
 
