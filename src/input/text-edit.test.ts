@@ -51,6 +51,20 @@ describe("processTextEdit", () => {
         cursor: 1,
       });
     });
+
+    it("strips newlines in single-line mode", () => {
+      expect(processTextEdit("a\nb\nc", key(), "hello", 5)).toEqual({
+        value: "helloabc",
+        cursor: 8,
+      });
+    });
+
+    it("no-ops when input is only newlines in single-line mode", () => {
+      expect(processTextEdit("\n", key(), "hello", 5)).toEqual({
+        value: "hello",
+        cursor: 5,
+      });
+    });
   });
 
   describe("backspace", () => {

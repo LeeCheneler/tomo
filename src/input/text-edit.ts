@@ -131,9 +131,13 @@ export function processTextEdit(
     return null;
   }
 
-  // Insert printable character.
+  // Strip newlines in single-line mode (e.g. pasted text).
+  const sanitised = lineMode === "single" ? input.replace(/\n/g, "") : input;
+  if (sanitised.length === 0) return { value, cursor };
+
+  // Insert printable character(s).
   return {
-    value: value.slice(0, cursor) + input + value.slice(cursor),
-    cursor: cursor + input.length,
+    value: value.slice(0, cursor) + sanitised + value.slice(cursor),
+    cursor: cursor + sanitised.length,
   };
 }
