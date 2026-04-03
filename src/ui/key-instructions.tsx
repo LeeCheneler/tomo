@@ -1,4 +1,5 @@
 import { Text } from "ink";
+import { theme } from "./theme";
 
 /** A single instruction item showing a key and its action. */
 export interface InstructionItem {
@@ -22,7 +23,7 @@ export function KeyInstructions(props: KeyInstructionsProps) {
       {props.items.map((item, i) => (
         <Text key={item.key}>
           {i > 0 && <Text dimColor> · </Text>}
-          <Text color="yellow">{item.key}</Text>
+          <Text color={theme.key}>{item.key}</Text>
           <Text dimColor> {item.description}</Text>
         </Text>
       ))}

@@ -133,6 +133,58 @@ describe("ToggleList", () => {
     });
   });
 
+  describe("options", () => {
+    const ITEMS_WITH_OPTIONS: ToggleListItem[] = [
+      { key: "a", label: "Alpha", value: true },
+      { key: "b", label: "Bravo", value: false, hasOptions: true },
+      { key: "c", label: "Charlie", value: true },
+    ];
+
+    /** Renders ToggleList with options support and spy callbacks. */
+    function renderWithOptions() {
+      const onToggle = vi.fn();
+      const onExit = vi.fn();
+      const onOptions = vi.fn();
+      const result = renderInk(
+        <ToggleList
+          items={ITEMS_WITH_OPTIONS}
+          onToggle={onToggle}
+          onExit={onExit}
+          onOptions={onOptions}
+        />,
+      );
+      return { ...result, onToggle, onExit, onOptions };
+    }
+
+    it("shows options indicator on items with hasOptions", () => {
+      const { lastFrame } = renderWithOptions();
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Bravo ›");
+      expect(frame).not.toContain("Alpha ›");
+      expect(frame).not.toContain("Charlie ›");
+    });
+
+    it("calls onOptions with item key on tab", async () => {
+      const { stdin, onOptions } = renderWithOptions();
+      await stdin.write(keys.down);
+      await stdin.write(keys.tab);
+      expect(onOptions).toHaveBeenCalledWith("b");
+    });
+
+    it("does not call onOptions on tab when item has no options", async () => {
+      const { stdin, onOptions } = renderWithOptions();
+      await stdin.write(keys.tab);
+      expect(onOptions).not.toHaveBeenCalled();
+    });
+
+    it("ignores tab when onOptions is not provided", async () => {
+      const { stdin, onToggle, onExit } = renderToggleList();
+      await stdin.write(keys.tab);
+      expect(onToggle).not.toHaveBeenCalled();
+      expect(onExit).not.toHaveBeenCalled();
+    });
+  });
+
   describe("unhandled keys", () => {
     it("ignores printable characters other than space", async () => {
       const { stdin, lastFrame, onToggle, onExit } = renderToggleList();

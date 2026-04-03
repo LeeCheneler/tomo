@@ -6,4 +6,5 @@ export const theme = {
   warning: "yellow",
   success: "green",
   settings: "green",
+  key: "yellow",
 } as const;
