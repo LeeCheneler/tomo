@@ -1,6 +1,7 @@
 import { Text, useInput } from "ink";
 import { useRef, useState } from "react";
 import { splitAtCursor } from "../input/cursor";
+import { processTextEdit } from "../input/text-edit";
 import { Indent } from "./layout/indent";
 import { theme } from "./theme";
 
@@ -126,34 +127,13 @@ function useForm(props: FormProps) {
     }
 
     // After handling toggle above, the remaining type is always text.
-    {
-      const value = valuesRef.current[field.key] as string;
-      const tc = textCursorRef.current;
-
-      if (key.backspace || key.delete) {
-        if (tc > 0) {
-          updateValue(field.key, value.slice(0, tc - 1) + value.slice(tc));
-          moveTextCursor(tc - 1);
-        }
-        return;
+    const value = valuesRef.current[field.key] as string;
+    const edit = processTextEdit(input, key, value, textCursorRef.current);
+    if (edit) {
+      if (edit.value !== value) {
+        updateValue(field.key, edit.value);
       }
-
-      if (key.leftArrow) {
-        moveTextCursor(Math.max(0, tc - 1));
-        return;
-      }
-
-      if (key.rightArrow) {
-        moveTextCursor(Math.min(value.length, tc + 1));
-        return;
-      }
-
-      if (key.ctrl || key.meta || key.tab) {
-        return;
-      }
-
-      updateValue(field.key, value.slice(0, tc) + input + value.slice(tc));
-      moveTextCursor(tc + input.length);
+      moveTextCursor(edit.cursor);
     }
   });
 

@@ -1,6 +1,7 @@
 import { Text, useInput } from "ink";
 import { useRef, useState } from "react";
 import { splitAtCursor } from "../input/cursor";
+import { processTextEdit } from "../input/text-edit";
 import { Indent } from "./layout/indent";
 import { theme } from "./theme";
 
@@ -137,38 +138,17 @@ function useEditableList(props: EditableListProps) {
       return;
     }
 
-    if (key.backspace || key.delete) {
-      const tc = textCursorRef.current;
-      const currentDraft = draftRef.current;
-
-      if (tc > 0) {
-        updateDraft(currentDraft.slice(0, tc - 1) + currentDraft.slice(tc));
-        moveTextCursor(tc - 1);
-      }
-      return;
+    // Delegate text editing (insert, delete, cursor, word ops).
+    const edit = processTextEdit(
+      input,
+      key,
+      draftRef.current,
+      textCursorRef.current,
+    );
+    if (edit) {
+      updateDraft(edit.value);
+      moveTextCursor(edit.cursor);
     }
-
-    if (key.leftArrow) {
-      moveTextCursor(Math.max(0, textCursorRef.current - 1));
-      return;
-    }
-
-    if (key.rightArrow) {
-      moveTextCursor(
-        Math.min(draftRef.current.length, textCursorRef.current + 1),
-      );
-      return;
-    }
-
-    if (key.ctrl || key.meta || key.tab) {
-      return;
-    }
-
-    // Insert printable character at text cursor position.
-    const tc = textCursorRef.current;
-    const currentDraft = draftRef.current;
-    updateDraft(currentDraft.slice(0, tc) + input + currentDraft.slice(tc));
-    moveTextCursor(tc + input.length);
   });
 
   return {

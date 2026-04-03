@@ -1,7 +1,7 @@
-import { Box, Text } from "ink";
+import { Box, Text, useInput } from "ink";
 import { useRef, useState } from "react";
 import { splitAtCursor } from "../input/cursor";
-import { useTextInput } from "../input/text-input";
+import { processTextEdit } from "../input/text-edit";
 import type { AutocompleteItem } from "./autocomplete";
 import { AutocompleteList, useAutocompleteNavigation } from "./autocomplete";
 import { Border } from "../ui/border";
@@ -34,12 +34,14 @@ function shouldShowAutocomplete(
   );
 }
 
-/** Manages chat input state and submission. Delegates autocomplete to its own hook. */
+/** Manages chat input state, cursor, and keyboard handling. */
 function useChatInput(props: ChatInputProps) {
   const initial = props.initialValue ?? "";
   const [value, setValue] = useState(initial);
   const [escPending, setEscPending] = useState(false);
+  const [cursor, setCursorState] = useState(initial.length);
   const valueRef = useRef(initial);
+  const cursorRef = useRef(initial.length);
 
   const showAutocomplete = shouldShowAutocomplete(
     value,
@@ -52,72 +54,82 @@ function useChatInput(props: ChatInputProps) {
     showAutocomplete,
   );
 
-  /** Updates value in both state (for rendering) and ref (for callbacks). */
-  function handleChange(newValue: string) {
+  /** Updates value in both state and ref. */
+  function applyChange(newValue: string) {
     valueRef.current = newValue;
     setValue(newValue);
     setEscPending(false);
     autocomplete.reset();
   }
 
-  /** Submits the current value if non-empty, then clears the input. */
-  function handleSubmit() {
-    if (showAutocomplete) {
-      // showAutocomplete guarantees filtered items exist and selectedIndex is valid.
-      const selected = autocomplete.select();
-      /* v8 ignore next -- selectedIndex is always in bounds */
-      if (!selected) return;
-      const filled = `/${selected.name} `;
-      handleChange(filled);
-      setCursorPos(filled.length);
-      return;
-    }
-
-    const current = valueRef.current;
-    if (current.trim() === "") {
-      return;
-    }
-    props.onMessage(current);
-    handleChange("");
-    setCursorPos(0);
+  /** Updates cursor in both state and ref. */
+  function setCursorPos(pos: number) {
+    cursorRef.current = pos;
+    setCursorState(pos);
   }
 
-  /** Handles escape: first press shows hint, second press clears input. */
-  function handleEscape() {
-    if (escPending) {
-      handleChange("");
+  useInput((input, key) => {
+    const pos = cursorRef.current;
+    const val = valueRef.current;
+
+    if (key.return) {
+      if (showAutocomplete) {
+        const selected = autocomplete.select();
+        /* v8 ignore next -- selectedIndex is always in bounds */
+        if (!selected) return;
+        const filled = `/${selected.name} `;
+        applyChange(filled);
+        setCursorPos(filled.length);
+        return;
+      }
+
+      if (val.trim() === "") return;
+      props.onMessage(val);
+      applyChange("");
       setCursorPos(0);
       return;
     }
-    if (valueRef.current.length > 0) {
-      setEscPending(true);
-    }
-  }
 
-  /** Navigates autocomplete up or passes to history. */
-  function handleUp() {
-    if (showAutocomplete) {
+    if (key.escape) {
+      if (escPending) {
+        applyChange("");
+        setCursorPos(0);
+        return;
+      }
+      if (val.length > 0) {
+        setEscPending(true);
+      }
+      return;
+    }
+
+    if (key.upArrow && showAutocomplete) {
       autocomplete.moveUp();
       return;
     }
-    props.onUp?.(valueRef.current);
-  }
 
-  /** Navigates autocomplete down. Only called when captureUpDown (showAutocomplete) is true. */
-  function handleDown() {
-    autocomplete.moveDown();
-  }
+    if (key.downArrow && showAutocomplete) {
+      autocomplete.moveDown();
+      return;
+    }
 
-  const { cursor, setCursor: setCursorPos } = useTextInput({
-    value,
-    onChange: handleChange,
-    onSubmit: handleSubmit,
-    lineMode: "multi",
-    onUp: handleUp,
-    onDown: handleDown,
-    onEscape: handleEscape,
-    captureUpDown: showAutocomplete,
+    // Delegate text editing (insert, delete, cursor, word ops, multi-line nav).
+    const edit = processTextEdit(input, key, val, pos, { lineMode: "multi" });
+    if (edit) {
+      if (edit.value !== val) {
+        applyChange(edit.value);
+      }
+      setCursorPos(edit.cursor);
+      return;
+    }
+
+    // processTextEdit returns null for up/down at boundaries in multi mode.
+    if (key.upArrow) {
+      props.onUp?.(val);
+    }
   });
+
+  // Clamp cursor to valid range on each render.
+  const clampedCursor = Math.max(0, Math.min(cursor, value.length));
 
   const instructions: InstructionItem[] = showAutocomplete
     ? [
@@ -134,7 +146,7 @@ function useChatInput(props: ChatInputProps) {
 
   return {
     value,
-    cursor,
+    cursor: clampedCursor,
     escPending,
     instructions,
     showAutocomplete,
