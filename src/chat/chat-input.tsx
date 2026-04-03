@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import { useRef, useState } from "react";
 import { useTextInput } from "../input/text";
-import type { AutocompleteItem, AutocompleteNavigation } from "./autocomplete";
+import type { AutocompleteItem } from "./autocomplete";
 import { AutocompleteList, useAutocompleteNavigation } from "./autocomplete";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
