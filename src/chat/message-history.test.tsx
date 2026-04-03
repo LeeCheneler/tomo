@@ -152,64 +152,25 @@ describe("MessageHistory", () => {
   });
 
   describe("instruction bar", () => {
-    it("shows escape and enter instructions", () => {
+    it("shows static instructions", () => {
       const { lastFrame } = renderHistory();
       const frame = lastFrame() ?? "";
+      expect(frame).toContain("up/down");
+      expect(frame).toContain("scroll");
       expect(frame).toContain("esc");
       expect(frame).toContain("return to draft");
       expect(frame).toContain("enter");
       expect(frame).toContain("replace draft");
     });
 
-    it("shows up next when there are older entries", async () => {
+    it("instructions do not change when navigating", async () => {
       const { stdin, lastFrame } = renderHistory();
-      // Default is last entry, so up is available.
+      const before = lastFrame();
       await stdin.write(keys.up);
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("up");
-      expect(frame).toContain("next");
-    });
-
-    it("does not show up next on the first entry", async () => {
-      const { stdin, lastFrame } = renderHistory();
-      await stdin.write(keys.up);
-      await stdin.write(keys.up);
-      // Now at first entry.
-      const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("up");
-      expect(frame).not.toContain("next");
-    });
-
-    it("shows down previous when there are newer entries", async () => {
-      const { stdin, lastFrame } = renderHistory();
-      await stdin.write(keys.up);
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("down");
-      expect(frame).toContain("previous");
-    });
-
-    it("shows esc/down return to draft on the last entry", () => {
-      const { lastFrame } = renderHistory();
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("esc/down");
-      expect(frame).toContain("return to draft");
-      expect(frame).not.toContain("previous");
-    });
-
-    it("shows esc without down when not on the last entry", async () => {
-      const { stdin, lastFrame } = renderHistory();
-      await stdin.write(keys.up);
-      const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("esc/down");
-      expect(frame).toContain("esc");
-      expect(frame).toContain("return to draft");
-    });
-
-    it("shows only single entry with no up and esc/down to exit", () => {
-      const { lastFrame } = renderHistory({ entries: ["only"] });
-      const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("up");
-      expect(frame).toContain("esc/down");
+      const after = lastFrame();
+      // Instructions should be identical regardless of position.
+      expect(before).toContain("up/down");
+      expect(after).toContain("up/down");
     });
   });
 });

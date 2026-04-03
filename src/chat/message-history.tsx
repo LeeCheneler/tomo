@@ -54,15 +54,11 @@ function useMessageHistory(props: MessageHistoryProps) {
     }
   });
 
-  const canGoUp = index > 0;
-  const canGoDown = index < props.entries.length - 1;
-
-  const instructions = [
-    canGoUp && { key: "up", description: "next" },
-    canGoDown && { key: "down", description: "previous" },
-    { key: canGoDown ? "esc" : "esc/down", description: "return to draft" },
+  const instructions: InstructionItem[] = [
+    { key: "up/down", description: "scroll" },
+    { key: "esc", description: "return to draft" },
     { key: "enter", description: "replace draft" },
-  ].filter((i): i is InstructionItem => Boolean(i));
+  ];
 
   return { selectedEntry: props.entries[index], instructions };
 }

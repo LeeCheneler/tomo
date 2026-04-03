@@ -13,6 +13,7 @@ function Harness(props: {
   onUp?: () => void;
   onDown?: () => void;
   onEscape?: () => void;
+  captureUpDown?: boolean;
   onCursor?: (cursor: number) => void;
   onSetCursor?: (setCursor: (pos: number) => void) => void;
 }) {
@@ -24,6 +25,7 @@ function Harness(props: {
     onUp: props.onUp,
     onDown: props.onDown,
     onEscape: props.onEscape,
+    captureUpDown: props.captureUpDown,
   });
   props.onCursor?.(cursor);
   props.onSetCursor?.(setCursor);
@@ -40,6 +42,7 @@ function renderHarness(
     onUp: () => void;
     onDown: () => void;
     onEscape: () => void;
+    captureUpDown: boolean;
     onCursor: (cursor: number) => void;
     onSetCursor: (setCursor: (pos: number) => void) => void;
   }> = {},
@@ -53,6 +56,7 @@ function renderHarness(
       onUp: overrides.onUp,
       onDown: overrides.onDown,
       onEscape: overrides.onEscape,
+      captureUpDown: overrides.captureUpDown,
       onCursor: overrides.onCursor,
       onSetCursor: overrides.onSetCursor,
     }),
@@ -499,6 +503,49 @@ describe("useTextInput", () => {
       stdin.write(keys.up);
       stdin.write(keys.down);
       expect(onDown).not.toHaveBeenCalled();
+    });
+
+    it("fires onUp on every up press when captureUpDown is true", () => {
+      const onUp = vi.fn();
+      const { stdin } = renderHarness({
+        value: "hello",
+        onUp,
+        captureUpDown: true,
+      });
+      // Cursor is at end — normally up would move to start, not fire onUp.
+      stdin.write(keys.up);
+      expect(onUp).toHaveBeenCalledOnce();
+    });
+
+    it("fires onDown on every down press when captureUpDown is true", () => {
+      const onDown = vi.fn();
+      const { stdin } = renderHarness({
+        value: "abc\ndef",
+        onDown,
+        captureUpDown: true,
+      });
+      // Cursor at end of line 2 — normally down at end fires onDown,
+      // but with cursor at start it would move to line 2. captureUpDown skips that.
+      stdin.write(keys.up);
+      stdin.write(keys.up);
+      // Now at start of line 1. Without captureUpDown, down would move to line 2.
+      stdin.write(keys.down);
+      expect(onDown).toHaveBeenCalledOnce();
+    });
+
+    it("does not move cursor on up/down when captureUpDown is true", () => {
+      const onUp = vi.fn();
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({
+        value: "hello",
+        onChange,
+        onUp,
+        captureUpDown: true,
+      });
+      // Up should fire onUp, not move cursor. Typing should insert at end.
+      stdin.write(keys.up);
+      stdin.write("x");
+      expect(onChange).toHaveBeenCalledWith("hellox");
     });
 
     it("setCursor moves cursor to specified position", () => {

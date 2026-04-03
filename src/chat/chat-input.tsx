@@ -1,6 +1,8 @@
 import { Box, Text } from "ink";
 import { useRef, useState } from "react";
 import { useTextInput } from "../input/text";
+import type { AutocompleteItem } from "./autocomplete";
+import { AutocompleteList, useAutocompleteNavigation } from "./autocomplete";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
@@ -15,6 +17,8 @@ export interface ChatInputProps {
   initialValue?: string;
   /** Whether message history is available for browsing. */
   hasHistory?: boolean;
+  /** Items to show in the autocomplete list when typing a command. */
+  autocompleteItems: readonly AutocompleteItem[];
 }
 
 /** Returns the terminal width, defaulting to 80 if unavailable. */
@@ -27,24 +31,56 @@ function buildBorder(): string {
   return "─".repeat(getTerminalWidth());
 }
 
-/** Manages chat input state and submission. */
+/** Returns true when autocomplete should be visible for the given input and items. */
+function shouldShowAutocomplete(
+  value: string,
+  items: readonly AutocompleteItem[],
+): boolean {
+  if (items.length === 0) return false;
+  return (
+    value.startsWith("/") && !value.startsWith("//") && !value.includes(" ")
+  );
+}
+
+/** Manages chat input state and submission. Delegates autocomplete to its own hook. */
 function useChatInput(props: ChatInputProps) {
   const initial = props.initialValue ?? "";
   const [value, setValue] = useState(initial);
   const [escPending, setEscPending] = useState(false);
-  // Ref keeps value fresh across batched React updates so submit
-  // always sees the latest input even before re-render.
   const valueRef = useRef(initial);
+
+  const showAutocomplete = shouldShowAutocomplete(
+    value,
+    props.autocompleteItems,
+  );
+
+  const autocomplete = useAutocompleteNavigation(
+    props.autocompleteItems,
+    value.startsWith("/") ? value.slice(1) : "",
+    showAutocomplete,
+  );
 
   /** Updates value in both state (for rendering) and ref (for callbacks). */
   function handleChange(newValue: string) {
     valueRef.current = newValue;
     setValue(newValue);
     setEscPending(false);
+    autocomplete.reset();
   }
 
   /** Submits the current value if non-empty, then clears the input. */
   function handleSubmit() {
+    if (showAutocomplete) {
+      // showAutocomplete guarantees filtered items exist and selectedIndex is valid.
+      const selected = autocomplete.select();
+      /* v8 ignore next -- selectedIndex is always in bounds */
+      if (!selected) return;
+      const filled = `/${selected.name} `;
+      handleChange(filled);
+      setCursorPos(filled.length);
+      return;
+    }
+
     const current = valueRef.current;
     if (current.trim() === "") {
       return;
@@ -66,9 +102,21 @@ function useChatInput(props: ChatInputProps) {
     }
   }
 
-  /** Passes the current draft value to the onUp callback. */
+  /** Navigates autocomplete up or passes to history. */
   function handleUp() {
+    if (showAutocomplete) {
+      autocomplete.moveUp();
+      return;
+    }
     props.onUp?.(valueRef.current);
+  }
+
+  /** Navigates autocomplete down. */
+  function handleDown() {
+    /* v8 ignore next -- showAutocomplete gates all callers */
+    if (showAutocomplete) {
+      autocomplete.moveDown();
+    }
   }
 
   const { cursor, setCursor: setCursorPos } = useTextInput({
@@ -77,20 +125,28 @@ function useChatInput(props: ChatInputProps) {
     onSubmit: handleSubmit,
     lineMode: "multi",
     onUp: handleUp,
+    onDown: handleDown,
     onEscape: handleEscape,
+    captureUpDown: showAutocomplete,
   });
 
-  const hasContent = value.length > 0;
-  const instructions = [
-    (hasContent || escPending) && { key: "enter", description: "submit" },
-    (hasContent || escPending) && {
-      key: "escape",
-      description: escPending ? "confirm" : "clear",
-    },
-    props.hasHistory && cursor === 0 && { key: "up", description: "history" },
-  ].filter((i): i is InstructionItem => Boolean(i));
+  const instructions: InstructionItem[] = showAutocomplete
+    ? [
+        { key: "enter", description: "select" },
+        { key: "up/down", description: "navigate" },
+      ]
+    : [
+        { key: "/", description: "command" },
+        { key: "enter", description: "submit" },
+        { key: "up", description: "history" },
+      ];
 
-  return { value, cursor, instructions };
+  instructions.push({
+    key: "escape",
+    description: escPending ? "confirm" : "clear",
+  });
+
+  return { value, cursor, instructions, showAutocomplete, autocomplete };
 }
 
 /** Splits a value around a cursor position for rendering. */
@@ -99,8 +155,6 @@ export function splitAtCursor(
   cursor: number,
 ): { before: string; at: string; after: string } {
   const charAtCursor = value[cursor];
-  // Newlines and end-of-value are invisible — show a space block instead.
-  // When on a newline, keep it in after so line breaks aren't lost.
   const showPlaceholder = charAtCursor === undefined || charAtCursor === "\n";
   return {
     before: value.slice(0, cursor),
@@ -109,9 +163,10 @@ export function splitAtCursor(
   };
 }
 
-/** Chat input with bordered text area. */
+/** Chat input with bordered text area and inline autocomplete. */
 export function ChatInput(props: ChatInputProps) {
-  const { value, cursor, instructions } = useChatInput(props);
+  const { value, cursor, instructions, showAutocomplete, autocomplete } =
+    useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
   return (
@@ -129,6 +184,7 @@ export function ChatInput(props: ChatInputProps) {
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
       </Box>
+      {showAutocomplete && <AutocompleteList autocomplete={autocomplete} />}
     </Box>
   );
 }

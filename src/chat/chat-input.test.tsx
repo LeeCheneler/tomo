@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AutocompleteItem } from "./autocomplete";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { ChatInput, splitAtCursor } from "./chat-input";
@@ -19,6 +20,24 @@ describe("ChatInput", () => {
     setColumns(undefined);
   });
 
+  /** Test autocomplete items. */
+  const testItems: AutocompleteItem[] = [
+    { name: "ping", description: "Responds with pong" },
+    { name: "pong", description: "Responds with ping" },
+    { name: "help", description: "Show help" },
+  ];
+
+  /** Test items exceeding MAX_VISIBLE (5). */
+  const manyItems: AutocompleteItem[] = [
+    { name: "aaa", description: "First" },
+    { name: "bbb", description: "Second" },
+    { name: "ccc", description: "Third" },
+    { name: "ddd", description: "Fourth" },
+    { name: "eee", description: "Fifth" },
+    { name: "fff", description: "Sixth" },
+    { name: "ggg", description: "Seventh" },
+  ];
+
   /** Renders ChatInput with sensible defaults and a fixed terminal width. */
   function renderInput(
     overrides: Partial<{
@@ -26,6 +45,7 @@ describe("ChatInput", () => {
       onUp: () => void;
       initialValue: string;
       hasHistory: boolean;
+      autocompleteItems: readonly AutocompleteItem[];
     }> = {},
   ) {
     setColumns(COLUMNS);
@@ -36,6 +56,7 @@ describe("ChatInput", () => {
         onUp={overrides.onUp}
         initialValue={overrides.initialValue}
         hasHistory={overrides.hasHistory}
+        autocompleteItems={overrides.autocompleteItems ?? []}
       />,
     );
   }
@@ -57,7 +78,9 @@ describe("ChatInput", () => {
     it("falls back to 80 columns when stdout.columns is undefined", () => {
       setColumns(undefined);
 
-      const { lastFrame } = renderInk(<ChatInput onMessage={() => {}} />);
+      const { lastFrame } = renderInk(
+        <ChatInput onMessage={() => {}} autocompleteItems={[]} />,
+      );
 
       const frame = lastFrame() ?? "";
       const lines = frame.split("\n");
@@ -141,89 +164,281 @@ describe("ChatInput", () => {
   });
 
   describe("instruction bar", () => {
-    it("shows no instructions when input is empty", () => {
+    it("always shows enter submit, escape clear, and / command", () => {
       const { lastFrame } = renderInput();
-      const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("enter");
-      expect(frame).not.toContain("escape");
-    });
-
-    it("does not show confirm after escape on empty input", async () => {
-      const { stdin, lastFrame } = renderInput();
-      await stdin.write(keys.escape);
-      const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("confirm");
-      expect(frame).not.toContain("escape");
-    });
-
-    it("shows enter submit and escape clear when input has content", async () => {
-      const { stdin, lastFrame } = renderInput();
-      await stdin.write("hello");
       const frame = lastFrame() ?? "";
       expect(frame).toContain("enter");
       expect(frame).toContain("submit");
       expect(frame).toContain("escape");
       expect(frame).toContain("clear");
+      expect(frame).toContain("/");
+      expect(frame).toContain("command");
     });
 
-    it("switches escape instruction to confirm after first escape", async () => {
+    it("shows instructions even when input is empty", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("enter");
+      expect(frame).toContain("escape");
+    });
+
+    it("does not switch to confirm on escape when input is empty", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("clear");
+      expect(frame).not.toContain("confirm");
+    });
+
+    it("switches escape to confirm after first escape", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("escape");
       expect(frame).toContain("confirm");
       expect(frame).not.toContain("clear");
     });
 
-    it("reverts escape instruction to clear after second escape", async () => {
+    it("reverts escape to clear after second escape", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("hello");
-      expect(frame).not.toContain("escape");
+      expect(frame).toContain("clear");
     });
 
-    it("reverts escape instruction to clear when user types", async () => {
+    it("reverts escape to clear when user types", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
       await stdin.write("x");
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("hellox");
-      expect(frame).toContain("escape");
       expect(frame).toContain("clear");
       expect(frame).not.toContain("confirm");
     });
 
-    it("shows up history when hasHistory is true and cursor is at start", () => {
-      const { lastFrame } = renderInput({ hasHistory: true });
+    it("always shows up history", () => {
+      const { lastFrame } = renderInput();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("up");
       expect(frame).toContain("history");
     });
+  });
 
-    it("hides up history when cursor moves away from start", async () => {
-      const { stdin, lastFrame } = renderInput({ hasHistory: true });
-      await stdin.write("hello");
+  describe("autocomplete", () => {
+    it("shows autocomplete list when typing /", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
       const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("history");
+      expect(frame).toContain("/help");
+      expect(frame).toContain("/ping");
+      expect(frame).toContain("/pong");
     });
 
-    it("shows up history again when cursor returns to start", async () => {
-      const { stdin, lastFrame } = renderInput({ hasHistory: true });
-      await stdin.write("hi");
+    it("filters autocomplete list as user types", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/pi");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("/ping");
+      expect(frame).not.toContain("/help");
+    });
+
+    it("hides autocomplete after space", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/ping");
+      await stdin.write(" ");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("Responds with pong");
+    });
+
+    it("does not show autocomplete for regular text", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("hello");
+      expect(lastFrame()).not.toContain("/ping");
+    });
+
+    it("does not show autocomplete for // prefix", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("//");
+      expect(lastFrame()).not.toContain("/ping");
+    });
+
+    it("navigates down through autocomplete with up/down", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      // Items are sorted alphabetically: help, ping, pong.
+      // Down from 0 selects index 1 (ping).
+      expect(frame).toContain("/ping");
+    });
+
+    it("navigates up through autocomplete", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.down);
       await stdin.write(keys.up);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("history");
+      expect(frame).toContain("/help");
     });
 
-    it("does not show up history when hasHistory is false", () => {
-      const { lastFrame } = renderInput();
+    it("loops autocomplete selection", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      // Up from index 0 loops to last (pong).
+      await stdin.write(keys.up);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("/pong");
+    });
+
+    it("fills input with selected command on enter and appends space", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      // First item alphabetically is help.
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("/help");
+      // Autocomplete should be dismissed (space appended).
+      expect(frame).not.toContain("Show help");
+    });
+
+    it("shows navigate instruction when autocomplete is visible", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("up/down");
+      expect(frame).toContain("navigate");
+    });
+
+    it("shows select instead of submit when autocomplete is visible", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("select");
+      expect(frame).not.toContain("submit");
+    });
+
+    it("hides history instruction when autocomplete is visible", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+        hasHistory: true,
+      });
+      await stdin.write("/");
       const frame = lastFrame() ?? "";
       expect(frame).not.toContain("history");
+    });
+
+    it("does not call onUp when autocomplete is visible", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({
+        onUp,
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.up);
+      expect(onUp).not.toHaveBeenCalled();
+    });
+
+    it("does not show autocomplete when no items provided", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("navigate");
+    });
+
+    it("does not show autocomplete when items array is empty", async () => {
+      const { stdin, lastFrame } = renderInput({ autocompleteItems: [] });
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("navigate");
+    });
+
+    it("submits normally when enter pressed with no matching autocomplete items", async () => {
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({
+        onMessage,
+        autocompleteItems: testItems,
+      });
+      // Type a command that matches no items — autocomplete won't show.
+      await stdin.write("/zzz ");
+      await stdin.write(keys.enter);
+      expect(onMessage).toHaveBeenCalledWith("/zzz ");
+    });
+
+    it("resets selection when filter changes", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.down);
+      // Type more to change filter — selection should reset.
+      await stdin.write("h");
+      const frame = lastFrame() ?? "";
+      // /help is the only match and should be at index 0.
+      expect(frame).toContain("/help");
+    });
+
+    it("scrolls through all items with sliding window when more than 5 exist", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: manyItems,
+      });
+      await stdin.write("/");
+      // 7 items: aaa-ggg. Down 5 times reaches fff (index 5).
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      // Window should slide to show fff.
+      expect(frame).toContain("/fff");
+    });
+
+    it("loops back to first item after scrolling past last", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: manyItems,
+      });
+      await stdin.write("/");
+      // 7 items. Down 7 times loops back to aaa (index 0).
+      for (let i = 0; i < 7; i++) {
+        await stdin.write(keys.down);
+      }
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("/aaa");
+    });
+
+    it("does nothing on down arrow when autocomplete is not visible", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      // Down at end of input — no autocomplete, should be a no-op.
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("hello");
+      expect(frame).not.toContain("navigate");
     });
   });
 });

@@ -1,4 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { isCommand } from "../commands/is-command";
+import type { CommandRegistry } from "../commands/registry";
+import { createCommandRegistry } from "../commands/registry";
+import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
 import { ChatList } from "./chat-list";
 import type { ChatMessage } from "./message";
@@ -8,19 +12,32 @@ import { useHistory } from "./use-history";
 /** Chat mode — either typing input or browsing history. */
 type ChatMode = { kind: "input"; initialValue?: string } | { kind: "history" };
 
+/** Props for useChat. */
+interface UseChatProps {
+  commandRegistry?: CommandRegistry;
+}
+
 /** Manages mode switching between input and history. */
-function useChat() {
+function useChat(props: UseChatProps) {
   const history = useHistory();
   const [mode, setMode] = useState<ChatMode>({ kind: "input" });
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  /** Creates a user message, adds it to the list, and pushes to input history. */
-  function handleMessage(message: string) {
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), role: "user", content: message },
-    ]);
+  /** Appends a message to the chat list. */
+  function appendMessage(msg: ChatMessage) {
+    setMessages((prev) => [...prev, msg]);
+  }
+
+  /** Handles submitted input — dispatches commands or creates user messages. */
+  async function handleMessage(message: string) {
+    const commandRegistry = props.commandRegistry ?? createCommandRegistry();
+    if (isCommand(message)) {
+      appendMessage(await commandRegistry.invoke(message));
+      return;
+    }
+
+    appendMessage({ id: crypto.randomUUID(), role: "user", content: message });
     history.push(message);
   }
 
@@ -43,10 +60,19 @@ function useChat() {
     setMode({ kind: "input", initialValue: draft });
   }
 
+  /** Maps registry commands to autocomplete items. */
+  const autocompleteItems: readonly AutocompleteItem[] = useMemo(() => {
+    const registry = props.commandRegistry ?? createCommandRegistry();
+    return registry
+      .list()
+      .map((cmd) => ({ name: cmd.name, description: cmd.description }));
+  }, [props.commandRegistry]);
+
   return {
     mode,
     history,
     messages,
+    autocompleteItems,
     handleMessage,
     handleUp,
     handleSelected,
@@ -54,17 +80,23 @@ function useChat() {
   };
 }
 
+/** Props for Chat. */
+interface ChatProps {
+  commandRegistry?: CommandRegistry;
+}
+
 /** Chat router — renders ChatInput or MessageHistory based on mode. */
-export function Chat() {
+export function Chat(props: ChatProps) {
   const {
     mode,
     history,
     messages,
+    autocompleteItems,
     handleMessage,
     handleUp,
     handleSelected,
     handleExit,
-  } = useChat();
+  } = useChat({ commandRegistry: props.commandRegistry });
 
   if (mode.kind === "history") {
     return (
@@ -87,6 +119,7 @@ export function Chat() {
         onUp={handleUp}
         initialValue={mode.initialValue}
         hasHistory={history.entries.length > 0}
+        autocompleteItems={autocompleteItems}
       />
     </>
   );
