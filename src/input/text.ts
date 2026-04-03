@@ -159,6 +159,19 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
       return;
     }
 
+    // Word delete: Option+Backspace deletes backward to the previous word boundary.
+    // Mirrors the Option+Left word jump. Must be checked before single-char backspace.
+    if (key.meta && (key.backspace || key.delete)) {
+      const boundary = findPreviousWordBoundary(value, pos);
+      if (boundary < pos) {
+        const before = value.slice(0, boundary);
+        const after = value.slice(pos);
+        applyChange(before + after);
+        setCursor(boundary);
+      }
+      return;
+    }
+
     // macOS Backspace sends \x7f which Ink maps to key.delete.
     if (key.backspace || key.delete) {
       if (pos > 0) {
@@ -190,6 +203,18 @@ export function useTextInput(options: TextInputOptions): TextInputResult {
 
     if (key.meta && (input === "f" || key.rightArrow)) {
       setCursor(findNextWordBoundary(value, pos));
+      return;
+    }
+
+    // Word delete forward: ESC+d (readline Meta-d) deletes to the next word boundary.
+    // Mirrors the Option+Right / ESC+f word jump.
+    if (key.meta && input === "d") {
+      const boundary = findNextWordBoundary(value, pos);
+      if (boundary > pos) {
+        const before = value.slice(0, pos);
+        const after = value.slice(boundary);
+        applyChange(before + after);
+      }
       return;
     }
 

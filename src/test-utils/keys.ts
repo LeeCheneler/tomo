@@ -16,5 +16,9 @@ export const keys = {
   readlineWordLeft: "\x1bb",
   /** Readline alt+f — word-right in some terminals. */
   readlineWordRight: "\x1bf",
+  /** Option+Backspace — delete word backward. */
+  optionBackspace: "\x1b\x7f",
+  /** Readline alt+d — delete word forward. */
+  readlineWordDelete: "\x1bd",
   ctrlA: "\x01",
 } as const;

@@ -450,6 +450,100 @@ describe("useTextInput", () => {
       expect(onChange).toHaveBeenCalledWith("xhttps://example");
     });
 
+    it("option+backspace deletes backward to start of previous word", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello world", onChange });
+      stdin.write(keys.optionBackspace);
+      expect(onChange).toHaveBeenCalledWith("hello ");
+    });
+
+    it("option+backspace deletes across multiple words", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "one two three", onChange });
+      stdin.write(keys.optionBackspace);
+      stdin.write(keys.optionBackspace);
+      expect(onChange).toHaveBeenCalledWith("one ");
+    });
+
+    it("option+backspace from start does nothing", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello", onChange });
+      // Move cursor to start
+      stdin.write(keys.optionLeft);
+      onChange.mockClear();
+      stdin.write(keys.optionBackspace);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("option+backspace skips multiple spaces between words", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello  world", onChange });
+      stdin.write(keys.optionBackspace);
+      expect(onChange).toHaveBeenCalledWith("hello  ");
+    });
+
+    it("option+backspace stops at punctuation boundary", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello-world", onChange });
+      stdin.write(keys.optionBackspace);
+      expect(onChange).toHaveBeenCalledWith("hello-");
+    });
+
+    it("option+backspace deletes from mid-word", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello world", onChange });
+      stdin.write(keys.left);
+      stdin.write(keys.left);
+      stdin.write(keys.optionBackspace);
+      expect(onChange).toHaveBeenCalledWith("hello ld");
+    });
+
+    it("readline meta+d deletes forward to end of next word", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello world", onChange });
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.readlineWordDelete);
+      expect(onChange).toHaveBeenCalledWith(" world");
+    });
+
+    it("readline meta+d deletes across multiple words", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "one two three", onChange });
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.readlineWordDelete);
+      stdin.write(keys.readlineWordDelete);
+      expect(onChange).toHaveBeenCalledWith(" three");
+    });
+
+    it("readline meta+d from end does nothing", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello", onChange });
+      onChange.mockClear();
+      stdin.write(keys.readlineWordDelete);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("readline meta+d skips multiple spaces between words", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello  world", onChange });
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.readlineWordDelete);
+      expect(onChange).toHaveBeenCalledWith("  world");
+    });
+
+    it("readline meta+d stops at punctuation boundary", () => {
+      const onChange = vi.fn();
+      const { stdin } = renderHarness({ value: "hello-world", onChange });
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.optionLeft);
+      stdin.write(keys.readlineWordDelete);
+      expect(onChange).toHaveBeenCalledWith("-world");
+    });
+
     it("option+left via readline sequence jumps to start of previous word", () => {
       const onChange = vi.fn();
       const { stdin } = renderHarness({ value: "hello world", onChange });
