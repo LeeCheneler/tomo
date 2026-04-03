@@ -3,6 +3,7 @@ import { useState } from "react";
 import { loadConfig } from "../config/file";
 import type { Permissions } from "../config/schema";
 import { updatePermissions } from "../config/updaters";
+import { Border } from "../ui/border";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { Indent } from "../ui/layout/indent";
@@ -27,16 +28,6 @@ const INSTRUCTIONS: InstructionItem[] = [
   { key: "space", description: "toggle" },
   { key: "esc", description: "back" },
 ];
-
-/** Returns the terminal width, defaulting to 80 if unavailable. */
-function getTerminalWidth(): number {
-  return process.stdout.columns || 80;
-}
-
-/** Builds a full-width border line of ─ characters. */
-function buildBorder(): string {
-  return "─".repeat(getTerminalWidth());
-}
 
 /** Builds toggle list items from permissions config. */
 function buildToggleItems(permissions: Permissions): ToggleListItem[] {
@@ -78,7 +69,7 @@ export function PermissionsScreen(props: PermissionsScreenProps) {
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Indent>
         <Text bold>Permissions</Text>
       </Indent>
@@ -88,7 +79,7 @@ export function PermissionsScreen(props: PermissionsScreenProps) {
         onExit={handleBack}
         color={theme.settings}
       />
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={INSTRUCTIONS} />
       </Box>

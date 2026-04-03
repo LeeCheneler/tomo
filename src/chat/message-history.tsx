@@ -1,5 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
+import { Border } from "../ui/border";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
@@ -12,16 +13,6 @@ export interface MessageHistoryProps {
   onSelected: (entry: string) => void;
   /** Called when the user exits history (down past last entry or Escape). */
   onExit: () => void;
-}
-
-/** Returns the terminal width, defaulting to 80 if unavailable. */
-function getTerminalWidth(): number {
-  return process.stdout.columns || 80;
-}
-
-/** Builds a full-width border line of ─ characters. */
-function buildBorder(): string {
-  return "─".repeat(getTerminalWidth());
 }
 
 /** Manages the selected index within history entries. */
@@ -69,12 +60,12 @@ export function MessageHistory(props: MessageHistoryProps) {
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text color={theme.history}>{buildBorder()}</Text>
+      <Border color={theme.history} />
       <Text>
         <Text color={theme.history}>{"❯ "}</Text>
         {selectedEntry}
       </Text>
-      <Text color={theme.history}>{buildBorder()}</Text>
+      <Border color={theme.history} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
       </Box>

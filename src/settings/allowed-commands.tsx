@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { useState } from "react";
 import { loadConfig } from "../config/file";
 import { updateAllowedCommands } from "../config/updaters";
+import { Border } from "../ui/border";
 import { EditableList } from "../ui/editable-list";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
@@ -14,16 +15,6 @@ const INSTRUCTIONS: InstructionItem[] = [
   { key: "enter", description: "save/add/remove" },
   { key: "esc", description: "back" },
 ];
-
-/** Returns the terminal width, defaulting to 80 if unavailable. */
-function getTerminalWidth(): number {
-  return process.stdout.columns || 80;
-}
-
-/** Builds a full-width border line of ─ characters. */
-function buildBorder(): string {
-  return "─".repeat(getTerminalWidth());
-}
 
 /** Props for AllowedCommandsScreen. */
 export interface AllowedCommandsScreenProps {
@@ -73,7 +64,7 @@ export function AllowedCommandsScreen(props: AllowedCommandsScreenProps) {
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Indent>
         <Text bold>Allowed Commands</Text>
       </Indent>
@@ -89,7 +80,7 @@ export function AllowedCommandsScreen(props: AllowedCommandsScreenProps) {
         color={theme.settings}
         placeholder="Add command..."
       />
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={INSTRUCTIONS} />
       </Box>

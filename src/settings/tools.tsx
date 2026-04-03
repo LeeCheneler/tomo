@@ -3,6 +3,7 @@ import { useState } from "react";
 import { loadConfig } from "../config/file";
 import type { Tools } from "../config/schema";
 import { updateTools } from "../config/updaters";
+import { Border } from "../ui/border";
 import type { FormField, FormValues } from "../ui/form";
 import { Form } from "../ui/form";
 import type { InstructionItem } from "../ui/key-instructions";
@@ -48,16 +49,6 @@ const OPTIONS_INSTRUCTIONS: InstructionItem[] = [
   { key: "enter", description: "save" },
   { key: "esc", description: "cancel" },
 ];
-
-/** Returns the terminal width, defaulting to 80 if unavailable. */
-function getTerminalWidth(): number {
-  return process.stdout.columns || 80;
-}
-
-/** Builds a full-width border line of ─ characters. */
-function buildBorder(): string {
-  return "─".repeat(getTerminalWidth());
-}
 
 /** Builds toggle list items from tools config. */
 function buildToggleItems(tools: Tools): ToggleListItem[] {
@@ -184,7 +175,7 @@ export function ToolsScreen(props: ToolsScreenProps) {
     const fields = buildFormFields(tools);
     return (
       <Box flexDirection="column" paddingTop={1}>
-        <Text color={theme.settings}>{buildBorder()}</Text>
+        <Border color={theme.settings} />
         <Indent>
           <Text bold>{activeOptions.label} Options</Text>
         </Indent>
@@ -194,7 +185,7 @@ export function ToolsScreen(props: ToolsScreenProps) {
           onCancel={handleOptionsCancel}
           color={theme.settings}
         />
-        <Text color={theme.settings}>{buildBorder()}</Text>
+        <Border color={theme.settings} />
         <Box justifyContent="flex-end" height={1}>
           <KeyInstructions items={OPTIONS_INSTRUCTIONS} />
         </Box>
@@ -204,7 +195,7 @@ export function ToolsScreen(props: ToolsScreenProps) {
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Indent>
         <Text bold>Tools</Text>
       </Indent>
@@ -215,7 +206,7 @@ export function ToolsScreen(props: ToolsScreenProps) {
         onOptions={handleOptions}
         color={theme.settings}
       />
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={LIST_INSTRUCTIONS} />
       </Box>

@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 import type { TakeoverDone } from "../commands/registry";
+import { Border } from "../ui/border";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { Indent } from "../ui/layout/indent";
@@ -29,16 +30,6 @@ const MENU_ITEMS: readonly NavigationMenuItem[] = [
   { key: "mcp", label: "MCP Servers" },
   { key: "skill-sets", label: "Skill Sets" },
 ];
-
-/** Returns the terminal width, defaulting to 80 if unavailable. */
-function getTerminalWidth(): number {
-  return process.stdout.columns || 80;
-}
-
-/** Builds a full-width border line of ─ characters. */
-function buildBorder(): string {
-  return "─".repeat(getTerminalWidth());
-}
 
 /** Props for Settings. */
 export interface SettingsProps {
@@ -102,7 +93,7 @@ export function Settings(props: SettingsProps) {
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Indent>
         <Text bold>Settings</Text>
       </Indent>
@@ -112,7 +103,7 @@ export function Settings(props: SettingsProps) {
         onExit={handleExit}
         color={theme.settings}
       />
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
       </Box>
@@ -140,14 +131,14 @@ function SettingsPlaceholder(props: SettingsPlaceholderProps) {
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Indent>
         <Text bold>{label}</Text>
       </Indent>
       <Indent>
         <Text dimColor>Coming soon</Text>
       </Indent>
-      <Text color={theme.settings}>{buildBorder()}</Text>
+      <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={[{ key: "esc", description: "back" }]} />
       </Box>

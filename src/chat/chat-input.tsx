@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useTextInput } from "../input/text";
 import type { AutocompleteItem } from "./autocomplete";
 import { AutocompleteList, useAutocompleteNavigation } from "./autocomplete";
+import { Border } from "../ui/border";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
@@ -19,16 +20,6 @@ export interface ChatInputProps {
   hasHistory?: boolean;
   /** Items to show in the autocomplete list when typing a command. */
   autocompleteItems: readonly AutocompleteItem[];
-}
-
-/** Returns the terminal width, defaulting to 80 if unavailable. */
-function getTerminalWidth(): number {
-  return process.stdout.columns || 80;
-}
-
-/** Builds a full-width border line of ─ characters. */
-function buildBorder(): string {
-  return "─".repeat(getTerminalWidth());
 }
 
 /** Returns true when autocomplete should be visible for the given input and items. */
@@ -178,7 +169,7 @@ export function ChatInput(props: ChatInputProps) {
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text color={theme.brand}>{buildBorder()}</Text>
+      <Border color={theme.brand} />
       <Box>
         <Text color={theme.brand}>{"❯ "}</Text>
         {escPending ? (
@@ -195,7 +186,7 @@ export function ChatInput(props: ChatInputProps) {
           </Text>
         )}
       </Box>
-      <Text color={theme.brand}>{buildBorder()}</Text>
+      <Border color={theme.brand} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
       </Box>
