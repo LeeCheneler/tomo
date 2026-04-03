@@ -27,6 +27,17 @@ describe("ChatInput", () => {
     { name: "help", description: "Show help" },
   ];
 
+  /** Test items exceeding MAX_VISIBLE (5). */
+  const manyItems: AutocompleteItem[] = [
+    { name: "aaa", description: "First" },
+    { name: "bbb", description: "Second" },
+    { name: "ccc", description: "Third" },
+    { name: "ddd", description: "Fourth" },
+    { name: "eee", description: "Fifth" },
+    { name: "fff", description: "Sixth" },
+    { name: "ggg", description: "Seventh" },
+  ];
+
   /** Renders ChatInput with sensible defaults and a fixed terminal width. */
   function renderInput(
     overrides: Partial<{
@@ -412,6 +423,35 @@ describe("ChatInput", () => {
       const frame = lastFrame() ?? "";
       // /help is the only match and should be at index 0.
       expect(frame).toContain("/help");
+    });
+
+    it("scrolls through all items with sliding window when more than 5 exist", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: manyItems,
+      });
+      await stdin.write("/");
+      // 7 items: aaa-ggg. Down 5 times reaches fff (index 5).
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      // Window should slide to show fff.
+      expect(frame).toContain("/fff");
+    });
+
+    it("loops back to first item after scrolling past last", async () => {
+      const { stdin, lastFrame } = renderInput({
+        autocompleteItems: manyItems,
+      });
+      await stdin.write("/");
+      // 7 items. Down 7 times loops back to aaa (index 0).
+      for (let i = 0; i < 7; i++) {
+        await stdin.write(keys.down);
+      }
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("/aaa");
     });
 
     it("does nothing on down arrow when autocomplete is not visible", async () => {

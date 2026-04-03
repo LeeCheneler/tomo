@@ -88,8 +88,25 @@ describe("AutocompleteList", () => {
       <AutocompleteList items={items} filter="" selectedIndex={1} />,
     );
     const frame = lastFrame() ?? "";
-    // Both items should be present.
+    // Window starts at 0, both clear and context visible.
     expect(frame).toContain("clear");
     expect(frame).toContain("context");
+  });
+
+  it("slides window when windowStart is provided", () => {
+    // 6 items, window starting at 1 shows items 1-5.
+    const { lastFrame } = renderInk(
+      <AutocompleteList
+        items={items}
+        filter=""
+        selectedIndex={5}
+        windowStart={1}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    // Window starts at 1, so settings (index 5) is visible.
+    expect(frame).toContain("settings");
+    // clear (index 0) is scrolled out.
+    expect(frame).not.toContain("clear");
   });
 });

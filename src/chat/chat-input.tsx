@@ -2,7 +2,11 @@ import { Box, Text } from "ink";
 import { useRef, useState } from "react";
 import { useTextInput } from "../input/text";
 import type { AutocompleteItem } from "./autocomplete";
-import { AutocompleteList } from "./autocomplete";
+import {
+  AutocompleteList,
+  filterAutocompleteItems,
+  getWindowStart,
+} from "./autocomplete";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
@@ -49,6 +53,7 @@ function useChatInput(props: ChatInputProps) {
   const [value, setValue] = useState(initial);
   const [escPending, setEscPending] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [windowStart, setWindowStart] = useState(0);
   // Ref keeps value fresh across batched React updates so submit
   // always sees the latest input even before re-render.
   const valueRef = useRef(initial);
@@ -58,25 +63,24 @@ function useChatInput(props: ChatInputProps) {
     props.autocompleteItems,
   );
 
+  /** Returns the filtered autocomplete items for the current input. */
+  function getFiltered(): readonly AutocompleteItem[] {
+    return filterAutocompleteItems(props.autocompleteItems, value.slice(1));
+  }
+
   /** Updates value in both state (for rendering) and ref (for callbacks). */
   function handleChange(newValue: string) {
     valueRef.current = newValue;
     setValue(newValue);
     setEscPending(false);
     setSelectedIndex(0);
+    setWindowStart(0);
   }
 
   /** Submits the current value if non-empty, then clears the input. */
   function handleSubmit() {
-    if (showAutocomplete && props.autocompleteItems) {
-      // Fill selected command into input instead of submitting.
-      // showAutocomplete guarantees items exist and selectedIndex is valid
-      // (reset to 0 on every change, loops within bounds).
-      const filtered = props.autocompleteItems
-        .filter((item) =>
-          item.name.toLowerCase().includes(value.slice(1).toLowerCase()),
-        )
-        .sort((a, b) => a.name.localeCompare(b.name));
+    if (showAutocomplete) {
+      const filtered = getFiltered();
       const filled = `/${filtered[selectedIndex].name} `;
       handleChange(filled);
       setCursorPos(filled.length);
@@ -107,9 +111,13 @@ function useChatInput(props: ChatInputProps) {
   /** Navigates autocomplete up or passes to history. */
   function handleUp() {
     if (showAutocomplete) {
-      // showAutocomplete guarantees autocompleteItems exists with length > 0.
-      const count = props.autocompleteItems.length;
-      setSelectedIndex((i) => (i - 1 + count) % count);
+      const filtered = getFiltered();
+      const count = filtered.length;
+      setSelectedIndex((i) => {
+        const next = (i - 1 + count) % count;
+        setWindowStart((ws) => getWindowStart(next, count, ws));
+        return next;
+      });
       return;
     }
     props.onUp?.(valueRef.current);
@@ -119,8 +127,13 @@ function useChatInput(props: ChatInputProps) {
   function handleDown() {
     /* v8 ignore next -- showAutocomplete gates all callers */
     if (showAutocomplete) {
-      const count = props.autocompleteItems.length;
-      setSelectedIndex((i) => (i + 1) % count);
+      const filtered = getFiltered();
+      const count = filtered.length;
+      setSelectedIndex((i) => {
+        const next = (i + 1) % count;
+        setWindowStart((ws) => getWindowStart(next, count, ws));
+        return next;
+      });
     }
   }
 
@@ -151,7 +164,14 @@ function useChatInput(props: ChatInputProps) {
       cursor === 0 && { key: "up", description: "history" },
   ].filter((i): i is InstructionItem => Boolean(i));
 
-  return { value, cursor, instructions, showAutocomplete, selectedIndex };
+  return {
+    value,
+    cursor,
+    instructions,
+    showAutocomplete,
+    selectedIndex,
+    windowStart,
+  };
 }
 
 /** Splits a value around a cursor position for rendering. */
@@ -172,8 +192,14 @@ export function splitAtCursor(
 
 /** Chat input with bordered text area and inline autocomplete. */
 export function ChatInput(props: ChatInputProps) {
-  const { value, cursor, instructions, showAutocomplete, selectedIndex } =
-    useChatInput(props);
+  const {
+    value,
+    cursor,
+    instructions,
+    showAutocomplete,
+    selectedIndex,
+    windowStart,
+  } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
   return (
@@ -196,6 +222,7 @@ export function ChatInput(props: ChatInputProps) {
           items={props.autocompleteItems}
           filter={value.slice(1)}
           selectedIndex={selectedIndex}
+          windowStart={windowStart}
         />
       )}
     </Box>

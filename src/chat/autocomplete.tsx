@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 import { useMemo } from "react";
 
 /** Maximum number of items visible in the autocomplete list. */
-const MAX_VISIBLE = 5;
+export const MAX_VISIBLE = 5;
 
 /** A single autocomplete suggestion. */
 export interface AutocompleteItem {
@@ -14,39 +14,63 @@ export interface AutocompleteItem {
 interface AutocompleteListProps {
   items: readonly AutocompleteItem[];
   filter: string;
-  /** Index of the highlighted item, or -1 for no highlight. */
+  /** Absolute index in the full filtered list. -1 for no highlight. */
   selectedIndex?: number;
+  /** Start index of the visible window. Defaults to 0. */
+  windowStart?: number;
 }
 
-/** Filters, sorts, and slices items for display. */
-function useFilteredItems(
+/** Filters and sorts items. Does not slice — callers handle windowing. */
+export function filterAutocompleteItems(
   items: readonly AutocompleteItem[],
   filter: string,
 ): readonly AutocompleteItem[] {
-  return useMemo(() => {
-    const query = filter.toLowerCase();
-    return items
-      .filter((item) => item.name.toLowerCase().includes(query))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, MAX_VISIBLE);
-  }, [items, filter]);
+  const query = filter.toLowerCase();
+  return items
+    .filter((item) => item.name.toLowerCase().includes(query))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Filtered command list shown below the input. Optionally highlights a selected item. */
+/** Computes the visible window start for a given selection index. Slides lazily — only moves when the selection hits the window edge. */
+export function getWindowStart(
+  selectedIndex: number,
+  totalCount: number,
+  previousStart: number,
+): number {
+  if (totalCount <= MAX_VISIBLE || selectedIndex < 0) return 0;
+  let start = previousStart;
+  // Selection moved above the window — scroll up.
+  if (selectedIndex < start) {
+    start = selectedIndex;
+  }
+  // Selection moved below the window — scroll down.
+  if (selectedIndex >= start + MAX_VISIBLE) {
+    start = selectedIndex - MAX_VISIBLE + 1;
+  }
+  return Math.min(start, Math.max(0, totalCount - MAX_VISIBLE));
+}
+
+/** Filtered command list shown below the input. Shows a sliding window of MAX_VISIBLE items. */
 export function AutocompleteList(props: AutocompleteListProps) {
-  const filtered = useFilteredItems(props.items, props.filter);
+  const filtered = useMemo(
+    () => filterAutocompleteItems(props.items, props.filter),
+    [props.items, props.filter],
+  );
 
   if (filtered.length === 0) {
     return null;
   }
 
-  const nameWidth = Math.max(...filtered.map((item) => item.name.length + 1));
   const selected = props.selectedIndex ?? -1;
+  const windowStart = props.windowStart ?? 0;
+  const visible = filtered.slice(windowStart, windowStart + MAX_VISIBLE);
+  const nameWidth = Math.max(...visible.map((item) => item.name.length + 1));
 
   return (
     <Box flexDirection="column">
-      {filtered.map((item, i) => {
-        const isSelected = i === selected;
+      {visible.map((item, i) => {
+        const absoluteIndex = windowStart + i;
+        const isSelected = absoluteIndex === selected;
         return (
           <Box key={item.name} gap={2}>
             <Text color={isSelected ? "cyan" : "white"} bold={isSelected}>
