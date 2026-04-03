@@ -4,6 +4,8 @@ import type { TakeoverDone } from "../commands/registry";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { Indent } from "../ui/layout/indent";
+import type { NavigationMenuItem } from "../ui/navigation-menu";
+import { NavigationMenu } from "../ui/navigation-menu";
 import { theme } from "../ui/theme";
 
 /** Settings section identifiers. */
@@ -15,20 +17,14 @@ export type SettingsSection =
   | "mcp"
   | "skill-sets";
 
-/** A menu item in the settings navigation. */
-interface MenuItem {
-  label: string;
-  section: SettingsSection;
-}
-
 /** The menu items for the settings navigation. */
-const MENU_ITEMS: readonly MenuItem[] = [
-  { label: "Providers", section: "providers" },
-  { label: "Permissions", section: "permissions" },
-  { label: "Allowed Commands", section: "allowed-commands" },
-  { label: "Tools", section: "tools" },
-  { label: "MCP Servers", section: "mcp" },
-  { label: "Skill Sets", section: "skill-sets" },
+const MENU_ITEMS: readonly NavigationMenuItem[] = [
+  { key: "providers", label: "Providers" },
+  { key: "permissions", label: "Permissions" },
+  { key: "allowed-commands", label: "Allowed Commands" },
+  { key: "tools", label: "Tools" },
+  { key: "mcp", label: "MCP Servers" },
+  { key: "skill-sets", label: "Skill Sets" },
 ];
 
 /** Returns the terminal width, defaulting to 80 if unavailable. */
@@ -49,39 +45,23 @@ export interface SettingsProps {
 /** Internal step state — menu or a specific section. */
 type Step = "menu" | SettingsSection;
 
-/** Manages settings menu navigation and step routing. */
+/** Manages settings step routing. */
 function useSettings(props: SettingsProps) {
   const [step, setStep] = useState<Step>("menu");
-  const [cursor, setCursor] = useState(0);
 
-  useInput((_input, key) => {
-    if (step !== "menu") return;
-
-    if (key.escape) {
-      props.onDone();
-      return;
-    }
-
-    if (key.upArrow) {
-      setCursor((i) => Math.max(0, i - 1));
-      return;
-    }
-
-    if (key.downArrow) {
-      setCursor((i) => Math.min(MENU_ITEMS.length - 1, i + 1));
-      return;
-    }
-
-    if (key.return) {
-      setStep(MENU_ITEMS[cursor].section);
-      return;
-    }
-  });
+  /** Enters a section sub-screen. */
+  function handleSelect(item: NavigationMenuItem) {
+    setStep(item.key as SettingsSection);
+  }
 
   /** Returns to the menu from a sub-screen. */
   function handleBack() {
     setStep("menu");
-    setCursor(0);
+  }
+
+  /** Exits settings. */
+  function handleExit() {
+    props.onDone();
   }
 
   const instructions: InstructionItem[] =
@@ -93,12 +73,13 @@ function useSettings(props: SettingsProps) {
         ]
       : [{ key: "escape", description: "back" }];
 
-  return { step, cursor, instructions, handleBack };
+  return { step, instructions, handleSelect, handleBack, handleExit };
 }
 
 /** Root settings component. Renders a navigation menu and section sub-screens. */
 export function Settings(props: SettingsProps) {
-  const { step, cursor, instructions, handleBack } = useSettings(props);
+  const { step, instructions, handleSelect, handleBack, handleExit } =
+    useSettings(props);
 
   if (step !== "menu") {
     return <SettingsPlaceholder section={step} onBack={handleBack} />;
@@ -110,16 +91,12 @@ export function Settings(props: SettingsProps) {
       <Indent>
         <Text bold>Settings</Text>
       </Indent>
-      {MENU_ITEMS.map((item, i) => {
-        const isSelected = i === cursor;
-        return (
-          <Indent key={item.section}>
-            <Text color={isSelected ? theme.settings : undefined}>
-              {isSelected ? "❯" : " "} {item.label}
-            </Text>
-          </Indent>
-        );
-      })}
+      <NavigationMenu
+        items={MENU_ITEMS}
+        onSelect={handleSelect}
+        onExit={handleExit}
+        color={theme.settings}
+      />
       <Text color={theme.settings}>{buildBorder()}</Text>
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
@@ -144,7 +121,7 @@ function SettingsPlaceholder(props: SettingsPlaceholderProps) {
 
   /* v8 ignore next -- section always matches a menu item */
   const label =
-    MENU_ITEMS.find((m) => m.section === props.section)?.label ?? props.section;
+    MENU_ITEMS.find((m) => m.key === props.section)?.label ?? props.section;
 
   return (
     <Box flexDirection="column" paddingTop={1}>

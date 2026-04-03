@@ -28,55 +28,17 @@ describe("Settings", () => {
   }
 
   describe("menu", () => {
-    it("renders borders and heading", () => {
+    it("renders borders, heading, and all menu items", () => {
       const { lastFrame } = renderSettings();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("─".repeat(COLUMNS));
       expect(frame).toContain("Settings");
-    });
-
-    it("renders all menu items", () => {
-      const { lastFrame } = renderSettings();
-      const frame = lastFrame() ?? "";
       expect(frame).toContain("Providers");
       expect(frame).toContain("Permissions");
       expect(frame).toContain("Allowed Commands");
       expect(frame).toContain("Tools");
       expect(frame).toContain("MCP Servers");
       expect(frame).toContain("Skill Sets");
-    });
-
-    it("shows the first item selected by default", () => {
-      const { lastFrame } = renderSettings();
-      expect(lastFrame()).toContain("❯ Providers");
-    });
-
-    it("moves selection down", async () => {
-      const { stdin, lastFrame } = renderSettings();
-      await stdin.write(keys.down);
-      expect(lastFrame()).toContain("❯ Permissions");
-    });
-
-    it("moves selection up", async () => {
-      const { stdin, lastFrame } = renderSettings();
-      await stdin.write(keys.down);
-      await stdin.write(keys.down);
-      await stdin.write(keys.up);
-      expect(lastFrame()).toContain("❯ Permissions");
-    });
-
-    it("clamps selection at top", async () => {
-      const { stdin, lastFrame } = renderSettings();
-      await stdin.write(keys.up);
-      expect(lastFrame()).toContain("❯ Providers");
-    });
-
-    it("clamps selection at bottom", async () => {
-      const { stdin, lastFrame } = renderSettings();
-      for (let i = 0; i < 10; i++) {
-        await stdin.write(keys.down);
-      }
-      expect(lastFrame()).toContain("❯ Skill Sets");
     });
 
     it("shows key instructions", () => {
@@ -91,13 +53,6 @@ describe("Settings", () => {
       const { stdin, onDone } = renderSettings();
       await stdin.write(keys.escape);
       expect(onDone).toHaveBeenCalledWith();
-    });
-
-    it("ignores unhandled keys", async () => {
-      const { stdin, lastFrame, onDone } = renderSettings();
-      await stdin.write("x");
-      expect(onDone).not.toHaveBeenCalled();
-      expect(lastFrame()).toContain("❯ Providers");
     });
   });
 
@@ -121,7 +76,8 @@ describe("Settings", () => {
       await stdin.write(keys.enter);
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("❯ Providers");
+      expect(frame).toContain("Settings");
+      expect(frame).toContain("Providers");
       expect(frame).toContain("Permissions");
     });
 
@@ -132,7 +88,7 @@ describe("Settings", () => {
       expect(onDone).not.toHaveBeenCalled();
     });
 
-    it("enters the correct sub-screen based on cursor position", async () => {
+    it("enters the correct sub-screen based on selection", async () => {
       const { stdin, lastFrame } = renderSettings();
       await stdin.write(keys.down);
       await stdin.write(keys.down);
@@ -154,7 +110,6 @@ describe("Settings", () => {
       await stdin.write("x");
       await stdin.write(keys.up);
       await stdin.write(keys.down);
-      // Still on the sub-screen
       expect(lastFrame()).toContain("Coming soon");
     });
   });
