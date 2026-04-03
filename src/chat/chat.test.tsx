@@ -100,9 +100,11 @@ describe("Chat", () => {
       await stdin.write("/ping ");
       await stdin.write(keys.enter);
       // Up arrow should not enter history mode since commands aren't in input history.
+      // The input area should still show an empty prompt (not a history entry).
       await stdin.write(keys.up);
       const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("❯ /ping");
+      expect(frame).toContain("submit");
+      expect(frame).toContain("command");
     });
   });
 
@@ -225,7 +227,8 @@ describe("Chat", () => {
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("❯");
-      // Result message appears in chat list
+      // Result message appears in chat list with command name
+      expect(frame).toContain("/test");
       expect(frame).toContain("Stub result");
     });
 

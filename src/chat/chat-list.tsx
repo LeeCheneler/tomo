@@ -20,9 +20,12 @@ function UserMessageView(props: { content: string }) {
 /** Renders a command invocation and its result. */
 function CommandMessageView(props: { command: string; result: string }) {
   return (
-    <Box flexDirection="column" paddingBottom={1}>
-      <Text dimColor>/{props.command}</Text>
-      <Text>{props.result}</Text>
+    <Box paddingBottom={1}>
+      <Text dimColor>{"❯ "}</Text>
+      <Box flexDirection="column">
+        <Text dimColor>/{props.command}</Text>
+        <Text>{props.result}</Text>
+      </Box>
     </Box>
   );
 }

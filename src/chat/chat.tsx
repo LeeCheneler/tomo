@@ -17,7 +17,7 @@ import { useHistory } from "./use-history";
 type ChatMode =
   | { kind: "input"; initialValue?: string }
   | { kind: "history" }
-  | { kind: "takeover"; render: TakeoverRender };
+  | { kind: "takeover"; name: string; render: TakeoverRender };
 
 /** Props for useChat. */
 interface UseChatProps {
@@ -39,7 +39,7 @@ function useChat(props: UseChatProps) {
   /** Handles an invoke result — either enters takeover mode or appends an inline message. */
   function handleInvokeResult(result: InvokeResult) {
     if (result.type === "takeover") {
-      setMode({ kind: "takeover", render: result.render });
+      setMode({ kind: "takeover", name: result.name, render: result.render });
       return;
     }
     appendMessage({
@@ -64,11 +64,11 @@ function useChat(props: UseChatProps) {
 
   /** Handles a takeover screen completing. Drops an optional result message and returns to input. */
   function handleTakeoverDone(result?: string) {
-    if (result) {
+    if (result && mode.kind === "takeover") {
       appendMessage({
         id: crypto.randomUUID(),
         role: "command",
-        command: "",
+        command: mode.name,
         result,
       });
     }

@@ -7,6 +7,7 @@ import { Indent } from "../ui/layout/indent";
 import type { NavigationMenuItem } from "../ui/navigation-menu";
 import { NavigationMenu } from "../ui/navigation-menu";
 import { theme } from "../ui/theme";
+import { PermissionsScreen } from "./permissions";
 
 /** Settings section identifiers. */
 export type SettingsSection =
@@ -61,7 +62,7 @@ function useSettings(props: SettingsProps) {
 
   /** Exits settings. */
   function handleExit() {
-    props.onDone();
+    props.onDone("Settings updated");
   }
 
   const instructions: InstructionItem[] =
@@ -80,6 +81,10 @@ function useSettings(props: SettingsProps) {
 export function Settings(props: SettingsProps) {
   const { step, instructions, handleSelect, handleBack, handleExit } =
     useSettings(props);
+
+  if (step === "permissions") {
+    return <PermissionsScreen onBack={handleBack} />;
+  }
 
   if (step !== "menu") {
     return <SettingsPlaceholder section={step} onBack={handleBack} />;

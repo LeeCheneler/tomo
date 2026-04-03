@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
+import type { MockFsState } from "../test-utils/mock-fs";
 import { Settings } from "./settings";
 
 const COLUMNS = 40;
@@ -15,13 +17,17 @@ function setColumns(width: number | undefined) {
 }
 
 describe("Settings", () => {
+  let fsState: MockFsState;
+
   afterEach(() => {
+    fsState?.restore();
     setColumns(undefined);
   });
 
-  /** Renders Settings with a spy onDone callback and fixed terminal width. */
+  /** Renders Settings with a spy onDone callback, mocked config, and fixed terminal width. */
   function renderSettings() {
     setColumns(COLUMNS);
+    fsState = mockConfig({ global: {} });
     const onDone = vi.fn();
     const result = renderInk(<Settings onDone={onDone} />);
     return { ...result, onDone };
@@ -49,10 +55,10 @@ describe("Settings", () => {
       expect(frame).toContain("exit");
     });
 
-    it("calls onDone with no result on escape", async () => {
+    it("calls onDone with settings updated message on escape", async () => {
       const { stdin, onDone } = renderSettings();
       await stdin.write(keys.escape);
-      expect(onDone).toHaveBeenCalledWith();
+      expect(onDone).toHaveBeenCalledWith("Settings updated");
     });
   });
 
@@ -111,6 +117,41 @@ describe("Settings", () => {
       await stdin.write(keys.up);
       await stdin.write(keys.down);
       expect(lastFrame()).toContain("Coming soon");
+    });
+  });
+
+  describe("permissions screen", () => {
+    it("enters the permissions screen instead of placeholder", async () => {
+      const { stdin, lastFrame } = renderSettings();
+      // Navigate to Permissions (second item)
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Permissions");
+      expect(frame).toContain("Read files (current directory)");
+      expect(frame).not.toContain("Coming soon");
+    });
+
+    it("returns to menu from permissions screen", async () => {
+      const { stdin, lastFrame } = renderSettings();
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Settings");
+      expect(frame).toContain("Providers");
+    });
+  });
+
+  describe("exit message", () => {
+    it("always calls onDone with settings updated message", async () => {
+      const { stdin, onDone } = renderSettings();
+      // Enter permissions, go back, exit
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      expect(onDone).toHaveBeenCalledWith("Settings updated");
     });
   });
 });
