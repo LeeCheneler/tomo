@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderInk } from "../test-utils/ink";
-import { ChatList } from "./chat-list";
+import { ChatList, LiveAssistantMessage } from "./chat-list";
 import type { ChatMessage } from "./message";
 
 describe("ChatList", () => {
@@ -38,11 +38,47 @@ describe("ChatList", () => {
     expect(frame).toContain("pong");
   });
 
+  it("renders an assistant message", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "assistant", content: "Hello, how can I help?" },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    expect(lastFrame()).toContain("Hello, how can I help?");
+  });
+
+  it("renders an interrupted message", () => {
+    const messages: ChatMessage[] = [{ id: "1", role: "interrupted" }];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    expect(lastFrame()).toContain("Interrupted");
+  });
+
+  it("renders an error message", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "error", content: "Something went wrong" },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    expect(lastFrame()).toContain("Something went wrong");
+  });
+
   it("skips unknown message roles", () => {
     const messages = [
       { id: "1", role: "unknown", content: "should not render" },
     ] as unknown as ChatMessage[];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    expect(lastFrame()).toBe("");
+  });
+});
+
+describe("LiveAssistantMessage", () => {
+  it("renders content when provided", () => {
+    const { lastFrame } = renderInk(
+      <LiveAssistantMessage content="streaming text" />,
+    );
+    expect(lastFrame()).toContain("streaming text");
+  });
+
+  it("renders nothing when content is empty", () => {
+    const { lastFrame } = renderInk(<LiveAssistantMessage content="" />);
     expect(lastFrame()).toBe("");
   });
 });

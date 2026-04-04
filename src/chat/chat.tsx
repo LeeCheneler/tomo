@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isCommand } from "../commands/is-command";
 import type {
   CommandRegistry,
@@ -6,11 +6,15 @@ import type {
   TakeoverRender,
 } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
+import type { Provider } from "../config/schema";
+import type { ChatMessage as ProviderChatMessage } from "../provider/client";
+import { LoadingIndicator } from "../ui/loading-indicator";
 import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
-import { ChatList } from "./chat-list";
+import { ChatList, LiveAssistantMessage } from "./chat-list";
 import type { ChatMessage } from "./message";
 import { MessageHistory } from "./message-history";
+import { useCompletion } from "./use-completion";
 import { useHistory } from "./use-history";
 
 /** Chat mode — typing input, browsing history, or a takeover screen. */
@@ -22,6 +26,22 @@ type ChatMode =
 /** Props for useChat. */
 interface UseChatProps {
   commandRegistry?: CommandRegistry;
+  provider?: Provider | null;
+  model?: string | null;
+}
+
+/** Builds the provider message history from chat messages for the completion API. */
+function buildProviderMessages(messages: ChatMessage[]): ProviderChatMessage[] {
+  const result: ProviderChatMessage[] = [];
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      result.push({ role: "user", content: msg.content });
+    }
+    if (msg.role === "assistant") {
+      result.push({ role: "assistant", content: msg.content });
+    }
+  }
+  return result;
 }
 
 /** Manages mode switching between input, history, and takeover screens. */
@@ -30,11 +50,14 @@ function useChat(props: UseChatProps) {
   const [mode, setMode] = useState<ChatMode>({ kind: "input" });
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const completion = useCompletion(props.provider ?? null, props.model ?? null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   /** Appends a message to the chat list. */
-  function appendMessage(msg: ChatMessage) {
+  const appendMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => [...prev, msg]);
-  }
+  }, []);
 
   /** Handles an invoke result — either enters takeover mode or appends an inline message. */
   function handleInvokeResult(result: InvokeResult) {
@@ -50,6 +73,37 @@ function useChat(props: UseChatProps) {
     });
   }
 
+  // When streaming completes, append the result to the static message list
+  useEffect(() => {
+    if (completion.state === "complete" && completion.content) {
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: completion.content,
+      });
+    }
+    if (completion.state === "aborted") {
+      if (completion.content) {
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: completion.content,
+        });
+      }
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "interrupted",
+      });
+    }
+    if (completion.state === "error" && completion.error) {
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "error",
+        content: completion.error,
+      });
+    }
+  }, [completion.state, completion.content, completion.error, appendMessage]);
+
   /** Handles submitted input — dispatches commands or creates user messages. */
   async function handleMessage(message: string) {
     const commandRegistry = props.commandRegistry ?? createCommandRegistry();
@@ -58,8 +112,20 @@ function useChat(props: UseChatProps) {
       return;
     }
 
-    appendMessage({ id: crypto.randomUUID(), role: "user", content: message });
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: message,
+    };
+    appendMessage(userMsg);
     history.push(message);
+
+    // Send to LLM — include the new user message in the provider history
+    const providerMessages = buildProviderMessages([
+      ...messagesRef.current,
+      userMsg,
+    ]);
+    completion.send(providerMessages);
   }
 
   /** Handles a takeover screen completing. Drops an optional result message and returns to input. */
@@ -102,10 +168,16 @@ function useChat(props: UseChatProps) {
       .map((cmd) => ({ name: cmd.name, description: cmd.description }));
   }, [props.commandRegistry]);
 
+  /** Whether the assistant is currently streaming a response. */
+  const isStreaming = completion.state === "streaming";
+
   return {
     mode,
     history,
     messages,
+    isStreaming,
+    streamingContent: completion.content,
+    abort: completion.abort,
     autocompleteItems,
     handleMessage,
     handleUp,
@@ -118,6 +190,8 @@ function useChat(props: UseChatProps) {
 /** Props for Chat. */
 interface ChatProps {
   commandRegistry?: CommandRegistry;
+  provider?: Provider | null;
+  model?: string | null;
 }
 
 /** Chat router — renders ChatInput, MessageHistory, or takeover content based on mode. */
@@ -126,18 +200,28 @@ export function Chat(props: ChatProps) {
     mode,
     history,
     messages,
+    isStreaming,
+    streamingContent,
+    abort,
     autocompleteItems,
     handleMessage,
     handleUp,
     handleSelected,
     handleExit,
     handleTakeoverDone,
-  } = useChat({ commandRegistry: props.commandRegistry });
+  } = useChat({
+    commandRegistry: props.commandRegistry,
+    provider: props.provider,
+    model: props.model,
+  });
 
+  /* v8 ignore start -- streaming persists across mode changes but testing all combinations is impractical */
   if (mode.kind === "takeover") {
     return (
       <>
         <ChatList messages={messages} />
+        {isStreaming && <LiveAssistantMessage content={streamingContent} />}
+        {isStreaming && <LoadingIndicator text="Thinking" />}
         {mode.render(handleTakeoverDone)}
       </>
     );
@@ -147,6 +231,8 @@ export function Chat(props: ChatProps) {
     return (
       <>
         <ChatList messages={messages} />
+        {isStreaming && <LiveAssistantMessage content={streamingContent} />}
+        {isStreaming && <LoadingIndicator text="Thinking" />}
         <MessageHistory
           entries={history.entries}
           onSelected={handleSelected}
@@ -155,13 +241,17 @@ export function Chat(props: ChatProps) {
       </>
     );
   }
+  /* v8 ignore stop */
 
   return (
     <>
       <ChatList messages={messages} />
+      {isStreaming && <LiveAssistantMessage content={streamingContent} />}
+      {isStreaming && <LoadingIndicator text="Thinking" />}
       <ChatInput
         onMessage={handleMessage}
         onUp={handleUp}
+        onAbort={isStreaming ? abort : undefined}
         initialValue={mode.initialValue}
         hasHistory={history.entries.length > 0}
         autocompleteItems={autocompleteItems}

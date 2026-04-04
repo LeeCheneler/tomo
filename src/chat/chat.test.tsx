@@ -3,8 +3,11 @@ import { Text, useInput } from "ink";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
+import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
+import { setupMsw, http, HttpResponse } from "../test-utils/msw";
+import type { MockFsState } from "../test-utils/mock-fs";
 import { Chat } from "./chat";
 
 const COLUMNS = 40;
@@ -316,6 +319,219 @@ describe("Chat", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("❯");
       expect(frame).toContain("my draft");
+    });
+  });
+
+  describe("completion", () => {
+    const mswServer = setupMsw();
+    let fsState: MockFsState;
+
+    /** Builds an SSE response body from data objects. */
+    function sseBody(chunks: unknown[]): string {
+      return (
+        chunks.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n") +
+        "\n\ndata: [DONE]\n\n"
+      );
+    }
+
+    const PROVIDER = {
+      name: "test-ollama",
+      type: "ollama" as const,
+      baseUrl: "http://localhost:11434",
+    };
+
+    afterEach(() => {
+      fsState?.restore();
+    });
+
+    /** Renders Chat with a provider configured. */
+    function renderChatWithProvider() {
+      setColumns(COLUMNS);
+      fsState = mockConfig({ global: { providers: [PROVIDER] } });
+      return renderInk(<Chat provider={PROVIDER} model="llama3" />);
+    }
+
+    it("shows live streaming content below message list", async () => {
+      const cleanup: { resolve: (() => void) | null } = { resolve: null };
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", () => {
+          const body = new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              controller.enqueue(
+                encoder.encode(
+                  'data: {"choices":[{"delta":{"content":"streaming..."}}]}\n\n',
+                ),
+              );
+              cleanup.resolve = () => {
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                controller.close();
+              };
+            },
+          });
+          return new HttpResponse(body, {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Should show live streaming content and loading indicator
+      expect(lastFrame()).toContain("streaming...");
+      expect(lastFrame()).toContain("⠋");
+
+      cleanup.resolve?.();
+    });
+
+    it("shows interrupted message when user aborts stream", async () => {
+      const cleanup: { resolve: (() => void) | null } = { resolve: null };
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", () => {
+          const body = new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              controller.enqueue(
+                encoder.encode(
+                  'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+                ),
+              );
+              cleanup.resolve = () => {
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                controller.close();
+              };
+            },
+          });
+          return new HttpResponse(body, {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Abort with escape
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("partial");
+      expect(frame).toContain("Interrupted");
+
+      cleanup.resolve?.();
+    });
+
+    it("shows interrupted message when aborted before any content", async () => {
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () => new Promise(() => {}),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Interrupted");
+      expect(frame).not.toContain("assistant");
+    });
+
+    it("sends user message to LLM and renders assistant response", async () => {
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([
+                { choices: [{ delta: { content: "Hello from LLM" } }] },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("hi there");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("hi there");
+      expect(frame).toContain("Hello from LLM");
+    });
+
+    it("shows error message on completion failure", async () => {
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () => new HttpResponse(null, { status: 500 }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+      expect(lastFrame()).toContain("500");
+    });
+
+    it("includes assistant messages in subsequent requests", async () => {
+      let requestCount = 0;
+      let lastMessages: unknown[] = [];
+
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          async (info) => {
+            requestCount++;
+            const body = (await info.request.json()) as {
+              messages: unknown[];
+            };
+            lastMessages = body.messages;
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [{ delta: { content: `Response ${requestCount}` } }],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          },
+        ),
+      );
+
+      const { stdin } = renderChatWithProvider();
+
+      // First message
+      await stdin.write("first");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Second message — should include the assistant response in history
+      await stdin.write("second");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(requestCount).toBe(2);
+      // Second request should have: user "first", assistant "Response 1", user "second"
+      expect(lastMessages).toEqual([
+        { role: "user", content: "first" },
+        { role: "assistant", content: "Response 1" },
+        { role: "user", content: "second" },
+      ]);
     });
   });
 });

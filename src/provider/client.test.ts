@@ -39,6 +39,7 @@ describe("resolveApiKey", () => {
   });
 
   it("returns undefined when no key is available", () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
     expect(resolveApiKey("openrouter")).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 import { Box, Static, Text } from "ink";
 import type { ChatMessage } from "./message";
 import { theme } from "../ui/theme";
+import { Indent } from "../ui/layout/indent";
 
 /** Props for ChatList. */
 interface ChatListProps {
@@ -12,7 +13,40 @@ function UserMessageView(props: { content: string }) {
   return (
     <Box paddingBottom={1}>
       <Text color={theme.brand}>{"❯ "}</Text>
-      <Text>{props.content}</Text>
+      <Text color={theme.brand}>{props.content}</Text>
+    </Box>
+  );
+}
+
+/** Renders an assistant response. */
+function AssistantMessageView(props: { content: string }) {
+  return (
+    <Box paddingBottom={1}>
+      <Indent>
+        <Text>{props.content}</Text>
+      </Indent>
+    </Box>
+  );
+}
+
+/** Renders a dimmed interrupted notice. */
+function InterruptedMessageView() {
+  return (
+    <Box paddingBottom={1}>
+      <Indent>
+        <Text dimColor>Interrupted</Text>
+      </Indent>
+    </Box>
+  );
+}
+
+/** Renders an error message in red. */
+function ErrorMessageView(props: { content: string }) {
+  return (
+    <Box paddingBottom={1}>
+      <Indent>
+        <Text color={theme.error}>{props.content}</Text>
+      </Indent>
     </Box>
   );
 }
@@ -23,7 +57,9 @@ function CommandMessageView(props: { command: string; result: string }) {
     <Box paddingBottom={1}>
       <Text dimColor>{"❯ "}</Text>
       <Box flexDirection="column">
-        <Text dimColor>/{props.command}</Text>
+        <Box paddingBottom={1}>
+          <Text dimColor>/{props.command}</Text>
+        </Box>
         <Text>{props.result}</Text>
       </Box>
     </Box>
@@ -42,6 +78,19 @@ export function ChatList(props: ChatListProps) {
         if (message.role === "user") {
           return <UserMessageView key={message.id} content={message.content} />;
         }
+        if (message.role === "assistant") {
+          return (
+            <AssistantMessageView key={message.id} content={message.content} />
+          );
+        }
+        if (message.role === "interrupted") {
+          return <InterruptedMessageView key={message.id} />;
+        }
+        if (message.role === "error") {
+          return (
+            <ErrorMessageView key={message.id} content={message.content} />
+          );
+        }
         if (message.role === "command") {
           return (
             <CommandMessageView
@@ -54,5 +103,23 @@ export function ChatList(props: ChatListProps) {
         return null;
       }}
     </Static>
+  );
+}
+
+/** Props for LiveAssistantMessage. */
+export interface LiveAssistantMessageProps {
+  content: string;
+}
+
+/** Renders the in-progress streaming assistant response below the static message list. */
+export function LiveAssistantMessage(props: LiveAssistantMessageProps) {
+  if (!props.content) {
+    return null;
+  }
+
+  return (
+    <Box paddingBottom={1}>
+      <Text>{props.content}</Text>
+    </Box>
   );
 }

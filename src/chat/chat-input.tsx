@@ -15,6 +15,8 @@ export interface ChatInputProps {
   onMessage: (message: string) => void;
   /** Called when up arrow is pressed at the start of the input. Receives the current draft value. */
   onUp?: (draft: string) => void;
+  /** Called on escape when set, taking priority over the default clear behaviour. */
+  onAbort?: () => void;
   /** Initial text to populate the input with on mount. */
   initialValue?: string;
   /** Whether message history is available for browsing. */
@@ -91,6 +93,10 @@ function useChatInput(props: ChatInputProps) {
     }
 
     if (key.escape) {
+      if (props.onAbort) {
+        props.onAbort();
+        return;
+      }
       if (escPending) {
         applyChange("");
         setCursorPos(0);
@@ -142,7 +148,7 @@ function useChatInput(props: ChatInputProps) {
         { key: "up", description: "history" },
       ];
 
-  instructions.push({ key: "esc", description: "clear" });
+  instructions.push({ key: "esc", description: "interrupt/clear" });
 
   return {
     value,
