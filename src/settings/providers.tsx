@@ -10,6 +10,7 @@ import {
 import { API_KEY_ENV_VARS, PROVIDER_DEFAULT_URLS } from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import { Border } from "../ui/border";
+import { LoadingIndicator } from "../ui/loading-indicator";
 import type { EditableListItem } from "../ui/editable-list";
 import { EditableList } from "../ui/editable-list";
 import type { FormField, FormValues } from "../ui/form";
@@ -284,7 +285,7 @@ function ConnectionStatusLine(props: ConnectionStatusLineProps) {
   if (status === "checking") {
     return (
       <Indent>
-        <Text>Checking {name}...</Text>
+        <LoadingIndicator text={`Checking ${name}`} />
       </Indent>
     );
   }

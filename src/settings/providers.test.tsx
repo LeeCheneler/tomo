@@ -379,7 +379,8 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.up);
       await stdin.write(keys.tab);
       await stdin.write(keys.enter);
-      expect(lastFrame()).toContain("Checking my-ollama...");
+      // Spinner frame indicates loading state (text is shimmer-styled with escape codes)
+      expect(lastFrame()).toContain("⠋");
     });
 
     it("shows connected after successful model fetch", async () => {
