@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/file";
 import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
@@ -35,6 +35,16 @@ const OPENROUTER_PROVIDER = {
 describe("ModelSelector", () => {
   const server = setupMsw();
   let fsState: MockFsState;
+
+  // Default handler so model fetches don't leak unhandled requests.
+  // Individual tests override with server.use() when they need specific responses.
+  beforeEach(() => {
+    server.use(
+      http.get("http://localhost:11434/v1/models", () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+  });
 
   afterEach(() => {
     fsState?.restore();
