@@ -1,8 +1,12 @@
 import { createElement, Fragment } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderInk } from "../test-utils/ink";
+import type { CommandContext } from "./registry";
 import { createCommandRegistry } from "./registry";
 import { settingsCommand } from "./settings";
+
+/** Default context for tests. */
+const DEFAULT_CONTEXT: CommandContext = { usage: null, contextWindow: 8192 };
 
 describe("settingsCommand", () => {
   it("is named settings", () => {
@@ -12,7 +16,7 @@ describe("settingsCommand", () => {
   it("renders the settings menu when invoked", async () => {
     const registry = createCommandRegistry();
     registry.register(settingsCommand);
-    const result = await registry.invoke("/settings");
+    const result = await registry.invoke("/settings", DEFAULT_CONTEXT);
     expect(result.type).toBe("takeover");
     if (result.type !== "takeover") return;
     const onDone = vi.fn();

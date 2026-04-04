@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isCommand } from "../commands/is-command";
 import type {
+  CommandContext,
   CommandRegistry,
   InvokeResult,
   TakeoverRender,
 } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
+import { DEFAULT_CONTEXT_WINDOW } from "../provider/client";
+import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import type { Provider } from "../config/schema";
 import type { ChatMessage as ProviderChatMessage } from "../provider/client";
 import { LoadingIndicator } from "../ui/loading-indicator";
@@ -51,8 +54,16 @@ function useChat(props: UseChatProps) {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const completion = useCompletion(props.provider ?? null, props.model ?? null);
+  const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+
+  // Fetch the real context window size when provider/model are configured
+  useEffect(() => {
+    if (!props.provider || !props.model) return;
+    const client = createOpenAICompatibleClient(props.provider);
+    client.fetchContextWindow(props.model).then(setContextWindow);
+  }, [props.provider, props.model]);
 
   /** Appends a message to the chat list. */
   const appendMessage = useCallback((msg: ChatMessage) => {
@@ -108,7 +119,11 @@ function useChat(props: UseChatProps) {
   async function handleMessage(message: string) {
     const commandRegistry = props.commandRegistry ?? createCommandRegistry();
     if (isCommand(message)) {
-      handleInvokeResult(await commandRegistry.invoke(message));
+      const context: CommandContext = {
+        usage: completion.usage,
+        contextWindow,
+      };
+      handleInvokeResult(await commandRegistry.invoke(message, context));
       return;
     }
 

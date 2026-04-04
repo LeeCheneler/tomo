@@ -63,6 +63,79 @@ const sseChunkSchema = z.object({
   usage: usageSchema.optional(),
 });
 
+/** Schema for Ollama's /api/show response model_info. */
+const ollamaShowSchema = z.object({
+  model_info: z.record(z.string(), z.unknown()).optional(),
+});
+
+/**
+ * Fetches the context window from Ollama's native /api/show endpoint.
+ * Ollama stores context length under a key like `<arch>.context_length`
+ * where the architecture prefix varies per model.
+ */
+async function fetchOllamaContextWindow(
+  baseUrl: string,
+  model: string,
+): Promise<number> {
+  const response = await fetch(`${baseUrl}/api/show`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  });
+
+  if (!response.ok) return DEFAULT_CONTEXT_WINDOW;
+
+  const json = await response.json();
+  const result = ollamaShowSchema.safeParse(json);
+  if (!result.success || !result.data.model_info) return DEFAULT_CONTEXT_WINDOW;
+
+  for (const [key, value] of Object.entries(result.data.model_info)) {
+    if (key.endsWith(".context_length") && typeof value === "number") {
+      return value;
+    }
+  }
+
+  return DEFAULT_CONTEXT_WINDOW;
+}
+
+/** Schema for a model entry with optional context_length. */
+const modelEntrySchema = z.object({
+  id: z.string(),
+  context_length: z.number().optional(),
+});
+
+/** Schema for the /v1/models response — wrapped or bare array. */
+const modelsResponseSchema = z.union([
+  z.object({ data: z.array(modelEntrySchema) }),
+  z.array(modelEntrySchema),
+]);
+
+/**
+ * Fetches the context window from /v1/models metadata.
+ * Works for providers that include context_length in their model entries
+ * (OpenRouter, OpenCode Zen).
+ */
+async function fetchModelsContextWindow(
+  baseUrl: string,
+  model: string,
+  apiKey?: string,
+): Promise<number> {
+  const response = await fetch(`${baseUrl}/v1/models`, {
+    headers: buildHeaders(apiKey),
+  });
+
+  if (!response.ok) return DEFAULT_CONTEXT_WINDOW;
+
+  const json = await response.json();
+  const result = modelsResponseSchema.safeParse(json);
+  if (!result.success) return DEFAULT_CONTEXT_WINDOW;
+
+  const models = Array.isArray(result.data) ? result.data : result.data.data;
+  const entry = models.find((m) => m.id === model);
+
+  return entry?.context_length ?? DEFAULT_CONTEXT_WINDOW;
+}
+
 /** Creates a ProviderClient backed by an OpenAI-compatible API. */
 export function createOpenAICompatibleClient(
   provider: Provider,
@@ -99,10 +172,21 @@ export function createOpenAICompatibleClient(
     return models.map((m) => ({ id: String(m.id) }));
   }
 
-  /** Fetches the context window size for a model. */
-  async function fetchContextWindow(): Promise<number> {
-    // TODO: implement in context window slice
-    return DEFAULT_CONTEXT_WINDOW;
+  /**
+   * Fetches the context window size for a model.
+   * Ollama exposes this via its native /api/show endpoint. OpenRouter and
+   * OpenCode Zen include context_length in the /v1/models metadata.
+   * Falls back to DEFAULT_CONTEXT_WINDOW if detection fails.
+   */
+  async function fetchContextWindow(model: string): Promise<number> {
+    try {
+      if (provider.type === "ollama") {
+        return await fetchOllamaContextWindow(baseUrl, model);
+      }
+      return await fetchModelsContextWindow(baseUrl, model, apiKey);
+    } catch {
+      return DEFAULT_CONTEXT_WINDOW;
+    }
   }
 
   /**

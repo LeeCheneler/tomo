@@ -242,10 +242,191 @@ describe("createOpenAICompatibleClient", () => {
   });
 
   describe("fetchContextWindow", () => {
-    it("returns default context window", async () => {
+    it("fetches context window from ollama /api/show", async () => {
+      server.use(
+        http.post("http://localhost:11434/api/show", () =>
+          HttpResponse.json({
+            model_info: {
+              "llama.context_length": 131072,
+            },
+          }),
+        ),
+      );
+
       const client = createOpenAICompatibleClient(makeProvider());
       const result = await client.fetchContextWindow("llama3");
+      expect(result).toBe(131072);
+    });
 
+    it("handles different architecture prefixes in ollama response", async () => {
+      server.use(
+        http.post("http://localhost:11434/api/show", () =>
+          HttpResponse.json({
+            model_info: {
+              "qwen2.context_length": 32768,
+            },
+          }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const result = await client.fetchContextWindow("qwen3:8b");
+      expect(result).toBe(32768);
+    });
+
+    it("returns default when ollama /api/show fails", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/api/show",
+          () => new HttpResponse(null, { status: 404 }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const result = await client.fetchContextWindow("llama3");
+      expect(result).toBe(8192);
+    });
+
+    it("returns default when ollama model_info has no context_length", async () => {
+      server.use(
+        http.post("http://localhost:11434/api/show", () =>
+          HttpResponse.json({ model_info: { "llama.embedding_length": 4096 } }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const result = await client.fetchContextWindow("llama3");
+      expect(result).toBe(8192);
+    });
+
+    it("returns default when ollama response has no model_info", async () => {
+      server.use(
+        http.post("http://localhost:11434/api/show", () =>
+          HttpResponse.json({}),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const result = await client.fetchContextWindow("llama3");
+      expect(result).toBe(8192);
+    });
+
+    it("fetches context window from /v1/models for openrouter", async () => {
+      server.use(
+        http.get("https://openrouter.ai/api/v1/models", () =>
+          HttpResponse.json({
+            data: [{ id: "gpt-4", context_length: 128000 }],
+          }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "openrouter",
+          baseUrl: "https://openrouter.ai/api",
+        }),
+      );
+      const result = await client.fetchContextWindow("gpt-4");
+      expect(result).toBe(128000);
+    });
+
+    it("handles bare array response from /v1/models", async () => {
+      server.use(
+        http.get("https://openrouter.ai/api/v1/models", () =>
+          HttpResponse.json([{ id: "gpt-4", context_length: 128000 }]),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "openrouter",
+          baseUrl: "https://openrouter.ai/api",
+        }),
+      );
+      const result = await client.fetchContextWindow("gpt-4");
+      expect(result).toBe(128000);
+    });
+
+    it("returns default when model has no context_length", async () => {
+      server.use(
+        http.get("https://openrouter.ai/api/v1/models", () =>
+          HttpResponse.json({
+            data: [{ id: "gpt-4" }],
+          }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "openrouter",
+          baseUrl: "https://openrouter.ai/api",
+        }),
+      );
+      const result = await client.fetchContextWindow("gpt-4");
+      expect(result).toBe(8192);
+    });
+
+    it("returns default when response fails schema validation", async () => {
+      server.use(
+        http.get("https://openrouter.ai/api/v1/models", () =>
+          HttpResponse.json("not an object"),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "openrouter",
+          baseUrl: "https://openrouter.ai/api",
+        }),
+      );
+      const result = await client.fetchContextWindow("gpt-4");
+      expect(result).toBe(8192);
+    });
+
+    it("returns default when model not found in /v1/models", async () => {
+      server.use(
+        http.get("https://openrouter.ai/api/v1/models", () =>
+          HttpResponse.json({ data: [{ id: "other-model" }] }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "openrouter",
+          baseUrl: "https://openrouter.ai/api",
+        }),
+      );
+      const result = await client.fetchContextWindow("gpt-4");
+      expect(result).toBe(8192);
+    });
+
+    it("returns default when /v1/models fails", async () => {
+      server.use(
+        http.get(
+          "https://openrouter.ai/api/v1/models",
+          () => new HttpResponse(null, { status: 500 }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "openrouter",
+          baseUrl: "https://openrouter.ai/api",
+        }),
+      );
+      const result = await client.fetchContextWindow("gpt-4");
+      expect(result).toBe(8192);
+    });
+
+    it("returns default on network error", async () => {
+      server.use(
+        http.post("http://localhost:11434/api/show", () =>
+          HttpResponse.error(),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const result = await client.fetchContextWindow("llama3");
       expect(result).toBe(8192);
     });
   });

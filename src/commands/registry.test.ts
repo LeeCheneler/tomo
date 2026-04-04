@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { CommandContext } from "./registry";
 import { createCommandRegistry } from "./registry";
+
+/** Default context for tests that don't care about runtime state. */
+const DEFAULT_CONTEXT: CommandContext = { usage: null, contextWindow: 8192 };
 
 describe("createCommandRegistry", () => {
   it("registers and retrieves a command", () => {
@@ -61,7 +65,7 @@ describe("createCommandRegistry", () => {
       handler: () => "pong",
     });
     const command = registry.get("ping");
-    expect(command?.handler?.()).toBe("pong");
+    expect(command?.handler?.(DEFAULT_CONTEXT)).toBe("pong");
   });
 
   describe("invoke", () => {
@@ -72,7 +76,7 @@ describe("createCommandRegistry", () => {
         description: "Responds with pong",
         handler: () => "pong",
       });
-      const result = await registry.invoke("/ping");
+      const result = await registry.invoke("/ping", DEFAULT_CONTEXT);
       expect(result.type).toBe("inline");
       expect(result.name).toBe("ping");
       if (result.type === "inline") {
@@ -87,7 +91,10 @@ describe("createCommandRegistry", () => {
         description: "Echoes input",
         handler: () => "echoed",
       });
-      const result = await registry.invoke("/echo hello world");
+      const result = await registry.invoke(
+        "/echo hello world",
+        DEFAULT_CONTEXT,
+      );
       expect(result.name).toBe("echo");
       if (result.type === "inline") {
         expect(result.output).toBe("echoed");
@@ -96,7 +103,7 @@ describe("createCommandRegistry", () => {
 
     it("returns an inline error for unknown commands", async () => {
       const registry = createCommandRegistry();
-      const result = await registry.invoke("/nope");
+      const result = await registry.invoke("/nope", DEFAULT_CONTEXT);
       expect(result.type).toBe("inline");
       expect(result.name).toBe("nope");
       if (result.type === "inline") {
@@ -111,7 +118,7 @@ describe("createCommandRegistry", () => {
         description: "Async command",
         handler: async () => "done",
       });
-      const result = await registry.invoke("/slow");
+      const result = await registry.invoke("/slow", DEFAULT_CONTEXT);
       if (result.type === "inline") {
         expect(result.output).toBe("done");
       }
@@ -125,7 +132,7 @@ describe("createCommandRegistry", () => {
         description: "Manage settings",
         takeover: render,
       });
-      const result = await registry.invoke("/settings");
+      const result = await registry.invoke("/settings", DEFAULT_CONTEXT);
       expect(result.type).toBe("takeover");
       expect(result.name).toBe("settings");
       if (result.type === "takeover") {

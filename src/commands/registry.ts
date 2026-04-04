@@ -8,6 +8,14 @@ export type TakeoverDone = (result?: string) => void;
 /** Renders takeover content given a done callback. */
 export type TakeoverRender = (onDone: TakeoverDone) => ReactNode;
 
+/** Runtime context passed to handler commands when invoked. */
+export interface CommandContext {
+  /** Token usage from the last completion, or null if none yet. */
+  usage: { promptTokens: number; completionTokens: number } | null;
+  /** Context window size for the active model. */
+  contextWindow: number;
+}
+
 /** Fields shared by all command types. */
 interface CommandBase {
   name: string;
@@ -16,7 +24,7 @@ interface CommandBase {
 
 /** A command that returns a string result. */
 interface HandlerCommand extends CommandBase {
-  handler: () => string | Promise<string>;
+  handler: (context: CommandContext) => string | Promise<string>;
   takeover?: never;
 }
 
@@ -54,8 +62,8 @@ export interface CommandRegistry {
   get: (name: string) => CommandDefinition | undefined;
   /** Returns all registered commands in registration order. */
   list: () => readonly CommandDefinition[];
-  /** Parses and invokes a slash command input. */
-  invoke: (input: string) => Promise<InvokeResult>;
+  /** Parses and invokes a slash command input with runtime context. */
+  invoke: (input: string, context: CommandContext) => Promise<InvokeResult>;
 }
 
 /** Parses the command name from a slash command input. */
@@ -77,7 +85,7 @@ export function createCommandRegistry(): CommandRegistry {
     list() {
       return [...commands.values()];
     },
-    async invoke(input: string) {
+    async invoke(input: string, context: CommandContext) {
       const name = parseCommandName(input);
       const command = commands.get(name);
 
@@ -86,7 +94,7 @@ export function createCommandRegistry(): CommandRegistry {
       }
 
       if (command?.handler) {
-        const output = await command.handler();
+        const output = await command.handler(context);
         return { name, type: "inline" as const, output };
       }
 
