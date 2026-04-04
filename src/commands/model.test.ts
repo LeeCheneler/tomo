@@ -1,0 +1,43 @@
+import { createElement, Fragment } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockConfig } from "../test-utils/mock-config";
+import { renderInk } from "../test-utils/ink";
+import type { MockFsState } from "../test-utils/mock-fs";
+import { modelCommand } from "./model";
+import { createCommandRegistry } from "./registry";
+
+describe("modelCommand", () => {
+  let fsState: MockFsState;
+
+  afterEach(() => {
+    fsState?.restore();
+  });
+
+  it("is named model", () => {
+    expect(modelCommand.name).toBe("model");
+  });
+
+  it("registers and invokes as a takeover", async () => {
+    const registry = createCommandRegistry();
+    registry.register(modelCommand);
+    const result = await registry.invoke("/model");
+    expect(result.type).toBe("takeover");
+  });
+
+  it("renders the model selector when invoked", async () => {
+    fsState = mockConfig({ global: {} });
+    const registry = createCommandRegistry();
+    registry.register(modelCommand);
+    const result = await registry.invoke("/model");
+    if (result.type !== "takeover") return;
+    const onDone = vi.fn();
+    const { lastFrame } = renderInk(
+      createElement(Fragment, null, result.render(onDone)),
+    );
+    expect(lastFrame()).toContain("Select Model");
+  });
+
+  it("has a description", () => {
+    expect(modelCommand.description).toBeTruthy();
+  });
+});

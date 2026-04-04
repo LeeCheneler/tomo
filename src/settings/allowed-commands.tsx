@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import { useState } from "react";
-import { loadConfig } from "../config/file";
+import { useConfig } from "../config/hook";
 import { updateAllowedCommands } from "../config/updaters";
 import { Border } from "../ui/border";
 import { EditableList } from "../ui/editable-list";
@@ -23,9 +23,10 @@ export interface AllowedCommandsScreenProps {
 
 /** Manages allowed commands state and persistence. */
 function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
-  const [commands, setCommands] = useState<string[]>(() => {
-    return loadConfig().allowedCommands;
-  });
+  const config = useConfig();
+  const [commands, setCommands] = useState<string[]>(
+    () => config.allowedCommands,
+  );
 
   /** Adds a command and saves to local config. */
   function handleAdd(value: string) {

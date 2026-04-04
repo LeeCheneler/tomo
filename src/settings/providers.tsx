@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import { useRef, useState } from "react";
-import { loadConfig } from "../config/file";
+import { useConfig } from "../config/hook";
 import type { Provider, ProviderType } from "../config/schema";
 import {
   addProvider,
@@ -103,8 +103,9 @@ interface ConnectionStatus {
 
 /** Manages provider list state, persistence, and options form routing. */
 function useProvidersScreen(props: ProvidersScreenProps) {
+  const config = useConfig();
   const [providers, setProviders] = useState<Provider[]>(
-    () => loadConfig().providers,
+    () => config.providers,
   );
   const [activeOptions, setActiveOptions] = useState<number | null>(null);
   const [connectionStatus, setConnectionStatus] =
