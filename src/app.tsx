@@ -1,5 +1,6 @@
 import { Box, Static } from "ink";
 import { Chat } from "./chat/chat";
+import { modelCommand } from "./commands/model";
 import { pingCommand } from "./commands/ping";
 import { createCommandRegistry } from "./commands/registry";
 import { settingsCommand } from "./commands/settings";
@@ -10,6 +11,7 @@ import { version } from "./utils/version";
 /** Creates the application command registry with all built-in commands. */
 function buildCommandRegistry() {
   const registry = createCommandRegistry();
+  registry.register(modelCommand);
   registry.register(pingCommand);
   registry.register(settingsCommand);
   return registry;
