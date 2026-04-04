@@ -10,6 +10,7 @@ import { NavigationMenu } from "../ui/navigation-menu";
 import { theme } from "../ui/theme";
 import { AllowedCommandsScreen } from "./allowed-commands";
 import { PermissionsScreen } from "./permissions";
+import { ProvidersScreen } from "./providers";
 import { ToolsScreen } from "./tools";
 
 /** Settings section identifiers. */
@@ -74,6 +75,10 @@ function useSettings(props: SettingsProps) {
 export function Settings(props: SettingsProps) {
   const { step, instructions, handleSelect, handleBack, handleExit } =
     useSettings(props);
+
+  if (step === "providers") {
+    return <ProvidersScreen onBack={handleBack} />;
+  }
 
   if (step === "permissions") {
     return <PermissionsScreen onBack={handleBack} />;

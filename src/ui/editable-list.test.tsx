@@ -1,12 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
+import type { EditableListItem } from "./editable-list";
 import { EditableList } from "./editable-list";
+
+/** Default test items. */
+const DEFAULT_ITEMS: EditableListItem[] = [
+  { value: "npm test" },
+  { value: "npm run build" },
+];
 
 /** Renders EditableList with sensible defaults and spied callbacks. */
 function renderEditableList(
-  items: string[] = ["npm test", "npm run build"],
-  placeholder?: string,
+  items: EditableListItem[] = DEFAULT_ITEMS,
+  options: { placeholder?: string; onOptions?: (index: number) => void } = {},
 ) {
   const onAdd = vi.fn();
   const onRemove = vi.fn();
@@ -19,7 +26,8 @@ function renderEditableList(
       onRemove={onRemove}
       onUpdate={onUpdate}
       onExit={onExit}
-      placeholder={placeholder}
+      onOptions={options.onOptions}
+      placeholder={options.placeholder}
     />,
   );
   return { ...result, onAdd, onRemove, onUpdate, onExit };
@@ -44,7 +52,9 @@ describe("EditableList", () => {
     });
 
     it("shows add row with custom placeholder", () => {
-      const { lastFrame } = renderEditableList([], "Add command...");
+      const { lastFrame } = renderEditableList([], {
+        placeholder: "Add command...",
+      });
       expect(lastFrame()).toContain("Add command...");
     });
 
@@ -305,7 +315,11 @@ describe("EditableList", () => {
     });
 
     it("focuses next item after removal", async () => {
-      const { stdin, onRemove } = renderEditableList(["aaa", "bbb", "ccc"]);
+      const { stdin, onRemove } = renderEditableList([
+        { value: "aaa" },
+        { value: "bbb" },
+        { value: "ccc" },
+      ]);
       // Navigate to first item (down from add row wraps to item 0)
       await stdin.write(keys.down);
       for (let i = 0; i < 3; i++) {
@@ -316,7 +330,10 @@ describe("EditableList", () => {
     });
 
     it("focuses add row when removing last item", async () => {
-      const { stdin, onRemove } = renderEditableList(["aaa", "bbb"]);
+      const { stdin, onRemove } = renderEditableList([
+        { value: "aaa" },
+        { value: "bbb" },
+      ]);
       // Navigate to second item (down wraps to 0, down again to 1)
       await stdin.write(keys.down);
       await stdin.write(keys.down);
@@ -331,6 +348,68 @@ describe("EditableList", () => {
       const { stdin, onRemove } = renderEditableList();
       await stdin.write(keys.backspace);
       expect(onRemove).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("options", () => {
+    it("shows options indicator on items with hasOptions", () => {
+      const { lastFrame } = renderEditableList([
+        { value: "alpha", hasOptions: true },
+        { value: "beta" },
+      ]);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("alpha ›");
+      expect(frame).not.toContain("beta ›");
+    });
+
+    it("calls onOptions on tab when item has hasOptions", async () => {
+      const onOptions = vi.fn();
+      const { stdin } = renderEditableList(
+        [{ value: "alpha", hasOptions: true }, { value: "beta" }],
+        { onOptions },
+      );
+      await stdin.write(keys.down);
+      await stdin.write(keys.tab);
+      expect(onOptions).toHaveBeenCalledWith(0);
+    });
+
+    it("does not call onOptions on tab when item lacks hasOptions", async () => {
+      const onOptions = vi.fn();
+      const { stdin } = renderEditableList(
+        [{ value: "alpha" }, { value: "beta" }],
+        { onOptions },
+      );
+      await stdin.write(keys.down);
+      await stdin.write(keys.tab);
+      expect(onOptions).not.toHaveBeenCalled();
+    });
+
+    it("does not call onOptions on tab from add row", async () => {
+      const onOptions = vi.fn();
+      const { stdin } = renderEditableList(
+        [{ value: "alpha", hasOptions: true }],
+        { onOptions },
+      );
+      // Cursor starts on add row
+      await stdin.write(keys.tab);
+      expect(onOptions).not.toHaveBeenCalled();
+    });
+
+    it("does not call onOptions when prop is not provided", async () => {
+      const { stdin, onUpdate } = renderEditableList([
+        { value: "alpha", hasOptions: true },
+      ]);
+      await stdin.write(keys.down);
+      await stdin.write(keys.tab);
+      expect(onUpdate).not.toHaveBeenCalled();
+    });
+
+    it("shows options indicator on selected item with hasOptions", async () => {
+      const { stdin, lastFrame } = renderEditableList([
+        { value: "alpha", hasOptions: true },
+      ]);
+      await stdin.write(keys.down);
+      expect(lastFrame()).toContain("›");
     });
   });
 

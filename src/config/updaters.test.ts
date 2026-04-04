@@ -9,6 +9,7 @@ import {
   updateActiveProvider,
   updateAllowedCommands,
   updatePermissions,
+  updateProvider,
   updateTools,
 } from "./updaters";
 
@@ -143,6 +144,58 @@ describe("removeProvider", () => {
     removeProvider("nonexistent");
     const config = loadConfig();
     expect(config.providers).toHaveLength(1);
+  });
+});
+
+describe("updateProvider", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("updates a provider by original name", () => {
+    state = mockConfig({
+      global: {
+        providers: [
+          { name: "ollama", type: "ollama", baseUrl: "http://localhost:11434" },
+        ],
+      },
+    });
+    updateProvider("ollama", {
+      name: "my-ollama",
+      type: "ollama",
+      baseUrl: "http://localhost:11434",
+      apiKey: "sk-123",
+    });
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(1);
+    expect(config.providers[0].name).toBe("my-ollama");
+    expect(config.providers[0].apiKey).toBe("sk-123");
+  });
+
+  it("preserves other providers", () => {
+    state = mockConfig({
+      global: {
+        providers: [
+          { name: "ollama", type: "ollama", baseUrl: "http://localhost:11434" },
+          {
+            name: "openrouter",
+            type: "openrouter",
+            baseUrl: "https://openrouter.ai/api",
+          },
+        ],
+      },
+    });
+    updateProvider("ollama", {
+      name: "ollama",
+      type: "ollama",
+      baseUrl: "http://other:11434",
+    });
+    const config = loadConfig();
+    expect(config.providers).toHaveLength(2);
+    expect(config.providers[0].baseUrl).toBe("http://other:11434");
+    expect(config.providers[1].name).toBe("openrouter");
   });
 });
 

@@ -5,10 +5,17 @@ import { processTextEdit } from "../input/text-edit";
 import { Indent } from "./layout/indent";
 import { theme } from "./theme";
 
+/** A single item in an editable list. */
+export interface EditableListItem {
+  value: string;
+  /** When true, indicates this item has additional options accessible via Tab. */
+  hasOptions?: boolean;
+}
+
 /** Props for EditableList. */
 export interface EditableListProps {
-  /** The current saved string values. */
-  items: string[];
+  /** The current item objects. */
+  items: EditableListItem[];
   /** Called when a new item is added via the add row. */
   onAdd: (value: string) => void;
   /** Called when an existing item is removed (enter on empty). */
@@ -17,6 +24,8 @@ export interface EditableListProps {
   onUpdate: (index: number, value: string) => void;
   /** Called when escape is pressed. */
   onExit: () => void;
+  /** Called when the user presses Tab on an item with hasOptions. */
+  onOptions?: (index: number) => void;
   /** Color for the cursor indicator. Defaults to theme.brand. */
   color?: string;
   /** Placeholder text for the add row. Defaults to "Add item...". */
@@ -46,14 +55,14 @@ function useEditableList(props: EditableListProps) {
   cursorRef.current = cursor;
 
   const isAddRow = cursor === addRowIndex;
-  const savedValue = isAddRow ? "" : props.items[cursor];
+  const savedValue = isAddRow ? "" : props.items[cursor].value;
   const isDraftEmpty = draft.trim() === "";
   const hasUnsavedChanges = !isAddRow && !isDraftEmpty && draft !== savedValue;
   const showRemoveHint = !isAddRow && isDraftEmpty;
 
   /** Sets draft and text cursor for a given row index. */
   function focusRow(index: number) {
-    const value = index === props.items.length ? "" : props.items[index];
+    const value = index === props.items.length ? "" : props.items[index].value;
     draftRef.current = value;
     setDraft(value);
     const end = value.length;
@@ -97,6 +106,14 @@ function useEditableList(props: EditableListProps) {
       return;
     }
 
+    if (key.tab && props.onOptions) {
+      const item = props.items[cursorRef.current];
+      if (item?.hasOptions) {
+        props.onOptions(cursorRef.current);
+      }
+      return;
+    }
+
     if (key.return) {
       const currentCursor = cursorRef.current;
       const currentDraft = draftRef.current;
@@ -104,7 +121,7 @@ function useEditableList(props: EditableListProps) {
 
       if (onAdd) {
         const trimmed = currentDraft.trim();
-        if (trimmed && !props.items.includes(trimmed)) {
+        if (trimmed && !props.items.some((item) => item.value === trimmed)) {
           props.onAdd(trimmed);
           // Bump cursor to follow the add row which shifts down by 1.
           const next = currentCursor + 1;
@@ -122,16 +139,16 @@ function useEditableList(props: EditableListProps) {
         // After removal, the next item slides into this position.
         // If we removed the last item, cursor now points to the add row.
         const nextIsAdd = currentCursor >= props.items.length - 1;
-        const nextValue = nextIsAdd ? "" : props.items[currentCursor + 1];
+        const nextValue = nextIsAdd ? "" : props.items[currentCursor + 1].value;
         updateDraft(nextValue);
         moveTextCursor(nextValue.length);
         return;
       }
 
       // Enter on changed existing item saves it.
-      if (currentDraft !== props.items[currentCursor]) {
+      if (currentDraft !== props.items[currentCursor].value) {
         const trimmed = currentDraft.trim();
-        if (trimmed && !props.items.includes(trimmed)) {
+        if (trimmed && !props.items.some((item) => item.value === trimmed)) {
           props.onUpdate(currentCursor, trimmed);
         }
       }
@@ -249,7 +266,7 @@ export function EditableList(props: EditableListProps) {
         if (isSelected) {
           const { before, at, after } = splitAtCursor(draft, textCursor);
           return (
-            <Indent key={item}>
+            <Indent key={item.value}>
               <Text color={color}>{"❯ "}</Text>
               <Text>
                 {before}
@@ -258,16 +275,18 @@ export function EditableList(props: EditableListProps) {
               </Text>
               {hasUnsavedChanges && <SaveHint />}
               {showRemoveHint && <RemoveHint />}
+              {item.hasOptions && <Text color={theme.key}> ›</Text>}
             </Indent>
           );
         }
 
         return (
-          <Indent key={item}>
+          <Indent key={item.value}>
             <Text>
               {"  "}
-              {item}
+              {item.value}
             </Text>
+            {item.hasOptions && <Text color={theme.key}> ›</Text>}
           </Indent>
         );
       })}

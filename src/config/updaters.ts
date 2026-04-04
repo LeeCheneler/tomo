@@ -37,6 +37,17 @@ export function removeProvider(name: string): void {
   });
 }
 
+/** Updates an existing provider by its original name in the global config. */
+export function updateProvider(originalName: string, provider: Provider): void {
+  updateGlobalConfig((raw) => {
+    const { providers } = providersFieldSchema.parse(raw);
+    return {
+      ...raw,
+      providers: providers.map((p) => (p.name === originalName ? provider : p)),
+    };
+  });
+}
+
 /** Sets permissions in the local config. */
 export function updatePermissions(permissions: Permissions): void {
   updateLocalConfig((raw) => ({ ...raw, permissions }));

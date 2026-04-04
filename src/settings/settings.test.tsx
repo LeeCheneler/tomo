@@ -68,7 +68,7 @@ describe("Settings", () => {
       await stdin.write(keys.enter);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("Providers");
-      expect(frame).toContain("Coming soon");
+      expect(frame).not.toContain("Coming soon");
     });
 
     it("renders borders in sub-screen", async () => {
@@ -113,13 +113,30 @@ describe("Settings", () => {
       expect(lastFrame()).toContain("back");
     });
 
-    it("ignores non-escape keys in sub-screen", async () => {
+    it("ignores non-escape keys in placeholder sub-screen", async () => {
       const { stdin, lastFrame } = renderSettings();
+      // Navigate to MCP Servers (placeholder)
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
       await stdin.write(keys.enter);
       await stdin.write("x");
       await stdin.write(keys.up);
       await stdin.write(keys.down);
       expect(lastFrame()).toContain("Coming soon");
+    });
+
+    it("returns to menu on escape from placeholder sub-screen", async () => {
+      const { stdin, lastFrame } = renderSettings();
+      // Navigate to MCP Servers (placeholder)
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).toContain("Settings");
     });
   });
 

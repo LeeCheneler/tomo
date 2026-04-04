@@ -72,7 +72,7 @@ export function AllowedCommandsScreen(props: AllowedCommandsScreenProps) {
         <Text dimColor>Exact match (npm test) or prefix with :* (git:*)</Text>
       </Indent>
       <EditableList
-        items={commands}
+        items={commands.map((c) => ({ value: c }))}
         onAdd={handleAdd}
         onRemove={handleRemove}
         onUpdate={handleUpdate}
