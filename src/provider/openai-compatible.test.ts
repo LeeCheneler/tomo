@@ -250,15 +250,416 @@ describe("createOpenAICompatibleClient", () => {
   });
 
   describe("streamCompletion", () => {
-    it("throws not yet implemented", async () => {
-      const client = createOpenAICompatibleClient(makeProvider());
+    /** Builds an SSE response body from an array of data objects. */
+    function sseBody(chunks: unknown[]): string {
+      return (
+        chunks.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n") +
+        "\n\ndata: [DONE]\n\n"
+      );
+    }
 
-      await expect(
-        client.streamCompletion({
-          model: "llama3",
-          messages: [{ role: "user", content: "hello" }],
+    /** Standard completion options for tests. */
+    const COMPLETION_OPTIONS = {
+      model: "llama3",
+      messages: [{ role: "user" as const, content: "hello" }],
+    };
+
+    it("streams content tokens", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([
+                { choices: [{ delta: { content: "Hello" } }] },
+                { choices: [{ delta: { content: " world" } }] },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+
+      const tokens: string[] = [];
+      for await (const token of stream.content) {
+        tokens.push(token);
+      }
+      expect(tokens).toEqual(["Hello", " world"]);
+    });
+
+    it("captures token usage", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([
+                { choices: [{ delta: { content: "Hi" } }] },
+                { usage: { prompt_tokens: 10, completion_tokens: 5 } },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+
+      for await (const _ of stream.content) {
+        // consume
+      }
+      expect(stream.getUsage()).toEqual({
+        promptTokens: 10,
+        completionTokens: 5,
+      });
+    });
+
+    it("returns null usage when not provided", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([{ choices: [{ delta: { content: "Hi" } }] }]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+
+      for await (const _ of stream.content) {
+        // consume
+      }
+      expect(stream.getUsage()).toBeNull();
+    });
+
+    it("accumulates tool calls across chunks", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_1",
+                            function: {
+                              name: "readFile",
+                              arguments: '{"path":',
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            function: { arguments: '"test.ts"}' },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+
+      for await (const _ of stream.content) {
+        // consume
+      }
+      const calls = stream.getToolCalls();
+      expect(calls).toHaveLength(1);
+      expect(calls[0].id).toBe("call_1");
+      expect(calls[0].function.name).toBe("readFile");
+      expect(calls[0].function.arguments).toBe('{"path":"test.ts"}');
+    });
+
+    it("defaults missing tool call fields to empty strings", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [{ index: 0 }],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+      for await (const _ of stream.content) {
+        // consume
+      }
+      const calls = stream.getToolCalls();
+      expect(calls).toHaveLength(1);
+      expect(calls[0].id).toBe("");
+      expect(calls[0].function.name).toBe("");
+      expect(calls[0].function.arguments).toBe("");
+    });
+
+    it("updates id and name on subsequent tool call chunks", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [{ index: 0 }],
+                      },
+                    },
+                  ],
+                },
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_late",
+                            function: { name: "lateName" },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+      for await (const _ of stream.content) {
+        // consume
+      }
+      const calls = stream.getToolCalls();
+      expect(calls[0].id).toBe("call_late");
+      expect(calls[0].function.name).toBe("lateName");
+      expect(calls[0].function.arguments).toBe("");
+    });
+
+    it("sends authorization header when api key is set", async () => {
+      let authHeader = "";
+      server.use(
+        http.post("http://localhost:11434/v1/chat/completions", (info) => {
+          authHeader = info.request.headers.get("authorization") ?? "";
+          return new HttpResponse(sseBody([]), {
+            headers: { "Content-Type": "text/event-stream" },
+          });
         }),
-      ).rejects.toThrow("streamCompletion not yet implemented");
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({ apiKey: "sk-test" }),
+      );
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+      for await (const _ of stream.content) {
+        // consume
+      }
+      expect(authHeader).toBe("Bearer sk-test");
+    });
+
+    it("includes max_tokens when provided", async () => {
+      let requestBody: Record<string, unknown> = {};
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          async (info) => {
+            requestBody = (await info.request.json()) as Record<
+              string,
+              unknown
+            >;
+            return new HttpResponse(sseBody([]), {
+              headers: { "Content-Type": "text/event-stream" },
+            });
+          },
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion({
+        ...COMPLETION_OPTIONS,
+        maxTokens: 1024,
+      });
+      for await (const _ of stream.content) {
+        // consume
+      }
+      expect(requestBody.max_tokens).toBe(1024);
+    });
+
+    it("includes tools when provided", async () => {
+      let requestBody: Record<string, unknown> = {};
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          async (info) => {
+            requestBody = (await info.request.json()) as Record<
+              string,
+              unknown
+            >;
+            return new HttpResponse(sseBody([]), {
+              headers: { "Content-Type": "text/event-stream" },
+            });
+          },
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion({
+        ...COMPLETION_OPTIONS,
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "test",
+              description: "test tool",
+              parameters: {},
+            },
+          },
+        ],
+      });
+      for await (const _ of stream.content) {
+        // consume
+      }
+      expect(requestBody.tools).toHaveLength(1);
+    });
+
+    it("throws on HTTP error with body", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () => new HttpResponse("Bad Request", { status: 400 }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      await expect(client.streamCompletion(COMPLETION_OPTIONS)).rejects.toThrow(
+        "Provider returned HTTP 400: Bad Request",
+      );
+    });
+
+    it("throws on HTTP error without body", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () => new HttpResponse(null, { status: 500 }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      await expect(client.streamCompletion(COMPLETION_OPTIONS)).rejects.toThrow(
+        "Provider returned HTTP 500",
+      );
+    });
+
+    it("throws on empty response body", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () => new HttpResponse(null, { status: 200 }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      await expect(client.streamCompletion(COMPLETION_OPTIONS)).rejects.toThrow(
+        "Provider returned an empty response body",
+      );
+    });
+
+    it("throws on connection failure", async () => {
+      server.use(
+        http.post("http://localhost:11434/v1/chat/completions", () =>
+          HttpResponse.error(),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      await expect(
+        client.streamCompletion(COMPLETION_OPTIONS),
+      ).rejects.toThrow();
+    });
+
+    it("skips chunks that fail schema validation", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              'data: "just a string"\n\ndata: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n',
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+
+      const tokens: string[] = [];
+      for await (const token of stream.content) {
+        tokens.push(token);
+      }
+      expect(tokens).toEqual(["ok"]);
+    });
+
+    it("skips malformed JSON in SSE data", async () => {
+      server.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              'data: not-json\n\ndata: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n',
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(makeProvider());
+      const stream = await client.streamCompletion(COMPLETION_OPTIONS);
+
+      const tokens: string[] = [];
+      for await (const token of stream.content) {
+        tokens.push(token);
+      }
+      expect(tokens).toEqual(["ok"]);
     });
   });
 });

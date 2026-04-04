@@ -1,6 +1,15 @@
+import { z } from "zod";
 import type { Provider } from "../config/schema";
-import type { CompletionStream, ModelInfo, ProviderClient } from "./client";
+import type {
+  CompletionStream,
+  ModelInfo,
+  ProviderClient,
+  StreamCompletionOptions,
+  TokenUsage,
+  ToolCall,
+} from "./client";
 import { DEFAULT_CONTEXT_WINDOW, resolveApiKey } from "./client";
+import { parseSSEStream } from "./sse";
 
 /** Builds HTTP headers for an OpenAI-compatible API request. */
 function buildHeaders(apiKey?: string): Record<string, string> {
@@ -17,6 +26,42 @@ function buildHeaders(apiKey?: string): Record<string, string> {
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
 }
+
+/** Schema for a tool call delta in an SSE chunk. */
+const toolCallDeltaSchema = z.object({
+  index: z.number(),
+  id: z.string().optional(),
+  function: z
+    .object({
+      name: z.string().optional(),
+      arguments: z.string().optional(),
+    })
+    .optional(),
+});
+
+/** Schema for a single choice delta in an SSE chunk. */
+const deltaSchema = z.object({
+  content: z.string().optional(),
+  tool_calls: z.array(toolCallDeltaSchema).optional(),
+});
+
+/** Schema for token usage in an SSE chunk. */
+const usageSchema = z.object({
+  prompt_tokens: z.number(),
+  completion_tokens: z.number(),
+});
+
+/** Schema for an SSE streaming chunk from the completions endpoint. */
+const sseChunkSchema = z.object({
+  choices: z
+    .array(
+      z.object({
+        delta: deltaSchema.optional(),
+      }),
+    )
+    .optional(),
+  usage: usageSchema.optional(),
+});
 
 /** Creates a ProviderClient backed by an OpenAI-compatible API. */
 export function createOpenAICompatibleClient(
@@ -60,10 +105,131 @@ export function createOpenAICompatibleClient(
     return DEFAULT_CONTEXT_WINDOW;
   }
 
-  /** Streams a chat completion response. */
-  async function streamCompletion(): Promise<CompletionStream> {
-    // TODO: implement in streaming slice
-    throw new Error("streamCompletion not yet implemented");
+  /**
+   * Streams a chat completion response from the OpenAI-compatible endpoint.
+   *
+   * Sends a POST to /v1/chat/completions with stream: true and parses the
+   * response as Server-Sent Events (SSE). Returns a CompletionStream with:
+   * - content: an async iterable that yields text tokens as they arrive
+   * - getUsage(): token counts, available after the stream is fully consumed
+   * - getToolCalls(): accumulated tool calls, available after the stream is fully consumed
+   *
+   * The SSE stream consists of JSON chunks, each containing a delta with partial
+   * content, tool call fragments, or token usage. Content deltas are yielded
+   * immediately. Tool calls are accumulated across multiple chunks since the
+   * provider splits them: the first chunk carries the id and function name,
+   * subsequent chunks append to the arguments string. Usage arrives in the
+   * final chunk before [DONE].
+   */
+  async function streamCompletion(
+    options: StreamCompletionOptions,
+  ): Promise<CompletionStream> {
+    const url = `${baseUrl}/v1/chat/completions`;
+
+    // stream_options.include_usage asks the provider to send a final chunk
+    // with prompt and completion token counts before closing the stream.
+    const response = await fetch(url, {
+      method: "POST",
+      headers: buildHeaders(apiKey),
+      body: JSON.stringify({
+        model: options.model,
+        messages: options.messages,
+        stream: true,
+        stream_options: { include_usage: true },
+        ...(options.maxTokens != null && { max_tokens: options.maxTokens }),
+        ...(options.tools &&
+          options.tools.length > 0 && { tools: options.tools }),
+      }),
+      signal: options.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        `Provider returned HTTP ${response.status}${body ? `: ${body}` : ""}`,
+      );
+    }
+
+    if (!response.body) {
+      throw new Error("Provider returned an empty response body");
+    }
+
+    const responseBody = response.body;
+
+    // Usage and tool calls are populated as side effects while iterating
+    // the content generator below. They're only complete after the stream
+    // is fully consumed, which is why they're accessed via closures.
+    let usage: TokenUsage | null = null;
+    const toolCalls: ToolCall[] = [];
+
+    /**
+     * Async generator that parses SSE data lines into typed chunks and
+     * yields content tokens. Malformed JSON and chunks that don't match
+     * the expected schema are silently skipped.
+     */
+    async function* streamContent(): AsyncGenerator<string> {
+      for await (const data of parseSSEStream(responseBody)) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          // Skip lines that aren't valid JSON (e.g. comments, keepalives)
+          continue;
+        }
+        const result = sseChunkSchema.safeParse(parsed);
+        if (!result.success) continue;
+
+        const chunk = result.data;
+        const delta = chunk.choices?.[0]?.delta;
+
+        // Yield text content as it arrives for real-time rendering
+        if (delta?.content) {
+          yield delta.content;
+        }
+
+        // Tool calls arrive fragmented across multiple SSE chunks.
+        // The first chunk for a given index carries the id and function name;
+        // subsequent chunks for the same index append to the arguments string.
+        // We use the index to track which tool call each fragment belongs to.
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            if (!toolCalls[tc.index]) {
+              // First fragment for this tool call — initialise with defaults
+              toolCalls[tc.index] = {
+                id: tc.id ?? "",
+                type: "function",
+                function: {
+                  name: tc.function?.name ?? "",
+                  arguments: tc.function?.arguments ?? "",
+                },
+              };
+            } else {
+              // Subsequent fragment — merge into the existing tool call
+              const existing = toolCalls[tc.index];
+              if (tc.id) existing.id = tc.id;
+              if (tc.function?.name) existing.function.name = tc.function.name;
+              if (tc.function?.arguments) {
+                existing.function.arguments += tc.function.arguments;
+              }
+            }
+          }
+        }
+
+        // The provider sends usage in the final chunk when stream_options.include_usage is set
+        if (chunk.usage) {
+          usage = {
+            promptTokens: chunk.usage.prompt_tokens,
+            completionTokens: chunk.usage.completion_tokens,
+          };
+        }
+      }
+    }
+
+    return {
+      content: streamContent(),
+      getUsage: () => usage,
+      getToolCalls: () => toolCalls,
+    };
   }
 
   return { fetchModels, fetchContextWindow, streamCompletion };
