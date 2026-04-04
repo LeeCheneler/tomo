@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { loadConfig } from "../config/file";
 import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
+import { setupMsw, http, HttpResponse } from "../test-utils/msw";
 import type { MockFsState } from "../test-utils/mock-fs";
 import { ModelSelector } from "./model-selector";
 
@@ -31,6 +33,7 @@ const OPENROUTER_PROVIDER = {
 };
 
 describe("ModelSelector", () => {
+  const server = setupMsw();
   let fsState: MockFsState;
 
   afterEach(() => {
@@ -121,34 +124,172 @@ describe("ModelSelector", () => {
     });
   });
 
-  describe("model list placeholder", () => {
-    it("shows provider name in heading", async () => {
+  describe("model list", () => {
+    it("shows loading indicator while fetching", async () => {
+      server.use(
+        http.get(
+          "http://localhost:11434/v1/models",
+          () => new Promise(() => {}),
+        ),
+      );
+
       const { stdin, lastFrame } = renderModelSelector({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.enter);
+      expect(lastFrame()).toContain("⠋");
       expect(lastFrame()).toContain("Select Model — my-ollama");
     });
 
-    it("returns to provider list on escape", async () => {
+    it("shows models after successful fetch", async () => {
+      server.use(
+        http.get("http://localhost:11434/v1/models", () =>
+          HttpResponse.json({ data: [{ id: "llama3" }, { id: "mistral" }] }),
+        ),
+      );
+
       const { stdin, lastFrame } = renderModelSelector({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.enter);
-      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("Select Model");
-      expect(frame).toContain("my-ollama");
-      expect(frame).not.toContain("Coming soon");
+      expect(frame).toContain("llama3");
+      expect(frame).toContain("mistral");
     });
 
-    it("ignores other keys", async () => {
+    it("updates config on model selection and closes", async () => {
+      server.use(
+        http.get("http://localhost:11434/v1/models", () =>
+          HttpResponse.json({ data: [{ id: "llama3" }] }),
+        ),
+      );
+
+      const { stdin, onDone } = renderModelSelector({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      await stdin.write(keys.enter);
+      expect(onDone).toHaveBeenCalledWith("Model set to llama3 (my-ollama)");
+      const config = loadConfig();
+      expect(config.activeProvider).toBe("my-ollama");
+      expect(config.activeModel).toBe("llama3");
+    });
+
+    it("shows error message on fetch failure", async () => {
+      server.use(
+        http.get(
+          "http://localhost:11434/v1/models",
+          () => new HttpResponse(null, { status: 500 }),
+        ),
+      );
+
       const { stdin, lastFrame } = renderModelSelector({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(lastFrame()).toContain("Failed to load models");
+    });
+
+    it("returns to provider list on escape from error", async () => {
+      server.use(
+        http.get(
+          "http://localhost:11434/v1/models",
+          () => new HttpResponse(null, { status: 500 }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderModelSelector({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      await stdin.write(keys.escape);
+      expect(lastFrame()).toContain("Select Model");
+      expect(lastFrame()).not.toContain("Failed");
+    });
+
+    it("ignores other keys on error screen", async () => {
+      server.use(
+        http.get(
+          "http://localhost:11434/v1/models",
+          () => new HttpResponse(null, { status: 500 }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderModelSelector({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
       await stdin.write("x");
-      expect(lastFrame()).toContain("Coming soon");
+      expect(lastFrame()).toContain("Failed to load models");
+    });
+
+    it("shows empty message when no models returned", async () => {
+      server.use(
+        http.get("http://localhost:11434/v1/models", () =>
+          HttpResponse.json({ data: [] }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderModelSelector({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(lastFrame()).toContain("No models available");
+    });
+
+    it("returns to provider list on escape from empty", async () => {
+      server.use(
+        http.get("http://localhost:11434/v1/models", () =>
+          HttpResponse.json({ data: [] }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderModelSelector({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("No models");
+    });
+
+    it("ignores other keys on empty screen", async () => {
+      server.use(
+        http.get("http://localhost:11434/v1/models", () =>
+          HttpResponse.json({ data: [] }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderModelSelector({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      await stdin.write("x");
+      expect(lastFrame()).toContain("No models available");
+    });
+
+    it("returns to provider list on escape from model list", async () => {
+      server.use(
+        http.get("http://localhost:11434/v1/models", () =>
+          HttpResponse.json({ data: [{ id: "llama3" }] }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderModelSelector({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      await stdin.write(keys.escape);
+      expect(lastFrame()).toContain("Select Model");
+      expect(lastFrame()).not.toContain("llama3");
     });
   });
 });

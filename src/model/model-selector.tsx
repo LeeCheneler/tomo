@@ -1,12 +1,16 @@
 import { Box, Text, useInput } from "ink";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TakeoverDone } from "../commands/registry";
 import { loadConfig } from "../config/file";
 import type { Provider } from "../config/schema";
+import { updateActiveModel, updateActiveProvider } from "../config/updaters";
+import type { ModelInfo } from "../provider/client";
+import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import { Border } from "../ui/border";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { Indent } from "../ui/layout/indent";
+import { LoadingIndicator } from "../ui/loading-indicator";
 import type { NavigationMenuItem } from "../ui/navigation-menu";
 import { NavigationMenu } from "../ui/navigation-menu";
 import { theme } from "../ui/theme";
@@ -51,11 +55,19 @@ function useModelSelector(props: ModelSelectorProps) {
     setStep({ kind: "providers" });
   }
 
+  /** Selects a model, updates config, and closes the takeover. */
+  function handleSelectModel(provider: Provider, model: string) {
+    updateActiveProvider(provider.name);
+    updateActiveModel(model);
+    props.onDone(`Model set to ${model} (${provider.name})`);
+  }
+
   return {
     providers,
     providerItems: buildProviderItems(providers),
     step,
     handleSelectProvider,
+    handleSelectModel,
     handleBackToProviders,
     handleExit: props.onDone,
   };
@@ -68,14 +80,16 @@ export function ModelSelector(props: ModelSelectorProps) {
     providerItems,
     step,
     handleSelectProvider,
+    handleSelectModel,
     handleBackToProviders,
     handleExit,
   } = useModelSelector(props);
 
   if (step.kind === "models") {
     return (
-      <ModelListPlaceholder
+      <ModelList
         provider={step.provider}
+        onSelect={handleSelectModel}
         onBack={handleBackToProviders}
       />
     );
@@ -135,14 +149,113 @@ function NoProvidersMessage(props: NoProvidersMessageProps) {
   );
 }
 
-/** Props for ModelListPlaceholder. */
-interface ModelListPlaceholderProps {
+/** Model fetch state. */
+type ModelFetchState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "loaded"; models: ModelInfo[] };
+
+/** Key instructions for the model list. */
+const MODEL_INSTRUCTIONS: InstructionItem[] = [
+  { key: "up/down", description: "navigate" },
+  { key: "enter", description: "select" },
+  { key: "esc", description: "back" },
+];
+
+/** Props for ModelList. */
+interface ModelListProps {
   provider: Provider;
+  onSelect: (provider: Provider, model: string) => void;
   onBack: () => void;
 }
 
-/** Temporary placeholder for the model list screen. */
-function ModelListPlaceholder(props: ModelListPlaceholderProps) {
+/** Fetches and displays models for a provider. */
+function ModelList(props: ModelListProps) {
+  const [state, setState] = useState<ModelFetchState>({ status: "loading" });
+
+  useEffect(() => {
+    const client = createOpenAICompatibleClient(props.provider);
+    client
+      .fetchModels()
+      .then((models) => {
+        setState({ status: "loaded", models });
+      })
+      .catch((err: Error) => {
+        setState({ status: "error", message: err.message });
+      });
+  }, [props.provider]);
+
+  if (state.status === "loading") {
+    return (
+      <Box flexDirection="column" paddingTop={1}>
+        <Border color={theme.brand} />
+        <Indent>
+          <Text bold>Select Model — {props.provider.name}</Text>
+        </Indent>
+        <Indent>
+          <LoadingIndicator text="Loading models" />
+        </Indent>
+        <Border color={theme.brand} />
+        <Box justifyContent="flex-end" height={1}>
+          <KeyInstructions items={[{ key: "esc", description: "back" }]} />
+        </Box>
+      </Box>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <ModelListError
+        provider={props.provider}
+        message={state.message}
+        onBack={props.onBack}
+      />
+    );
+  }
+
+  if (state.models.length === 0) {
+    return <ModelListEmpty provider={props.provider} onBack={props.onBack} />;
+  }
+
+  const items: NavigationMenuItem[] = state.models.map((m) => ({
+    key: m.id,
+    label: m.id,
+  }));
+
+  /** Handles model selection. */
+  function handleSelect(item: NavigationMenuItem) {
+    props.onSelect(props.provider, item.key);
+  }
+
+  return (
+    <Box flexDirection="column" paddingTop={1}>
+      <Border color={theme.brand} />
+      <Indent>
+        <Text bold>Select Model — {props.provider.name}</Text>
+      </Indent>
+      <NavigationMenu
+        items={items}
+        onSelect={handleSelect}
+        onExit={props.onBack}
+        color={theme.brand}
+      />
+      <Border color={theme.brand} />
+      <Box justifyContent="flex-end" height={1}>
+        <KeyInstructions items={MODEL_INSTRUCTIONS} />
+      </Box>
+    </Box>
+  );
+}
+
+/** Props for ModelListError. */
+interface ModelListErrorProps {
+  provider: Provider;
+  message: string;
+  onBack: () => void;
+}
+
+/** Shown when model fetching fails. */
+function ModelListError(props: ModelListErrorProps) {
   useInput((_input, key) => {
     if (key.escape) {
       props.onBack();
@@ -156,7 +269,38 @@ function ModelListPlaceholder(props: ModelListPlaceholderProps) {
         <Text bold>Select Model — {props.provider.name}</Text>
       </Indent>
       <Indent>
-        <Text dimColor>Coming soon</Text>
+        <Text color={theme.error}>Failed to load models: {props.message}</Text>
+      </Indent>
+      <Border color={theme.brand} />
+      <Box justifyContent="flex-end" height={1}>
+        <KeyInstructions items={[{ key: "esc", description: "back" }]} />
+      </Box>
+    </Box>
+  );
+}
+
+/** Props for ModelListEmpty. */
+interface ModelListEmptyProps {
+  provider: Provider;
+  onBack: () => void;
+}
+
+/** Shown when provider returns no models. */
+function ModelListEmpty(props: ModelListEmptyProps) {
+  useInput((_input, key) => {
+    if (key.escape) {
+      props.onBack();
+    }
+  });
+
+  return (
+    <Box flexDirection="column" paddingTop={1}>
+      <Border color={theme.brand} />
+      <Indent>
+        <Text bold>Select Model — {props.provider.name}</Text>
+      </Indent>
+      <Indent>
+        <Text dimColor>No models available from this provider.</Text>
       </Indent>
       <Border color={theme.brand} />
       <Box justifyContent="flex-end" height={1}>
