@@ -73,13 +73,26 @@ function useChat(props: UseChatProps) {
     });
   }
 
-  // When streaming completes, append the assistant message to the static list
+  // When streaming completes, append the result to the static message list
   useEffect(() => {
     if (completion.state === "complete" && completion.content) {
       appendMessage({
         id: crypto.randomUUID(),
         role: "assistant",
         content: completion.content,
+      });
+    }
+    if (completion.state === "aborted") {
+      if (completion.content) {
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: completion.content,
+        });
+      }
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "interrupted",
       });
     }
     if (completion.state === "error" && completion.error) {
@@ -164,6 +177,7 @@ function useChat(props: UseChatProps) {
     messages,
     isStreaming,
     streamingContent: completion.content,
+    abort: completion.abort,
     autocompleteItems,
     handleMessage,
     handleUp,
@@ -188,6 +202,7 @@ export function Chat(props: ChatProps) {
     messages,
     isStreaming,
     streamingContent,
+    abort,
     autocompleteItems,
     handleMessage,
     handleUp,
@@ -236,6 +251,7 @@ export function Chat(props: ChatProps) {
       <ChatInput
         onMessage={handleMessage}
         onUp={handleUp}
+        onAbort={isStreaming ? abort : undefined}
         initialValue={mode.initialValue}
         hasHistory={history.entries.length > 0}
         autocompleteItems={autocompleteItems}

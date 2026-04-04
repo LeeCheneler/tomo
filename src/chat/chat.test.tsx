@@ -388,6 +388,68 @@ describe("Chat", () => {
       cleanup.resolve?.();
     });
 
+    it("shows interrupted message when user aborts stream", async () => {
+      const cleanup: { resolve: (() => void) | null } = { resolve: null };
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", () => {
+          const body = new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              controller.enqueue(
+                encoder.encode(
+                  'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+                ),
+              );
+              cleanup.resolve = () => {
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                controller.close();
+              };
+            },
+          });
+          return new HttpResponse(body, {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Abort with escape
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("partial");
+      expect(frame).toContain("Interrupted");
+
+      cleanup.resolve?.();
+    });
+
+    it("shows interrupted message when aborted before any content", async () => {
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () => new Promise(() => {}),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Interrupted");
+      expect(frame).not.toContain("assistant");
+    });
+
     it("sends user message to LLM and renders assistant response", async () => {
       mswServer.use(
         http.post(

@@ -44,6 +44,7 @@ describe("ChatInput", () => {
     overrides: Partial<{
       onMessage: (message: string) => void;
       onUp: () => void;
+      onAbort: () => void;
       initialValue: string;
       hasHistory: boolean;
       autocompleteItems: readonly AutocompleteItem[];
@@ -55,6 +56,7 @@ describe("ChatInput", () => {
       <ChatInput
         onMessage={overrides.onMessage ?? (() => {})}
         onUp={overrides.onUp}
+        onAbort={overrides.onAbort}
         initialValue={overrides.initialValue}
         hasHistory={overrides.hasHistory}
         autocompleteItems={overrides.autocompleteItems ?? []}
@@ -257,6 +259,31 @@ describe("ChatInput", () => {
       const frameAfter = lastFrame() ?? "";
       // escPending stays false on empty input — rendering unchanged.
       expect(frameAfter).toBe(frameBefore);
+    });
+  });
+
+  describe("abort", () => {
+    it("calls onAbort on escape when provided", async () => {
+      const onAbort = vi.fn();
+      const { stdin } = renderInput({ onAbort });
+      await stdin.write(keys.escape);
+      expect(onAbort).toHaveBeenCalledOnce();
+    });
+
+    it("does not clear input when onAbort is provided", async () => {
+      const onAbort = vi.fn();
+      const { stdin, lastFrame } = renderInput({ onAbort });
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      expect(lastFrame()).toContain("hello");
+    });
+
+    it("falls back to clear behaviour when onAbort is not provided", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("hello");
     });
   });
 

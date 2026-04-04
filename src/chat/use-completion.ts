@@ -4,7 +4,7 @@ import type { ChatMessage, TokenUsage } from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 
 /** Completion state machine states. */
-type CompletionState = "idle" | "streaming" | "complete" | "error";
+type CompletionState = "idle" | "streaming" | "complete" | "aborted" | "error";
 
 /** Return value of useCompletion. */
 export interface UseCompletionResult {
@@ -39,7 +39,6 @@ export function useCompletion(
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<TokenUsage | null>(null);
-
   const abortRef = useRef<AbortController | null>(null);
 
   /** Starts a streaming completion request. */
@@ -94,7 +93,7 @@ export function useCompletion(
       abortRef.current.abort();
       abortRef.current = null;
     }
-    setState("complete");
+    setState("aborted");
   }, []);
 
   return { state, content, error, usage, send, abort };

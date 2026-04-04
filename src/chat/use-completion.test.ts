@@ -128,7 +128,7 @@ describe("useCompletion", () => {
     ref.current?.abort();
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(ref.current?.state).toBe("complete");
+    expect(ref.current?.state).toBe("aborted");
   });
 
   it("keeps partial content on abort", async () => {
@@ -168,7 +168,7 @@ describe("useCompletion", () => {
     ref.current?.abort();
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(ref.current?.state).toBe("complete");
+    expect(ref.current?.state).toBe("aborted");
     expect(ref.current?.content).toBe("partial");
 
     // Clean up the hanging stream

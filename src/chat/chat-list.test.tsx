@@ -46,6 +46,12 @@ describe("ChatList", () => {
     expect(lastFrame()).toContain("Hello, how can I help?");
   });
 
+  it("renders an interrupted message", () => {
+    const messages: ChatMessage[] = [{ id: "1", role: "interrupted" }];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    expect(lastFrame()).toContain("Interrupted");
+  });
+
   it("renders an error message", () => {
     const messages: ChatMessage[] = [
       { id: "1", role: "error", content: "Something went wrong" },

@@ -27,9 +27,16 @@ export interface ErrorMessage {
   content: string;
 }
 
+/** A notice that a response was interrupted by the user. */
+export interface InterruptedMessage {
+  id: string;
+  role: "interrupted";
+}
+
 /** Union of all chat message types. Discriminate on `role`. */
 export type ChatMessage =
   | UserMessage
   | AssistantMessage
   | CommandMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | InterruptedMessage;
