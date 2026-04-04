@@ -3,6 +3,7 @@ import { loadConfig } from "../config/file";
 import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
+import { setupMsw, http, HttpResponse } from "../test-utils/msw";
 import type { MockFsState } from "../test-utils/mock-fs";
 import { ProvidersScreen } from "./providers";
 
@@ -32,6 +33,7 @@ const OPENROUTER_PROVIDER = {
 };
 
 describe("ProvidersScreen", () => {
+  const server = setupMsw();
   let fsState: MockFsState;
 
   afterEach(() => {
@@ -359,6 +361,70 @@ describe("ProvidersScreen", () => {
       const config = loadConfig();
       expect(config.providers[0].type).toBe("opencode-zen");
       expect(config.providers[1].name).toBe("my-openrouter");
+    });
+  });
+
+  describe("connection status", () => {
+    it("shows checking status after saving options", async () => {
+      server.use(
+        http.get(
+          "http://localhost:11434/v1/models",
+          () => new Promise(() => {}),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      await stdin.write(keys.enter);
+      expect(lastFrame()).toContain("Checking my-ollama...");
+    });
+
+    it("shows connected after successful model fetch", async () => {
+      server.use(
+        http.get("http://localhost:11434/v1/models", () =>
+          HttpResponse.json({ data: [{ id: "llama3" }] }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(lastFrame()).toContain("my-ollama connected");
+    });
+
+    it("shows error after failed model fetch", async () => {
+      server.use(
+        http.get(
+          "http://localhost:11434/v1/models",
+          () => new HttpResponse(null, { status: 500 }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(lastFrame()).toContain("my-ollama failed to connect");
+    });
+
+    it("does not show status before options are saved", () => {
+      const { lastFrame } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("Checking");
+      expect(frame).not.toContain("connected");
+      expect(frame).not.toContain("failed to connect");
     });
   });
 });
