@@ -6,6 +6,13 @@ import { Form } from "./form";
 
 const FIELDS: FormField[] = [
   { type: "toggle", key: "enabled", label: "Enabled", initialValue: true },
+  {
+    type: "select",
+    key: "provider",
+    label: "Type",
+    options: ["ollama", "opencode-zen", "openrouter"],
+    initialValue: "ollama",
+  },
   { type: "text", key: "apiKey", label: "API Key", initialValue: "tvly-123" },
   { type: "toggle", key: "verbose", label: "Verbose", initialValue: false },
 ];
@@ -31,6 +38,7 @@ describe("Form", () => {
       const { lastFrame } = renderForm();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("Enabled");
+      expect(frame).toContain("Type");
       expect(frame).toContain("API Key");
       expect(frame).toContain("Verbose");
     });
@@ -52,6 +60,23 @@ describe("Form", () => {
       expect(lastFrame()).toContain("API Key: tvly-123");
     });
 
+    it("shows select field with all options", () => {
+      const { lastFrame } = renderForm();
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Type:");
+      expect(frame).toContain("ollama");
+      expect(frame).toContain("opencode-zen");
+      expect(frame).toContain("openrouter");
+    });
+
+    it("shows checkmark on selected option", () => {
+      const { lastFrame } = renderForm();
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[✓] ollama");
+      expect(frame).toContain("[ ] opencode-zen");
+      expect(frame).toContain("[ ] openrouter");
+    });
+
     it("renders empty when no fields provided", () => {
       const { lastFrame } = renderForm([]);
       expect(lastFrame()).toBe("");
@@ -71,7 +96,7 @@ describe("Form", () => {
       const { stdin, lastFrame } = renderForm();
       await stdin.write(keys.down);
       expect(lastFrame()).toContain("❯");
-      expect(lastFrame()).toContain("API Key:");
+      expect(lastFrame()).toContain("Type:");
     });
 
     it("moves cursor up", async () => {
@@ -79,8 +104,19 @@ describe("Form", () => {
       await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.up);
-      // Back on API Key
+      // Back on Type (select field)
       expect(lastFrame()).toContain("❯");
+    });
+
+    it("positions text cursor when navigating up into a text field", async () => {
+      const { stdin, lastFrame } = renderForm();
+      // Go to Verbose (index 3), then up into API Key (text at index 2)
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.up);
+      await stdin.write("!");
+      expect(lastFrame()).toContain("tvly-123!");
     });
 
     it("loops from top to bottom", async () => {
@@ -92,6 +128,7 @@ describe("Form", () => {
 
     it("loops from bottom to top", async () => {
       const { stdin, lastFrame } = renderForm();
+      await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.down);
@@ -120,9 +157,64 @@ describe("Form", () => {
     });
   });
 
+  describe("select fields", () => {
+    it("selects next option on right arrow", async () => {
+      const { stdin, lastFrame } = renderForm();
+      await stdin.write(keys.down);
+      await stdin.write(keys.right);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[ ] ollama");
+      expect(frame).toContain("[✓] opencode-zen");
+    });
+
+    it("selects previous option on left arrow", async () => {
+      const { stdin, lastFrame } = renderForm();
+      await stdin.write(keys.down);
+      await stdin.write(keys.right);
+      await stdin.write(keys.left);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[✓] ollama");
+    });
+
+    it("wraps around forward", async () => {
+      const { stdin, lastFrame } = renderForm();
+      await stdin.write(keys.down);
+      await stdin.write(keys.right);
+      await stdin.write(keys.right);
+      await stdin.write(keys.right);
+      expect(lastFrame()).toContain("[✓] ollama");
+    });
+
+    it("wraps around backward", async () => {
+      const { stdin, lastFrame } = renderForm();
+      await stdin.write(keys.down);
+      await stdin.write(keys.left);
+      expect(lastFrame()).toContain("[✓] openrouter");
+    });
+
+    it("ignores typed characters", async () => {
+      const { stdin, lastFrame } = renderForm();
+      await stdin.write(keys.down);
+      await stdin.write("abc");
+      expect(lastFrame()).toContain("[✓] ollama");
+    });
+
+    it("includes select value in submitted values", async () => {
+      const { stdin, onSubmit } = renderForm();
+      await stdin.write(keys.down);
+      await stdin.write(keys.right);
+      await stdin.write(keys.enter);
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "opencode-zen" }),
+      );
+    });
+  });
+
   describe("text fields", () => {
     it("accepts typed input when focused", async () => {
       const { stdin, lastFrame } = renderForm();
+      // Navigate past toggle and select to text field
+      await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write("-extra");
       expect(lastFrame()).toContain("tvly-123-extra");
@@ -130,6 +222,7 @@ describe("Form", () => {
 
     it("handles backspace", async () => {
       const { stdin, lastFrame } = renderForm();
+      await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.delete);
       await stdin.write(keys.delete);
@@ -174,7 +267,8 @@ describe("Form", () => {
 
     it("positions cursor at end when navigating to text field", async () => {
       const { stdin, lastFrame } = renderForm();
-      // Navigate down to API Key, then type
+      // Navigate down past select to API Key, then type
+      await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write("!");
       // Character should be appended at the end
@@ -183,6 +277,7 @@ describe("Form", () => {
 
     it("ignores control sequences", async () => {
       const { stdin, lastFrame } = renderForm();
+      await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.tab);
       expect(lastFrame()).toContain("tvly-123");
@@ -203,6 +298,7 @@ describe("Form", () => {
       await stdin.write(keys.enter);
       expect(onSubmit).toHaveBeenCalledWith({
         enabled: true,
+        provider: "ollama",
         apiKey: "tvly-123",
         verbose: false,
       });
@@ -212,6 +308,9 @@ describe("Form", () => {
       const { stdin, onSubmit } = renderForm();
       // Toggle first field off
       await stdin.write(keys.space);
+      // Change select field
+      await stdin.write(keys.down);
+      await stdin.write(keys.right);
       // Navigate to text field and edit
       await stdin.write(keys.down);
       await stdin.write("-new");
@@ -219,6 +318,7 @@ describe("Form", () => {
       await stdin.write(keys.enter);
       expect(onSubmit).toHaveBeenCalledWith({
         enabled: false,
+        provider: "opencode-zen",
         apiKey: "tvly-123-new",
         verbose: false,
       });

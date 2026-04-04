@@ -21,8 +21,17 @@ export interface TextFormField {
   initialValue: string;
 }
 
+/** A select field that cycles through a list of string options. */
+export interface SelectFormField {
+  type: "select";
+  key: string;
+  label: string;
+  options: readonly string[];
+  initialValue: string;
+}
+
 /** A field in a form. Discriminate on `type`. */
-export type FormField = ToggleFormField | TextFormField;
+export type FormField = ToggleFormField | TextFormField | SelectFormField;
 
 /** Values collected from form fields, keyed by field key. */
 export type FormValues = Record<string, boolean | string>;
@@ -126,7 +135,20 @@ function useForm(props: FormProps) {
       return;
     }
 
-    // After handling toggle above, the remaining type is always text.
+    if (field.type === "select") {
+      const current = valuesRef.current[field.key] as string;
+      const idx = field.options.indexOf(current);
+      if (key.leftArrow) {
+        const next = (idx - 1 + field.options.length) % field.options.length;
+        updateValue(field.key, field.options[next]);
+      }
+      if (key.rightArrow) {
+        const next = (idx + 1) % field.options.length;
+        updateValue(field.key, field.options[next]);
+      }
+      return;
+    }
+
     const value = valuesRef.current[field.key] as string;
     const edit = processTextEdit(input, key, value, textCursorRef.current);
     if (edit) {
@@ -140,7 +162,7 @@ function useForm(props: FormProps) {
   return { cursor, values, textCursor };
 }
 
-/** Generic form with navigable toggle and text fields. */
+/** Generic form with navigable toggle, select, and text fields. */
 export function Form(props: FormProps) {
   const { cursor, values, textCursor } = useForm(props);
   const color = props.color ?? theme.brand;
@@ -165,6 +187,39 @@ export function Form(props: FormProps) {
               )}
               <Text dimColor>]</Text>
               <Text color={isSelected ? color : undefined}> {field.label}</Text>
+            </Indent>
+          );
+        }
+
+        if (field.type === "select") {
+          const selected = values[field.key] as string;
+          return (
+            <Indent key={field.key}>
+              <Text color={isSelected ? color : undefined}>
+                {isSelected ? "❯" : " "}{" "}
+              </Text>
+              <Text color={isSelected ? color : undefined}>
+                {field.label}:{" "}
+              </Text>
+              {field.options.map((option, oi) => {
+                const isChecked = option === selected;
+                return (
+                  <Text key={option}>
+                    {oi > 0 && "  "}
+                    <Text dimColor>[</Text>
+                    {isChecked ? (
+                      <Text color={theme.success}>✓</Text>
+                    ) : (
+                      <Text dimColor> </Text>
+                    )}
+                    <Text dimColor>]</Text>
+                    <Text color={isSelected ? color : undefined}>
+                      {" "}
+                      {option}
+                    </Text>
+                  </Text>
+                );
+              })}
             </Indent>
           );
         }
