@@ -107,7 +107,7 @@ export function resolveApiKey(
 ): string | undefined {
   if (configApiKey) return configApiKey;
   const envVar = API_KEY_ENV_VARS[providerType];
-  return env.getOptional(envVar);
+  return env.getOptional(envVar) || undefined;
 }
 
 /** Default context window size when detection fails. */

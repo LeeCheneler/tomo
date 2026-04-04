@@ -56,6 +56,7 @@ describe("createOpenAICompatibleClient", () => {
     });
 
     it("uses /v1/models for openrouter without api key", async () => {
+      vi.stubEnv("OPENROUTER_API_KEY", "");
       let requestUrl = "";
       server.use(
         http.get("https://openrouter.ai/api/v1/models", (info) => {
