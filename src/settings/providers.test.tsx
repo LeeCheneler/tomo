@@ -184,4 +184,181 @@ describe("ProvidersScreen", () => {
       expect(config.providers[1].name).toBe("my-openrouter");
     });
   });
+
+  describe("options form", () => {
+    it("opens options form on tab", async () => {
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("my-ollama Options");
+      expect(frame).toContain("Type:");
+      expect(frame).toContain("Name:");
+      expect(frame).toContain("Base URL:");
+      expect(frame).toContain("API Key:");
+    });
+
+    it("opens options form immediately after adding a provider", async () => {
+      const { stdin, lastFrame } = renderProviders();
+      await stdin.write("new-provider");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("new-provider Options");
+      expect(frame).toContain("Type:");
+    });
+
+    it("shows form instructions", async () => {
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("left/right");
+      expect(frame).toContain("select");
+      expect(frame).toContain("save");
+      expect(frame).toContain("cancel");
+    });
+
+    it("shows api key env var hint for ollama", async () => {
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      expect(lastFrame()).toContain("$OLLAMA_API_KEY");
+    });
+
+    it("shows api key env var hint for openrouter", async () => {
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OPENROUTER_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      expect(lastFrame()).toContain("$OPENROUTER_API_KEY");
+    });
+
+    it("shows api key env var hint for opencode-zen", async () => {
+      const { stdin, lastFrame } = renderProviders({
+        global: {
+          providers: [
+            {
+              name: "my-zen",
+              type: "opencode-zen",
+              baseUrl: "https://opencode.ai/zen",
+            },
+          ],
+        },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      expect(lastFrame()).toContain("$OPENCODE_API_KEY");
+    });
+
+    it("pre-fills form with current provider values", async () => {
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OPENROUTER_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[✓] openrouter");
+      expect(frame).toContain("my-openrouter");
+      expect(frame).toContain("https://openrouter.ai/api");
+      expect(frame).toContain("sk-test");
+    });
+
+    it("saves changes on enter", async () => {
+      const { stdin } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      // Navigate to API Key field (4th) and type
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write("sk-saved");
+      await stdin.write(keys.enter);
+      const config = loadConfig();
+      expect(config.providers[0].apiKey).toBe("sk-saved");
+    });
+
+    it("returns to list after saving", async () => {
+      const { stdin, lastFrame } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Providers");
+      expect(frame).toContain("Add provider...");
+    });
+
+    it("cancels on escape without saving", async () => {
+      const { stdin } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      // Edit API Key
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write("sk-unsaved");
+      await stdin.write(keys.escape);
+      const config = loadConfig();
+      expect(config.providers[0].apiKey).toBeUndefined();
+    });
+
+    it("updates type via select field", async () => {
+      const { stdin } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      // Type is first field, change with right arrow
+      await stdin.write(keys.right);
+      await stdin.write(keys.enter);
+      const config = loadConfig();
+      expect(config.providers[0].type).toBe("opencode-zen");
+    });
+
+    it("clears empty apiKey to undefined", async () => {
+      const { stdin } = renderProviders({
+        global: { providers: [OPENROUTER_PROVIDER] },
+      });
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      // Navigate to API Key and clear it
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      for (let i = 0; i < "sk-test".length; i++) {
+        await stdin.write(keys.delete);
+      }
+      await stdin.write(keys.enter);
+      const config = loadConfig();
+      expect(config.providers[0].apiKey).toBeUndefined();
+    });
+
+    it("preserves other providers when saving options", async () => {
+      const { stdin } = renderProviders({
+        global: { providers: [OLLAMA_PROVIDER, OPENROUTER_PROVIDER] },
+      });
+      // Navigate to first provider
+      await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      await stdin.write(keys.tab);
+      // Change type
+      await stdin.write(keys.right);
+      await stdin.write(keys.enter);
+      const config = loadConfig();
+      expect(config.providers[0].type).toBe("opencode-zen");
+      expect(config.providers[1].name).toBe("my-openrouter");
+    });
+  });
 });

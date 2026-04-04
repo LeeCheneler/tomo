@@ -91,7 +91,7 @@ export const PROVIDER_DEFAULT_URLS: Record<ProviderType, string> = {
 };
 
 /** Environment variable names for provider API keys. */
-const API_KEY_ENV_VARS: Record<ProviderType, string> = {
+export const API_KEY_ENV_VARS: Record<ProviderType, string> = {
   ollama: "OLLAMA_API_KEY",
   "opencode-zen": "OPENCODE_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
