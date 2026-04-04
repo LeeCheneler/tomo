@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import { useState } from "react";
-import { loadConfig } from "../config/file";
+import { useConfig } from "../config/hook";
 import type { Tools } from "../config/schema";
 import { updateTools } from "../config/updaters";
 import { Border } from "../ui/border";
@@ -104,9 +104,8 @@ interface ActiveToolOptions {
 
 /** Manages tools state, persistence, and sub-screen routing. */
 function useToolsScreen(props: ToolsScreenProps) {
-  const [tools, setTools] = useState<Tools>(() => {
-    return loadConfig().tools;
-  });
+  const config = useConfig();
+  const [tools, setTools] = useState<Tools>(() => config.tools);
   const [activeOptions, setActiveOptions] = useState<ActiveToolOptions | null>(
     null,
   );

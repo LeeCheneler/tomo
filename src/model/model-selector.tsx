@@ -1,7 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { useEffect, useState } from "react";
 import type { TakeoverDone } from "../commands/registry";
-import { loadConfig } from "../config/file";
+import { useConfig } from "../config/hook";
 import type { Provider } from "../config/schema";
 import { updateActiveModel, updateActiveProvider } from "../config/updaters";
 import type { ModelInfo } from "../provider/client";
@@ -39,7 +39,8 @@ function buildProviderItems(
 
 /** Manages model selector step routing. */
 function useModelSelector(props: ModelSelectorProps) {
-  const [providers] = useState<Provider[]>(() => loadConfig().providers);
+  const config = useConfig();
+  const [providers] = useState<Provider[]>(() => config.providers);
   const [step, setStep] = useState<Step>({ kind: "providers" });
 
   /** Selects a provider and moves to the model list. */

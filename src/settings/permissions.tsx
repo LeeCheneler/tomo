@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import { useState } from "react";
-import { loadConfig } from "../config/file";
+import { useConfig } from "../config/hook";
 import type { Permissions } from "../config/schema";
 import { updatePermissions } from "../config/updaters";
 import { Border } from "../ui/border";
@@ -45,9 +45,10 @@ export interface PermissionsScreenProps {
 
 /** Manages permissions state and persistence. */
 function usePermissionsScreen(props: PermissionsScreenProps) {
-  const [permissions, setPermissions] = useState<Permissions>(() => {
-    return loadConfig().permissions;
-  });
+  const config = useConfig();
+  const [permissions, setPermissions] = useState<Permissions>(
+    () => config.permissions,
+  );
 
   /** Toggles a permission and saves to local config. */
   function handleToggle(key: string, value: boolean) {
