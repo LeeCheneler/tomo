@@ -12,6 +12,7 @@ import { DEFAULT_CONTEXT_WINDOW } from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import { buildProviderMessages } from "../provider/messages";
 import { buildSystemPrompt } from "../prompt/build-system-prompt";
+import { appendSessionMessage, createSessionPath } from "../session/session";
 import { LoadingIndicator } from "../ui/loading-indicator";
 import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
@@ -45,6 +46,7 @@ function useChat(props: UseChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const completion = useCompletion(provider, model);
   const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
+  const sessionPath = useRef(createSessionPath());
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -55,9 +57,10 @@ function useChat(props: UseChatProps) {
     client.fetchContextWindow(model).then(setContextWindow);
   }, [provider, model]);
 
-  /** Appends a message to the chat list. */
+  /** Appends a message to the chat list and writes it to the session file. */
   const appendMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => [...prev, msg]);
+    appendSessionMessage(sessionPath.current, msg);
   }, []);
 
   /** Handles an invoke result — either enters takeover mode or appends an inline message. */

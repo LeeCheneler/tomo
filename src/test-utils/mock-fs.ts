@@ -44,6 +44,12 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
       files.set(path, data);
     });
 
+  const appendFileSpy = vi
+    .spyOn(fsUtils, "appendFile")
+    .mockImplementation((path, data) => {
+      files.set(path, (files.get(path) ?? "") + data);
+    });
+
   const ensureDirSpy = vi
     .spyOn(fsUtils, "ensureDir")
     .mockImplementation(() => {});
@@ -59,6 +65,7 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
       fileExistsSpy.mockRestore();
       readFileSpy.mockRestore();
       writeFileSpy.mockRestore();
+      appendFileSpy.mockRestore();
       ensureDirSpy.mockRestore();
     },
   };

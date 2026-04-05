@@ -3,6 +3,7 @@ import { Text, useInput } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
+import { SESSIONS_DIR } from "../session/session";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
@@ -546,6 +547,104 @@ describe("Chat", () => {
         { role: "assistant", content: "Response 1" },
         { role: "user", content: "second" },
       ]);
+    });
+  });
+
+  describe("session persistence", () => {
+    const mswServer = setupMsw();
+
+    /** Builds an SSE response body from data objects. */
+    function sseBody(chunks: unknown[]): string {
+      return (
+        chunks.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n") +
+        "\n\ndata: [DONE]\n\n"
+      );
+    }
+
+    const PROVIDER = {
+      name: "test-ollama",
+      type: "ollama" as const,
+      baseUrl: "http://localhost:11434",
+    };
+
+    /** Returns parsed messages from the session file in the mock fs. */
+    function getSessionMessages(
+      fsState: ReturnType<typeof renderInk>["fsState"],
+    ): unknown[] {
+      const sessionFile = fsState
+        .getPaths()
+        .filter((p) => p.startsWith(SESSIONS_DIR))
+        .sort()
+        .pop();
+      if (!sessionFile) return [];
+      const content = fsState.getFile(sessionFile);
+      if (!content) return [];
+      return content
+        .trimEnd()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    }
+
+    it("writes all message types to the session file", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "ping",
+        description: "Responds with pong",
+        handler: () => "pong",
+      });
+
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([
+                { choices: [{ delta: { content: "Hello from LLM" } }] },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      setColumns(COLUMNS);
+      const { stdin, fsState } = renderInk(
+        <Chat commandRegistry={commandRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      // User message + assistant response
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Command message
+      await stdin.write("/ping ");
+      await stdin.write(keys.enter);
+
+      const messages = getSessionMessages(fsState);
+      expect(messages).toHaveLength(3);
+      expect(messages[0]).toMatchObject({ role: "user", content: "hello" });
+      expect(messages[1]).toMatchObject({
+        role: "assistant",
+        content: "Hello from LLM",
+      });
+      expect(messages[2]).toMatchObject({
+        role: "command",
+        command: "ping",
+        result: "pong",
+      });
+
+      // All messages are written to a single session file.
+      const sessionFiles = fsState
+        .getPaths()
+        .filter((p) => p.startsWith(SESSIONS_DIR));
+      expect(sessionFiles).toHaveLength(1);
     });
   });
 });

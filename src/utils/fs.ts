@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 
 /** Checks if a file exists at the given path. */
 export function fileExists(path: string): boolean {
@@ -13,6 +19,11 @@ export function readFile(path: string): string {
 /** Writes UTF-8 text to a file, creating it if it doesn't exist. */
 export function writeFile(path: string, content: string): void {
   writeFileSync(path, content, "utf-8");
+}
+
+/** Appends UTF-8 text to a file, creating it if it doesn't exist. */
+export function appendFile(path: string, content: string): void {
+  appendFileSync(path, content, "utf-8");
 }
 
 /** Creates a directory and any missing parents. */

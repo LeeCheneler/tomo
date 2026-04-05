@@ -1,8 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { ensureDir, fileExists, readFile, writeFile } from "./fs";
+import { appendFile, ensureDir, fileExists, readFile, writeFile } from "./fs";
 
 vi.mock("node:fs", () => ({
+  appendFileSync: vi.fn(),
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
@@ -29,6 +36,13 @@ describe("writeFile", () => {
   it("delegates to writeFileSync with utf-8 encoding", () => {
     writeFile("/my/path", "data");
     expect(writeFileSync).toHaveBeenCalledWith("/my/path", "data", "utf-8");
+  });
+});
+
+describe("appendFile", () => {
+  it("delegates to appendFileSync with utf-8 encoding", () => {
+    appendFile("/my/path", "data");
+    expect(appendFileSync).toHaveBeenCalledWith("/my/path", "data", "utf-8");
   });
 });
 

@@ -1,11 +1,50 @@
 import { Text } from "ink";
+// Direct import needed to render without ConfigProvider for the error-path test.
+import { render as inkRender } from "ink-testing-library";
+import { Component, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { renderInk } from "../test-utils/ink";
 import { mockConfig } from "../test-utils/mock-config";
 import type { Config } from "./schema";
 import { useConfig } from "./hook";
 
+/** Error boundary that captures render errors for test assertions. */
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return <Text>{this.state.error.message}</Text>;
+    }
+    return this.props.children;
+  }
+}
+
 describe("useConfig", () => {
+  it("throws when used outside ConfigProvider", () => {
+    /** Renders the hook without a provider wrapper. */
+    function Bare() {
+      useConfig();
+      return null;
+    }
+
+    const { lastFrame } = inkRender(
+      <ErrorBoundary>
+        <Bare />
+      </ErrorBoundary>,
+    );
+    expect(lastFrame()).toContain(
+      "useConfig must be used within a ConfigProvider",
+    );
+  });
+
   it("returns config loaded from disk", () => {
     let captured: Config | undefined;
 
