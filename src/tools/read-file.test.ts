@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Permissions } from "../config/schema";
 import { mockFs } from "../test-utils/mock-fs";
 import type { ToolContext } from "./types";
 import { readFileTool } from "./read-file";
