@@ -8,6 +8,7 @@ import { ok } from "./types";
 function stubTool(name: string): Tool {
   return {
     name,
+    displayName: name,
     description: `Description for ${name}`,
     parameters: { type: "object", properties: {} },
     argsSchema: z.object({}),

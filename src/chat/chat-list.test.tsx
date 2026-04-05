@@ -95,24 +95,74 @@ describe("ChatList", () => {
     expect(lastFrame()).toContain("Something went wrong");
   });
 
-  it("renders a tool-call message with tool names", () => {
+  it("renders a tool-call message with display name and args in parens", () => {
     const messages: ChatMessage[] = [
       {
         id: "1",
         role: "tool-call",
         content: "",
         toolCalls: [
-          { id: "call_1", name: "read_file", arguments: '{"path":"foo"}' },
+          {
+            id: "call_1",
+            name: "read_file",
+            displayName: "Read File",
+            arguments: '{"path":"./foo.ts"}',
+          },
         ],
       },
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("read_file");
-    expect(frame).toContain("⚙");
+    expect(frame).toContain("⚙ Read File");
+    expect(frame).toContain("(path: ./foo.ts)");
   });
 
-  it("renders a tool-result message with tool name and output", () => {
+  it("renders tool-call with no args when arguments are a non-object JSON value", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-call",
+        content: "",
+        toolCalls: [
+          {
+            id: "call_1",
+            name: "test",
+            displayName: "Test",
+            arguments: '"just a string"',
+          },
+        ],
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("⚙");
+    expect(frame).toContain("Test");
+    expect(frame).not.toContain("just a string");
+  });
+
+  it("renders tool-call with no args when arguments are invalid JSON", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-call",
+        content: "",
+        toolCalls: [
+          {
+            id: "call_1",
+            name: "broken",
+            displayName: "Broken",
+            arguments: "not json",
+          },
+        ],
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("⚙");
+    expect(frame).toContain("Broken");
+  });
+
+  it("renders a tool-result message with output", () => {
     const messages: ChatMessage[] = [
       {
         id: "1",
@@ -124,24 +174,26 @@ describe("ChatList", () => {
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("read_file");
     expect(frame).toContain("file contents here");
   });
 
-  it("truncates long tool-result output", () => {
+  it("truncates tool-result output to 5 lines", () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);
     const messages: ChatMessage[] = [
       {
         id: "1",
         role: "tool-result",
         toolCallId: "call_1",
         toolName: "read_file",
-        output: "x".repeat(300),
+        output: lines.join("\n"),
       },
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
+    expect(frame).toContain("line 1");
+    expect(frame).toContain("line 5");
     expect(frame).toContain("…");
-    expect(frame).not.toContain("x".repeat(201));
+    expect(frame).not.toContain("line 6");
   });
 
   it("skips unknown message roles", () => {

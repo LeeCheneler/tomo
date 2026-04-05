@@ -121,6 +121,8 @@ function useChat(props: UseChatProps) {
             toolCalls: completion.toolCalls.map((tc) => ({
               id: tc.id,
               name: tc.function.name,
+              displayName:
+                registry.get(tc.function.name)?.displayName ?? tc.function.name,
               arguments: tc.function.arguments,
             })),
           };

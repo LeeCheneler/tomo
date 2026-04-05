@@ -880,6 +880,7 @@ describe("Chat", () => {
       const toolRegistry = createToolRegistry();
       toolRegistry.register({
         name: "test_tool",
+        displayName: "Test Tool",
         description: "A test tool",
         parameters: { type: "object", properties: {}, required: [] },
         argsSchema: z.object({}),
@@ -1062,6 +1063,7 @@ describe("Chat", () => {
       const toolRegistry = createToolRegistry();
       toolRegistry.register({
         name: "broken_tool",
+        displayName: "Broken Tool",
         description: "A broken tool",
         parameters: { type: "object", properties: {}, required: [] },
         argsSchema: z.object({}),

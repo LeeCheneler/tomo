@@ -51,7 +51,12 @@ describe("buildProviderMessages", () => {
         role: "tool-call",
         content: "",
         toolCalls: [
-          { id: "call_1", name: "read_file", arguments: '{"path":"foo.ts"}' },
+          {
+            id: "call_1",
+            name: "read_file",
+            displayName: "Read File",
+            arguments: '{"path":"foo.ts"}',
+          },
         ],
       },
     ];

@@ -39,6 +39,8 @@ export interface ToolContext {
 export interface Tool {
   /** Tool name as sent to the LLM (e.g. "read_file"). */
   name: string;
+  /** Human-readable display name for the UI (e.g. "Read File"). */
+  displayName: string;
   /** Human-readable description for the LLM. */
   description: string;
   /** JSON Schema for the tool's parameters (sent to the LLM). */

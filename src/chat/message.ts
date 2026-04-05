@@ -37,6 +37,7 @@ export interface InterruptedMessage {
 export interface ToolCallInfo {
   id: string;
   name: string;
+  displayName: string;
   arguments: string;
 }
 
