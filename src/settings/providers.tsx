@@ -103,7 +103,7 @@ interface ConnectionStatus {
 
 /** Manages provider list state, persistence, and options form routing. */
 function useProvidersScreen(props: ProvidersScreenProps) {
-  const { config } = useConfig();
+  const { config, reload } = useConfig();
   const [providers, setProviders] = useState<Provider[]>(
     () => config.providers,
   );
@@ -122,6 +122,7 @@ function useProvidersScreen(props: ProvidersScreenProps) {
       baseUrl: PROVIDER_DEFAULT_URLS.ollama,
     };
     addProvider(provider);
+    reload();
     const updated = [...providers, provider];
     setProviders(updated);
     setActiveOptions(updated.length - 1);
@@ -131,6 +132,7 @@ function useProvidersScreen(props: ProvidersScreenProps) {
   function handleRemove(index: number) {
     const name = providers[index].name;
     removeProvider(name);
+    reload();
     setProviders((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -139,6 +141,7 @@ function useProvidersScreen(props: ProvidersScreenProps) {
     const original = providers[index];
     const updated = { ...original, name: newName };
     updateProvider(original.name, updated);
+    reload();
     setProviders((prev) => prev.map((p, i) => (i === index ? updated : p)));
   }
 
@@ -173,6 +176,7 @@ function useProvidersScreen(props: ProvidersScreenProps) {
     const original = providers[activeOptions];
     const updated = formValuesToProvider(values);
     updateProvider(original.name, updated);
+    reload();
     setProviders((prev) =>
       prev.map((p, i) => (i === activeOptions ? updated : p)),
     );

@@ -113,7 +113,7 @@ describe("ProvidersScreen", () => {
 
   describe("adding providers", () => {
     it("adds a provider with ollama defaults on enter", async () => {
-      const { stdin, lastFrame } = renderProviders();
+      const { stdin, lastFrame, getConfig } = renderProviders();
       await stdin.write("my-ollama");
       await stdin.write(keys.enter);
       expect(lastFrame()).toContain("my-ollama");
@@ -122,6 +122,8 @@ describe("ProvidersScreen", () => {
       expect(config.providers[0].name).toBe("my-ollama");
       expect(config.providers[0].type).toBe("ollama");
       expect(config.providers[0].baseUrl).toBe("http://localhost:11434");
+      // Verify config context was reloaded
+      expect(getConfig().providers).toHaveLength(1);
     });
 
     it("does not add duplicate provider names", async () => {
@@ -144,7 +146,7 @@ describe("ProvidersScreen", () => {
 
   describe("removing providers", () => {
     it("removes a provider when enter is pressed on empty draft", async () => {
-      const { stdin } = renderProviders({
+      const { stdin, getConfig } = renderProviders({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       // Navigate to provider
@@ -156,12 +158,14 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.providers).toHaveLength(0);
+      // Verify config context was reloaded
+      expect(getConfig().providers).toHaveLength(0);
     });
   });
 
   describe("renaming providers", () => {
     it("renames a provider on enter with changed draft", async () => {
-      const { stdin } = renderProviders({
+      const { stdin, getConfig } = renderProviders({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.up);
@@ -169,6 +173,8 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.providers[0].name).toBe("my-ollama-renamed");
+      // Verify config context was reloaded
+      expect(getConfig().providers[0].name).toBe("my-ollama-renamed");
     });
 
     it("preserves provider type and url when renaming", async () => {
@@ -285,7 +291,7 @@ describe("ProvidersScreen", () => {
     });
 
     it("saves changes on enter", async () => {
-      const { stdin } = renderProviders({
+      const { stdin, getConfig } = renderProviders({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.up);
@@ -298,6 +304,8 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.providers[0].apiKey).toBe("sk-saved");
+      // Verify config context was reloaded
+      expect(getConfig().providers[0].apiKey).toBe("sk-saved");
     });
 
     it("returns to list after saving", async () => {

@@ -79,12 +79,14 @@ describe("ToolsScreen", () => {
 
   describe("toggling", () => {
     it("toggles a tool on space and persists to config", async () => {
-      const { stdin, lastFrame } = renderTools({ global: {} });
+      const { stdin, lastFrame, getConfig } = renderTools({ global: {} });
       // Agent is first and enabled by default, toggle it off
       await stdin.write(keys.space);
       expect(lastFrame()).toContain("[ ] Agent");
       const config = loadConfig();
       expect(config.tools.agent.enabled).toBe(false);
+      // Verify config context was reloaded
+      expect(getConfig().tools.agent.enabled).toBe(false);
     });
 
     it("toggles back on second space", async () => {
@@ -187,13 +189,15 @@ describe("ToolsScreen", () => {
     });
 
     it("saves api key on enter", async () => {
-      const { stdin } = renderTools({ global: {} });
+      const { stdin, getConfig } = renderTools({ global: {} });
       await openWebSearchOptions(stdin);
       await stdin.write(keys.down);
       await stdin.write("tvly-saved");
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.tools.webSearch.apiKey).toBe("tvly-saved");
+      // Verify config context was reloaded
+      expect(getConfig().tools.webSearch.apiKey).toBe("tvly-saved");
     });
 
     it("saves enabled toggle from form", async () => {

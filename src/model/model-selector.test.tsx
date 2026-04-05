@@ -168,7 +168,7 @@ describe("ModelSelector", () => {
         ),
       );
 
-      const { stdin, onDone } = renderModelSelector({
+      const { stdin, onDone, getConfig } = renderModelSelector({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.enter);
@@ -178,6 +178,9 @@ describe("ModelSelector", () => {
       const config = loadConfig();
       expect(config.activeProvider).toBe("my-ollama");
       expect(config.activeModel).toBe("llama3");
+      // Verify config context was reloaded
+      expect(getConfig().activeProvider).toBe("my-ollama");
+      expect(getConfig().activeModel).toBe("llama3");
     });
 
     it("shows error message on fetch failure", async () => {

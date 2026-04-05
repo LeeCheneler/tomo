@@ -87,13 +87,14 @@ describe("PermissionsScreen", () => {
 
   describe("toggling", () => {
     it("toggles a permission on space and persists to config", async () => {
-      const { stdin, lastFrame } = renderPermissions({ global: {} });
+      const { stdin, lastFrame, getConfig } = renderPermissions({ global: {} });
       // cwdReadFile starts as true, toggle it off
       await stdin.write(keys.space);
       expect(lastFrame()).toContain("[ ] Read files (current directory)");
-      // Verify persisted
+      // Verify persisted to disk and reloaded into context
       const config = loadConfig();
       expect(config.permissions.cwdReadFile).toBe(false);
+      expect(getConfig().permissions.cwdReadFile).toBe(false);
     });
 
     it("toggles a permission on space", async () => {

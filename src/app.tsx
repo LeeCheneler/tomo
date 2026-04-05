@@ -36,13 +36,7 @@ export function App() {
           </Box>
         )}
       </Static>
-      <Chat
-        commandRegistry={commandRegistry}
-        provider={
-          config.providers.find((p) => p.name === config.activeProvider) ?? null
-        }
-        model={config.activeModel ?? null}
-      />
+      <Chat commandRegistry={commandRegistry} />
     </>
   );
 }

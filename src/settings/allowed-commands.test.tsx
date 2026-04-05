@@ -71,7 +71,7 @@ describe("AllowedCommandsScreen", () => {
 
   describe("adding a command", () => {
     it("persists a new command to config", async () => {
-      const { stdin } = renderAllowedCommands();
+      const { stdin, getConfig } = renderAllowedCommands();
       // Cursor starts on add row
       await stdin.write("npm lint");
       await stdin.write(keys.enter);
@@ -81,6 +81,8 @@ describe("AllowedCommandsScreen", () => {
         "npm run build",
         "npm lint",
       ]);
+      // Verify config context was reloaded
+      expect(getConfig().allowedCommands).toEqual(config.allowedCommands);
     });
 
     it("rejects duplicate commands", async () => {
@@ -94,19 +96,21 @@ describe("AllowedCommandsScreen", () => {
 
   describe("editing a command", () => {
     it("persists an edited command to config", async () => {
-      const { stdin } = renderAllowedCommands();
+      const { stdin, getConfig } = renderAllowedCommands();
       // Navigate to first item (down wraps from add row to item 0)
       await stdin.write(keys.down);
       await stdin.write(" --watch");
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.allowedCommands).toContain("npm test --watch");
+      // Verify config context was reloaded
+      expect(getConfig().allowedCommands).toContain("npm test --watch");
     });
   });
 
   describe("removing a command", () => {
     it("persists removal to config on enter when empty", async () => {
-      const { stdin } = renderAllowedCommands();
+      const { stdin, getConfig } = renderAllowedCommands();
       // Navigate to first item
       await stdin.write(keys.down);
       // Clear "npm test" (8 chars) then enter to remove
@@ -116,6 +120,8 @@ describe("AllowedCommandsScreen", () => {
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.allowedCommands).toEqual(["npm run build"]);
+      // Verify config context was reloaded
+      expect(getConfig().allowedCommands).toEqual(["npm run build"]);
     });
   });
 

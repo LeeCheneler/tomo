@@ -66,6 +66,13 @@ describe("renderInk", () => {
     expect(captured?.allowedCommands).toEqual(["npm test"]);
   });
 
+  it("getConfig returns the current context config", () => {
+    const { getConfig } = renderInk(<Text>test</Text>, {
+      global: { activeModel: "llama3" },
+    });
+    expect(getConfig().activeModel).toBe("llama3");
+  });
+
   it("stdin.write auto-flushes so escape key state is visible", async () => {
     /** Test component that shows escape state. */
     function EscapeTracker() {

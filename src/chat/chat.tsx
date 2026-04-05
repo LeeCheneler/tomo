@@ -7,9 +7,9 @@ import type {
   TakeoverRender,
 } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
+import { useConfig } from "../config/hook";
 import { DEFAULT_CONTEXT_WINDOW } from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
-import type { Provider } from "../config/schema";
 import { buildProviderMessages } from "../provider/messages";
 import { buildSystemPrompt } from "../prompt/build-system-prompt";
 import { LoadingIndicator } from "../ui/loading-indicator";
@@ -30,27 +30,30 @@ type ChatMode =
 /** Props for useChat. */
 interface UseChatProps {
   commandRegistry?: CommandRegistry;
-  provider?: Provider | null;
-  model?: string | null;
 }
 
 /** Manages mode switching between input, history, and takeover screens. */
 function useChat(props: UseChatProps) {
+  const { config } = useConfig();
+  const provider =
+    config.providers.find((p) => p.name === config.activeProvider) ?? null;
+  const model = config.activeModel ?? null;
+
   const history = useHistory();
   const [mode, setMode] = useState<ChatMode>({ kind: "input" });
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const completion = useCompletion(props.provider ?? null, props.model ?? null);
+  const completion = useCompletion(provider, model);
   const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
   // Fetch the real context window size when provider/model are configured
   useEffect(() => {
-    if (!props.provider || !props.model) return;
-    const client = createOpenAICompatibleClient(props.provider);
-    client.fetchContextWindow(props.model).then(setContextWindow);
-  }, [props.provider, props.model]);
+    if (!provider || !model) return;
+    const client = createOpenAICompatibleClient(provider);
+    client.fetchContextWindow(model).then(setContextWindow);
+  }, [provider, model]);
 
   /** Appends a message to the chat list. */
   const appendMessage = useCallback((msg: ChatMessage) => {
@@ -193,8 +196,6 @@ function useChat(props: UseChatProps) {
 /** Props for Chat. */
 interface ChatProps {
   commandRegistry?: CommandRegistry;
-  provider?: Provider | null;
-  model?: string | null;
 }
 
 /** Chat router — renders ChatInput, MessageHistory, or takeover content based on mode. */
@@ -214,8 +215,6 @@ export function Chat(props: ChatProps) {
     handleTakeoverDone,
   } = useChat({
     commandRegistry: props.commandRegistry,
-    provider: props.provider,
-    model: props.model,
   });
 
   /* v8 ignore start -- streaming persists across mode changes but testing all combinations is impractical */

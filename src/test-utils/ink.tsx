@@ -1,7 +1,7 @@
 import { render as inkRender } from "ink-testing-library";
 import type { ReactElement } from "react";
 import { afterEach } from "vitest";
-import { ConfigProvider } from "../config/hook";
+import { ConfigProvider, useConfig } from "../config/hook";
 import type { Config } from "../config/schema";
 import type { MockFsState } from "./mock-fs";
 import { mockConfig } from "./mock-config";
@@ -38,8 +38,10 @@ export interface InkRenderResult {
   rerender: (tree: ReactElement) => void;
   unmount: () => void;
   cleanup: () => void;
-  /** Mock filesystem state. Call restore() in afterEach. */
+  /** Mock filesystem state. */
   fsState: MockFsState;
+  /** Returns the current config from the React context. Useful for asserting reload() was called. */
+  getConfig: () => Config;
 }
 
 /**
@@ -66,7 +68,22 @@ export function renderInk(
     ...(config.local && { local: config.local }),
   });
 
-  const result = inkRender(<ConfigProvider>{tree}</ConfigProvider>);
+  // Captures the live config value from context on every render.
+  let capturedConfig: Config | undefined;
+
+  /** Invisible component that captures the current context config. */
+  function ConfigCapture() {
+    const { config: currentConfig } = useConfig();
+    capturedConfig = currentConfig;
+    return null;
+  }
+
+  const result = inkRender(
+    <ConfigProvider>
+      {tree}
+      <ConfigCapture />
+    </ConfigProvider>,
+  );
   const originalWrite = result.stdin.write;
 
   afterEach(() => {
@@ -81,6 +98,10 @@ export function renderInk(
     unmount: result.unmount,
     cleanup: result.cleanup,
     fsState,
+    getConfig: () => {
+      if (!capturedConfig) throw new Error("Config not yet captured");
+      return capturedConfig;
+    },
     stdin: {
       async write(data: string) {
         originalWrite(data);

@@ -352,11 +352,15 @@ describe("Chat", () => {
       baseUrl: "http://localhost:11434",
     };
 
-    /** Renders Chat with a provider configured. */
+    /** Renders Chat with a provider configured via config context. */
     function renderChatWithProvider() {
       setColumns(COLUMNS);
-      return renderInk(<Chat provider={PROVIDER} model="llama3" />, {
-        global: { providers: [PROVIDER] },
+      return renderInk(<Chat />, {
+        global: {
+          providers: [PROVIDER],
+          activeProvider: PROVIDER.name,
+          activeModel: "llama3",
+        },
       });
     }
 
