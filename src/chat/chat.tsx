@@ -11,6 +11,7 @@ import { DEFAULT_CONTEXT_WINDOW } from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import type { Provider } from "../config/schema";
 import type { ChatMessage as ProviderChatMessage } from "../provider/client";
+import { buildSystemPrompt } from "../prompt/build-system-prompt";
 import { LoadingIndicator } from "../ui/loading-indicator";
 import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
@@ -33,9 +34,14 @@ interface UseChatProps {
   model?: string | null;
 }
 
-/** Builds the provider message history from chat messages for the completion API. */
-function buildProviderMessages(messages: ChatMessage[]): ProviderChatMessage[] {
-  const result: ProviderChatMessage[] = [];
+/** Builds the provider message array from chat messages, with system prompt at index 0. */
+function buildProviderMessages(
+  messages: ChatMessage[],
+  systemPrompt: string,
+): ProviderChatMessage[] {
+  const result: ProviderChatMessage[] = [
+    { role: "system", content: systemPrompt },
+  ];
   for (const msg of messages) {
     if (msg.role === "user") {
       result.push({ role: "user", content: msg.content });
@@ -135,11 +141,12 @@ function useChat(props: UseChatProps) {
     appendMessage(userMsg);
     history.push(message);
 
-    // Send to LLM — include the new user message in the provider history
-    const providerMessages = buildProviderMessages([
-      ...messagesRef.current,
-      userMsg,
-    ]);
+    // Build fresh system prompt each send so git status stays current
+    const systemPrompt = buildSystemPrompt();
+    const providerMessages = buildProviderMessages(
+      [...messagesRef.current, userMsg],
+      systemPrompt,
+    );
     completion.send(providerMessages);
   }
 
