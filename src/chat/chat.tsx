@@ -47,6 +47,7 @@ function useChat(props: UseChatProps) {
   const completion = useCompletion(provider, model);
   const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
   const sessionPath = useRef(createSessionPath());
+  const sessionStartIndex = useRef(0);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -112,11 +113,20 @@ function useChat(props: UseChatProps) {
   async function handleMessage(message: string) {
     const commandRegistry = props.commandRegistry ?? createCommandRegistry();
     if (isCommand(message)) {
+      let pendingReset = false;
       const context: CommandContext = {
         usage: completion.usage,
         contextWindow,
+        resetSession: () => {
+          pendingReset = true;
+        },
       };
       handleInvokeResult(await commandRegistry.invoke(message, context));
+      // Deferred so the command result is appended to the old session first.
+      if (pendingReset) {
+        sessionStartIndex.current = messagesRef.current.length + 1;
+        sessionPath.current = createSessionPath();
+      }
       return;
     }
 
@@ -130,8 +140,11 @@ function useChat(props: UseChatProps) {
 
     // Build fresh system prompt each send so git status stays current
     const systemPrompt = buildSystemPrompt();
+    const currentMessages = messagesRef.current.slice(
+      sessionStartIndex.current,
+    );
     const providerMessages = buildProviderMessages(
-      [...messagesRef.current, userMsg],
+      [...currentMessages, userMsg],
       systemPrompt,
     );
     completion.send(providerMessages);

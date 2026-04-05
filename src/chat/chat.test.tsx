@@ -646,5 +646,73 @@ describe("Chat", () => {
         .filter((p) => p.startsWith(SESSIONS_DIR));
       expect(sessionFiles).toHaveLength(1);
     });
+
+    it("resetSession starts a new session file and shows command result", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "reset",
+        description: "Resets the session",
+        handler: (context) => {
+          context.resetSession();
+          return "done";
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame, fsState } = renderInk(
+        <Chat commandRegistry={commandRegistry} />,
+      );
+
+      // Send a message so the first session file has content.
+      await stdin.write("before reset");
+      await stdin.write(keys.enter);
+
+      // Invoke the command that calls resetSession.
+      await stdin.write("/reset ");
+      await stdin.write(keys.enter);
+
+      // The command result is visible in the chat.
+      expect(lastFrame()).toContain("/reset");
+      expect(lastFrame()).toContain("done");
+
+      // Send another message — should go to a new session file.
+      await stdin.write("after reset");
+      await stdin.write(keys.enter);
+
+      // Two session files exist: one from before reset, one after.
+      const sessionFiles = fsState
+        .getPaths()
+        .filter((p) => p.startsWith(SESSIONS_DIR))
+        .sort();
+      expect(sessionFiles).toHaveLength(2);
+
+      // First session has the pre-reset user message and the command result.
+      const firstContent = fsState.getFile(sessionFiles[0]) ?? "";
+      const firstMessages = firstContent
+        .trimEnd()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      expect(firstMessages).toHaveLength(2);
+      expect(firstMessages[0]).toMatchObject({
+        role: "user",
+        content: "before reset",
+      });
+      expect(firstMessages[1]).toMatchObject({
+        role: "command",
+        command: "reset",
+      });
+
+      // Second session has only the post-reset message.
+      const secondContent = fsState.getFile(sessionFiles[1]) ?? "";
+      const secondMessages = secondContent
+        .trimEnd()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      expect(secondMessages).toHaveLength(1);
+      expect(secondMessages[0]).toMatchObject({
+        role: "user",
+        content: "after reset",
+      });
+    });
   });
 });

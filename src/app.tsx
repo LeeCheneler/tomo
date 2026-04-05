@@ -2,6 +2,7 @@ import { Box, Static } from "ink";
 import { Chat } from "./chat/chat";
 import { contextCommand } from "./commands/context";
 import { modelCommand } from "./commands/model";
+import { newCommand } from "./commands/new";
 import { createCommandRegistry } from "./commands/registry";
 import { settingsCommand } from "./commands/settings";
 import { useConfig } from "./config/hook";
@@ -13,6 +14,7 @@ function buildCommandRegistry() {
   const registry = createCommandRegistry();
   registry.register(contextCommand);
   registry.register(modelCommand);
+  registry.register(newCommand);
   registry.register(settingsCommand);
   return registry;
 }

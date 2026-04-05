@@ -3,7 +3,11 @@ import type { CommandContext } from "./registry";
 import { createCommandRegistry } from "./registry";
 
 /** Default context for tests that don't care about runtime state. */
-const DEFAULT_CONTEXT: CommandContext = { usage: null, contextWindow: 8192 };
+const DEFAULT_CONTEXT: CommandContext = {
+  usage: null,
+  contextWindow: 8192,
+  resetSession: () => {},
+};
 
 describe("createCommandRegistry", () => {
   it("registers and retrieves a command", () => {

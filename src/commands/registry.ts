@@ -14,6 +14,8 @@ export interface CommandContext {
   usage: { promptTokens: number; completionTokens: number } | null;
   /** Context window size for the active model. */
   contextWindow: number;
+  /** Clears the current conversation and starts a new session file. */
+  resetSession: () => void;
 }
 
 /** Fields shared by all command types. */

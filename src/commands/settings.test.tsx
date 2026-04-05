@@ -6,7 +6,11 @@ import { createCommandRegistry } from "./registry";
 import { settingsCommand } from "./settings";
 
 /** Default context for tests. */
-const DEFAULT_CONTEXT: CommandContext = { usage: null, contextWindow: 8192 };
+const DEFAULT_CONTEXT: CommandContext = {
+  usage: null,
+  contextWindow: 8192,
+  resetSession: () => {},
+};
 
 describe("settingsCommand", () => {
   it("is named settings", () => {

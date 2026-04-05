@@ -6,7 +6,11 @@ import { modelCommand } from "./model";
 import { createCommandRegistry } from "./registry";
 
 /** Default context for tests. */
-const DEFAULT_CONTEXT: CommandContext = { usage: null, contextWindow: 8192 };
+const DEFAULT_CONTEXT: CommandContext = {
+  usage: null,
+  contextWindow: 8192,
+  resetSession: () => {},
+};
 
 describe("modelCommand", () => {
   it("is named model", () => {
