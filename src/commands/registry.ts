@@ -5,8 +5,11 @@ import { theme } from "../ui/theme";
 /** Callback for a takeover component to signal completion. */
 export type TakeoverDone = (result?: string) => void;
 
-/** Renders takeover content given a done callback. */
-export type TakeoverRender = (onDone: TakeoverDone) => ReactNode;
+/** Renders takeover content given a done callback and runtime context. */
+export type TakeoverRender = (
+  onDone: TakeoverDone,
+  context: CommandContext,
+) => ReactNode;
 
 /** Runtime context passed to handler commands when invoked. */
 export interface CommandContext {
@@ -16,6 +19,8 @@ export interface CommandContext {
   contextWindow: number;
   /** Clears the current conversation and starts a new session file. */
   resetSession: () => void;
+  /** Loads a saved session, replacing current messages and session file. */
+  loadSession: (path: string) => void;
 }
 
 /** Fields shared by all command types. */

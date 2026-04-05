@@ -19,6 +19,7 @@ describe("contextCommand", () => {
       usage: null,
       contextWindow: 8192,
       resetSession: () => {},
+      loadSession: () => {},
     };
     const result = await registry.invoke("/context", context);
     expect(result.type).toBe("inline");
@@ -33,6 +34,7 @@ describe("contextCommand", () => {
       usage: { promptTokens: 1000, completionTokens: 500 },
       contextWindow: 8192,
       resetSession: () => {},
+      loadSession: () => {},
     };
     const result = await registry.invoke("/context", context);
     expect(result.type).toBe("inline");

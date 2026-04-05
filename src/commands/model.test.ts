@@ -10,6 +10,7 @@ const DEFAULT_CONTEXT: CommandContext = {
   usage: null,
   contextWindow: 8192,
   resetSession: () => {},
+  loadSession: () => {},
 };
 
 describe("modelCommand", () => {
@@ -31,7 +32,7 @@ describe("modelCommand", () => {
     if (result.type !== "takeover") return;
     const onDone = vi.fn();
     const { lastFrame } = renderInk(
-      createElement(Fragment, null, result.render(onDone)),
+      createElement(Fragment, null, result.render(onDone, DEFAULT_CONTEXT)),
     );
     expect(lastFrame()).toContain("Select Model");
   });

@@ -7,6 +7,8 @@ import {
   SESSIONS_DIR,
   appendSessionMessage,
   createSessionPath,
+  listSessions,
+  readSessionMessages,
 } from "./session";
 
 vi.mock("node:os", async (importOriginal) => ({
@@ -105,5 +107,121 @@ describe("appendSessionMessage", () => {
     for (let i = 0; i < messages.length; i++) {
       expect(JSON.parse(lines[i])).toEqual(messages[i]);
     }
+  });
+});
+
+describe("listSessions", () => {
+  let fs: ReturnType<typeof mockFs>;
+
+  afterEach(() => {
+    fs.restore();
+  });
+
+  it("returns empty array when no sessions exist", () => {
+    fs = mockFs();
+    expect(listSessions()).toEqual([]);
+  });
+
+  it("returns sessions sorted newest first", () => {
+    const older = `${SESSIONS_DIR}/2026-04-01T10-00-00-000Z-aaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl`;
+    const newer = `${SESSIONS_DIR}/2026-04-05T19-45-00-000Z-aaaa-bbbb-cccc-dddd-ffffffffffff.jsonl`;
+    fs = mockFs({
+      [older]: `${JSON.stringify({ id: "1", role: "user", content: "old" })}\n`,
+      [newer]: `${JSON.stringify({ id: "2", role: "user", content: "new" })}\n`,
+    });
+
+    const sessions = listSessions();
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0].firstMessage).toBe("new");
+    expect(sessions[1].firstMessage).toBe("old");
+  });
+
+  it("parses the date from the filename", () => {
+    const path = `${SESSIONS_DIR}/2026-04-05T19-45-30-123Z-aaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl`;
+    fs = mockFs({
+      [path]: `${JSON.stringify({ id: "1", role: "user", content: "hi" })}\n`,
+    });
+
+    const sessions = listSessions();
+    expect(sessions[0].date).toEqual(new Date("2026-04-05T19:45:30.123Z"));
+  });
+
+  it("extracts the first user message skipping non-user messages", () => {
+    const path = `${SESSIONS_DIR}/2026-04-05T19-45-00-000Z-aaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl`;
+    const lines = [
+      JSON.stringify({
+        id: "1",
+        role: "command",
+        command: "new",
+        result: "done",
+      }),
+      JSON.stringify({ id: "2", role: "user", content: "actual first" }),
+      JSON.stringify({ id: "3", role: "user", content: "second" }),
+    ];
+    fs = mockFs({ [path]: `${lines.join("\n")}\n` });
+
+    const sessions = listSessions();
+    expect(sessions[0].firstMessage).toBe("actual first");
+  });
+
+  it("returns null firstMessage when session has no user messages", () => {
+    const path = `${SESSIONS_DIR}/2026-04-05T19-45-00-000Z-aaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl`;
+    fs = mockFs({
+      [path]: `${JSON.stringify({ id: "1", role: "command", command: "new", result: "done" })}\n`,
+    });
+
+    const sessions = listSessions();
+    expect(sessions[0].firstMessage).toBeNull();
+  });
+
+  it("includes the full file path", () => {
+    const path = `${SESSIONS_DIR}/2026-04-05T19-45-00-000Z-aaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl`;
+    fs = mockFs({
+      [path]: `${JSON.stringify({ id: "1", role: "user", content: "hi" })}\n`,
+    });
+
+    const sessions = listSessions();
+    expect(sessions[0].path).toBe(path);
+  });
+
+  it("ignores non-jsonl files in the sessions directory", () => {
+    fs = mockFs({
+      [`${SESSIONS_DIR}/notes.txt`]: "not a session",
+      [`${SESSIONS_DIR}/2026-04-05T19-45-00-000Z-aaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl`]: `${JSON.stringify({ id: "1", role: "user", content: "hi" })}\n`,
+    });
+
+    const sessions = listSessions();
+    expect(sessions).toHaveLength(1);
+  });
+});
+
+describe("readSessionMessages", () => {
+  let fs: ReturnType<typeof mockFs>;
+
+  afterEach(() => {
+    fs.restore();
+  });
+
+  it("reads all messages from a JSONL file", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "user", content: "hello" },
+      { id: "2", role: "assistant", content: "hi" },
+    ];
+    const path = resolve(SESSIONS_DIR, "test.jsonl");
+    fs = mockFs({
+      [path]: `${messages.map((m) => JSON.stringify(m)).join("\n")}\n`,
+    });
+
+    const result = readSessionMessages(path);
+    expect(result).toEqual(messages);
+  });
+
+  it("skips empty lines", () => {
+    const path = resolve(SESSIONS_DIR, "test.jsonl");
+    const content = `${JSON.stringify({ id: "1", role: "user", content: "hi" })}\n\n`;
+    fs = mockFs({ [path]: content });
+
+    const result = readSessionMessages(path);
+    expect(result).toHaveLength(1);
   });
 });

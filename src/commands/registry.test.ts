@@ -7,6 +7,7 @@ const DEFAULT_CONTEXT: CommandContext = {
   usage: null,
   contextWindow: 8192,
   resetSession: () => {},
+  loadSession: () => {},
 };
 
 describe("createCommandRegistry", () => {

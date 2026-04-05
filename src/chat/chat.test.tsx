@@ -647,7 +647,7 @@ describe("Chat", () => {
       expect(sessionFiles).toHaveLength(1);
     });
 
-    it("resetSession starts a new session file and shows command result", async () => {
+    it("resetSession clears messages and starts a new session file", async () => {
       const commandRegistry = createCommandRegistry();
       commandRegistry.register({
         name: "reset",
@@ -659,7 +659,7 @@ describe("Chat", () => {
       });
 
       setColumns(COLUMNS);
-      const { stdin, lastFrame, fsState } = renderInk(
+      const { stdin, fsState } = renderInk(
         <Chat commandRegistry={commandRegistry} />,
       );
 
@@ -670,10 +670,6 @@ describe("Chat", () => {
       // Invoke the command that calls resetSession.
       await stdin.write("/reset ");
       await stdin.write(keys.enter);
-
-      // The command result is visible in the chat.
-      expect(lastFrame()).toContain("/reset");
-      expect(lastFrame()).toContain("done");
 
       // Send another message — should go to a new session file.
       await stdin.write("after reset");
@@ -686,32 +682,88 @@ describe("Chat", () => {
         .sort();
       expect(sessionFiles).toHaveLength(2);
 
-      // First session has the pre-reset user message and the command result.
+      // First session has the pre-reset user message.
       const firstContent = fsState.getFile(sessionFiles[0]) ?? "";
       const firstMessages = firstContent
         .trimEnd()
         .split("\n")
         .map((line) => JSON.parse(line));
-      expect(firstMessages).toHaveLength(2);
+      expect(firstMessages).toHaveLength(1);
       expect(firstMessages[0]).toMatchObject({
         role: "user",
         content: "before reset",
       });
-      expect(firstMessages[1]).toMatchObject({
-        role: "command",
-        command: "reset",
-      });
 
-      // Second session has only the post-reset message.
+      // Second session has the command result and post-reset message.
       const secondContent = fsState.getFile(sessionFiles[1]) ?? "";
       const secondMessages = secondContent
         .trimEnd()
         .split("\n")
         .map((line) => JSON.parse(line));
-      expect(secondMessages).toHaveLength(1);
+      expect(secondMessages).toHaveLength(2);
       expect(secondMessages[0]).toMatchObject({
+        role: "command",
+        command: "reset",
+      });
+      expect(secondMessages[1]).toMatchObject({
         role: "user",
         content: "after reset",
+      });
+    });
+
+    it("loadSession replaces messages and redirects writes to the loaded file", async () => {
+      // Pre-populate a session file to load.
+      const loadPath = `${SESSIONS_DIR}/2026-01-01T00-00-00-000Z-load-test.jsonl`;
+      const loadedMsg = JSON.stringify({
+        id: "loaded-1",
+        role: "user",
+        content: "loaded message",
+      });
+
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "load",
+        description: "Loads a session",
+        handler: (context) => {
+          context.loadSession(loadPath);
+          return "loaded";
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, fsState } = renderInk(
+        <Chat commandRegistry={commandRegistry} />,
+      );
+
+      // Write the session file into the mock fs before invoking the command.
+      fsState.getFile; // ensure fs is initialised
+      // We need to write via the mock — use appendFile spy path
+      const { writeFile: mockWrite } = await import("../utils/fs");
+      mockWrite(loadPath, `${loadedMsg}\n`);
+
+      // Invoke the command that calls loadSession.
+      await stdin.write("/load ");
+      await stdin.write(keys.enter);
+
+      // Send a new message — should append to the loaded session file.
+      await stdin.write("new message");
+      await stdin.write(keys.enter);
+
+      const content = fsState.getFile(loadPath) ?? "";
+      const lines = content.trimEnd().split("\n");
+      // Original loaded message + the load command result + the new user message.
+      expect(lines).toHaveLength(3);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        role: "user",
+        content: "loaded message",
+      });
+      expect(JSON.parse(lines[1])).toMatchObject({
+        role: "command",
+        command: "load",
+      });
+      expect(JSON.parse(lines[2])).toMatchObject({
+        role: "user",
+        content: "new message",
       });
     });
   });

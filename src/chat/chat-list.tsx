@@ -1,12 +1,20 @@
 import { Box, Static, Text } from "ink";
+import type { ReactNode } from "react";
 import { completePartialMarkdown, renderMarkdown } from "../markdown/render";
 import type { ChatMessage } from "./message";
 import { theme } from "../ui/theme";
 import { Indent } from "../ui/layout/indent";
 
+/** A static item — either the header or a chat message. */
+type StaticItem =
+  | { kind: "header"; id: string }
+  | { kind: "message"; message: ChatMessage };
+
 /** Props for ChatList. */
 interface ChatListProps {
   messages: ChatMessage[];
+  /** Optional header rendered as the first static item. */
+  header?: ReactNode;
 }
 
 /** Renders a user message with a cyan indicator. */
@@ -69,13 +77,29 @@ function CommandMessageView(props: { command: string; result: string }) {
 
 /** Renders the chat message list. Messages are rendered once and persist on screen. */
 export function ChatList(props: ChatListProps) {
-  if (props.messages.length === 0) {
+  const items: StaticItem[] = [];
+  if (props.header) {
+    items.push({ kind: "header", id: "__header__" });
+  }
+  for (const msg of props.messages) {
+    items.push({ kind: "message", message: msg });
+  }
+
+  if (items.length === 0) {
     return null;
   }
 
   return (
-    <Static items={props.messages}>
-      {(message) => {
+    <Static items={items}>
+      {(item) => {
+        if (item.kind === "header") {
+          return (
+            <Box key={item.id} flexDirection="column" paddingBottom={1}>
+              {props.header}
+            </Box>
+          );
+        }
+        const message = item.message;
         if (message.role === "user") {
           return <UserMessageView key={message.id} content={message.content} />;
         }

@@ -10,6 +10,7 @@ const DEFAULT_CONTEXT: CommandContext = {
   usage: null,
   contextWindow: 8192,
   resetSession: () => {},
+  loadSession: () => {},
 };
 
 describe("settingsCommand", () => {
@@ -25,7 +26,7 @@ describe("settingsCommand", () => {
     if (result.type !== "takeover") return;
     const onDone = vi.fn();
     const { lastFrame } = renderInk(
-      createElement(Fragment, null, result.render(onDone)),
+      createElement(Fragment, null, result.render(onDone, DEFAULT_CONTEXT)),
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Settings");

@@ -20,6 +20,7 @@ describe("newCommand", () => {
       usage: null,
       contextWindow: 8192,
       resetSession,
+      loadSession: () => {},
     };
     const result = await registry.invoke("/new", context);
     expect(resetSession).toHaveBeenCalledOnce();
