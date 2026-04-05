@@ -1,12 +1,36 @@
+import { Text } from "ink";
 import { describe, expect, it } from "vitest";
 import { renderInk } from "../test-utils/ink";
 import { ChatList, LiveAssistantMessage } from "./chat-list";
 import type { ChatMessage } from "./message";
 
 describe("ChatList", () => {
-  it("renders nothing when messages is empty", () => {
+  it("renders nothing when messages is empty and no header", () => {
     const { lastFrame } = renderInk(<ChatList messages={[]} />);
     expect(lastFrame()).toBe("");
+  });
+
+  it("renders header when provided with no messages", () => {
+    const { lastFrame } = renderInk(
+      <ChatList messages={[]} header={<Text>MY HEADER</Text>} />,
+    );
+    expect(lastFrame()).toContain("MY HEADER");
+  });
+
+  it("renders header before messages", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "user", content: "hello" },
+    ];
+    const { lastFrame } = renderInk(
+      <ChatList messages={messages} header={<Text>MY HEADER</Text>} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("MY HEADER");
+    expect(frame).toContain("hello");
+    // Header should appear before the message.
+    const headerIndex = frame.indexOf("MY HEADER");
+    const messageIndex = frame.indexOf("hello");
+    expect(headerIndex).toBeLessThan(messageIndex);
   });
 
   it("renders a user message", () => {

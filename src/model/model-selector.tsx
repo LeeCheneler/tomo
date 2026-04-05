@@ -11,8 +11,8 @@ import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { Indent } from "../ui/layout/indent";
 import { LoadingIndicator } from "../ui/loading-indicator";
-import type { NavigationMenuItem } from "../ui/navigation-menu";
-import { NavigationMenu } from "../ui/navigation-menu";
+import type { SelectListItem } from "../ui/select-list";
+import { SelectList } from "../ui/select-list";
 import { theme } from "../ui/theme";
 
 /** Key instructions for the provider list. */
@@ -31,9 +31,7 @@ export interface ModelSelectorProps {
 type Step = { kind: "providers" } | { kind: "models"; provider: Provider };
 
 /** Builds navigation menu items from providers. */
-function buildProviderItems(
-  providers: Provider[],
-): readonly NavigationMenuItem[] {
+function buildProviderItems(providers: Provider[]): readonly SelectListItem[] {
   return providers.map((p) => ({ key: p.name, label: p.name }));
 }
 
@@ -44,7 +42,7 @@ function useModelSelector(props: ModelSelectorProps) {
   const [step, setStep] = useState<Step>({ kind: "providers" });
 
   /** Selects a provider and moves to the model list. */
-  function handleSelectProvider(item: NavigationMenuItem) {
+  function handleSelectProvider(item: SelectListItem) {
     const provider = providers.find((p) => p.name === item.key);
     /* v8 ignore next -- provider always exists since items come from providers */
     if (!provider) return;
@@ -107,7 +105,7 @@ export function ModelSelector(props: ModelSelectorProps) {
       <Indent>
         <Text bold>Select Model</Text>
       </Indent>
-      <NavigationMenu
+      <SelectList
         items={providerItems}
         onSelect={handleSelectProvider}
         onExit={handleExit}
@@ -219,13 +217,13 @@ function ModelList(props: ModelListProps) {
     return <ModelListEmpty provider={props.provider} onBack={props.onBack} />;
   }
 
-  const items: NavigationMenuItem[] = state.models.map((m) => ({
+  const items: SelectListItem[] = state.models.map((m) => ({
     key: m.id,
     label: m.id,
   }));
 
   /** Handles model selection. */
-  function handleSelect(item: NavigationMenuItem) {
+  function handleSelect(item: SelectListItem) {
     props.onSelect(props.provider, item.key);
   }
 
@@ -235,7 +233,7 @@ function ModelList(props: ModelListProps) {
       <Indent>
         <Text bold>Select Model — {props.provider.name}</Text>
       </Indent>
-      <NavigationMenu
+      <SelectList
         items={items}
         onSelect={handleSelect}
         onExit={props.onBack}

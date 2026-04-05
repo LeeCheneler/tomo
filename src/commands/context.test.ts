@@ -15,7 +15,12 @@ describe("contextCommand", () => {
   it("shows no usage message when usage is null", async () => {
     const registry = createCommandRegistry();
     registry.register(contextCommand);
-    const context: CommandContext = { usage: null, contextWindow: 8192 };
+    const context: CommandContext = {
+      usage: null,
+      contextWindow: 8192,
+      resetSession: () => {},
+      loadSession: () => {},
+    };
     const result = await registry.invoke("/context", context);
     expect(result.type).toBe("inline");
     if (result.type !== "inline") return;
@@ -28,6 +33,8 @@ describe("contextCommand", () => {
     const context: CommandContext = {
       usage: { promptTokens: 1000, completionTokens: 500 },
       contextWindow: 8192,
+      resetSession: () => {},
+      loadSession: () => {},
     };
     const result = await registry.invoke("/context", context);
     expect(result.type).toBe("inline");

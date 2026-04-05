@@ -3,6 +3,7 @@ import { Text, useInput } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
+import { SESSIONS_DIR } from "../session/session";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
@@ -546,6 +547,224 @@ describe("Chat", () => {
         { role: "assistant", content: "Response 1" },
         { role: "user", content: "second" },
       ]);
+    });
+  });
+
+  describe("session persistence", () => {
+    const mswServer = setupMsw();
+
+    /** Builds an SSE response body from data objects. */
+    function sseBody(chunks: unknown[]): string {
+      return (
+        chunks.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n") +
+        "\n\ndata: [DONE]\n\n"
+      );
+    }
+
+    const PROVIDER = {
+      name: "test-ollama",
+      type: "ollama" as const,
+      baseUrl: "http://localhost:11434",
+    };
+
+    /** Returns parsed messages from the session file in the mock fs. */
+    function getSessionMessages(
+      fsState: ReturnType<typeof renderInk>["fsState"],
+    ): unknown[] {
+      const sessionFile = fsState
+        .getPaths()
+        .filter((p) => p.startsWith(SESSIONS_DIR))
+        .sort()
+        .pop();
+      if (!sessionFile) return [];
+      const content = fsState.getFile(sessionFile);
+      if (!content) return [];
+      return content
+        .trimEnd()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    }
+
+    it("writes all message types to the session file", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "ping",
+        description: "Responds with pong",
+        handler: () => "pong",
+      });
+
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse(
+              sseBody([
+                { choices: [{ delta: { content: "Hello from LLM" } }] },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            ),
+        ),
+      );
+
+      setColumns(COLUMNS);
+      const { stdin, fsState } = renderInk(
+        <Chat commandRegistry={commandRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      // User message + assistant response
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Command message
+      await stdin.write("/ping ");
+      await stdin.write(keys.enter);
+
+      const messages = getSessionMessages(fsState);
+      expect(messages).toHaveLength(3);
+      expect(messages[0]).toMatchObject({ role: "user", content: "hello" });
+      expect(messages[1]).toMatchObject({
+        role: "assistant",
+        content: "Hello from LLM",
+      });
+      expect(messages[2]).toMatchObject({
+        role: "command",
+        command: "ping",
+        result: "pong",
+      });
+
+      // All messages are written to a single session file.
+      const sessionFiles = fsState
+        .getPaths()
+        .filter((p) => p.startsWith(SESSIONS_DIR));
+      expect(sessionFiles).toHaveLength(1);
+    });
+
+    it("resetSession clears messages and starts a new session file", async () => {
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "reset",
+        description: "Resets the session",
+        handler: (context) => {
+          context.resetSession();
+          return "done";
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, fsState } = renderInk(
+        <Chat commandRegistry={commandRegistry} />,
+      );
+
+      // Send a message so the first session file has content.
+      await stdin.write("before reset");
+      await stdin.write(keys.enter);
+
+      // Invoke the command that calls resetSession.
+      await stdin.write("/reset ");
+      await stdin.write(keys.enter);
+
+      // Send another message — should go to a new session file.
+      await stdin.write("after reset");
+      await stdin.write(keys.enter);
+
+      // Two session files exist: one from before reset, one after.
+      const sessionFiles = fsState
+        .getPaths()
+        .filter((p) => p.startsWith(SESSIONS_DIR))
+        .sort();
+      expect(sessionFiles).toHaveLength(2);
+
+      // First session has the pre-reset user message.
+      const firstContent = fsState.getFile(sessionFiles[0]) ?? "";
+      const firstMessages = firstContent
+        .trimEnd()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      expect(firstMessages).toHaveLength(1);
+      expect(firstMessages[0]).toMatchObject({
+        role: "user",
+        content: "before reset",
+      });
+
+      // Second session has the command result and post-reset message.
+      const secondContent = fsState.getFile(sessionFiles[1]) ?? "";
+      const secondMessages = secondContent
+        .trimEnd()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      expect(secondMessages).toHaveLength(2);
+      expect(secondMessages[0]).toMatchObject({
+        role: "command",
+        command: "reset",
+      });
+      expect(secondMessages[1]).toMatchObject({
+        role: "user",
+        content: "after reset",
+      });
+    });
+
+    it("loadSession replaces messages and redirects writes to the loaded file", async () => {
+      // Pre-populate a session file to load.
+      const loadPath = `${SESSIONS_DIR}/2026-01-01T00-00-00-000Z-load-test.jsonl`;
+      const loadedMsg = JSON.stringify({
+        id: "loaded-1",
+        role: "user",
+        content: "loaded message",
+      });
+
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "load",
+        description: "Loads a session",
+        handler: (context) => {
+          context.loadSession(loadPath);
+          return "loaded";
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, fsState } = renderInk(
+        <Chat commandRegistry={commandRegistry} />,
+      );
+
+      // Write the session file into the mock fs before invoking the command.
+      fsState.getFile; // ensure fs is initialised
+      // We need to write via the mock — use appendFile spy path
+      const { writeFile: mockWrite } = await import("../utils/fs");
+      mockWrite(loadPath, `${loadedMsg}\n`);
+
+      // Invoke the command that calls loadSession.
+      await stdin.write("/load ");
+      await stdin.write(keys.enter);
+
+      // Send a new message — should append to the loaded session file.
+      await stdin.write("new message");
+      await stdin.write(keys.enter);
+
+      const content = fsState.getFile(loadPath) ?? "";
+      const lines = content.trimEnd().split("\n");
+      // Original loaded message + the load command result + the new user message.
+      expect(lines).toHaveLength(3);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        role: "user",
+        content: "loaded message",
+      });
+      expect(JSON.parse(lines[1])).toMatchObject({
+        role: "command",
+        command: "load",
+      });
+      expect(JSON.parse(lines[2])).toMatchObject({
+        role: "user",
+        content: "new message",
+      });
     });
   });
 });

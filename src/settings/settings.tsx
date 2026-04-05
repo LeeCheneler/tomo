@@ -5,8 +5,8 @@ import { Border } from "../ui/border";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { Indent } from "../ui/layout/indent";
-import type { NavigationMenuItem } from "../ui/navigation-menu";
-import { NavigationMenu } from "../ui/navigation-menu";
+import type { SelectListItem } from "../ui/select-list";
+import { SelectList } from "../ui/select-list";
 import { theme } from "../ui/theme";
 import { AllowedCommandsScreen } from "./allowed-commands";
 import { PermissionsScreen } from "./permissions";
@@ -23,7 +23,7 @@ export type SettingsSection =
   | "skill-sets";
 
 /** The menu items for the settings navigation. */
-const MENU_ITEMS: readonly NavigationMenuItem[] = [
+const MENU_ITEMS: readonly SelectListItem[] = [
   { key: "providers", label: "Providers" },
   { key: "permissions", label: "Permissions" },
   { key: "allowed-commands", label: "Allowed Commands" },
@@ -45,7 +45,7 @@ function useSettings(props: SettingsProps) {
   const [step, setStep] = useState<Step>("menu");
 
   /** Enters a section sub-screen. */
-  function handleSelect(item: NavigationMenuItem) {
+  function handleSelect(item: SelectListItem) {
     setStep(item.key as SettingsSection);
   }
 
@@ -102,7 +102,7 @@ export function Settings(props: SettingsProps) {
       <Indent>
         <Text bold>Settings</Text>
       </Indent>
-      <NavigationMenu
+      <SelectList
         items={MENU_ITEMS}
         onSelect={handleSelect}
         onExit={handleExit}

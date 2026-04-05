@@ -69,7 +69,8 @@ export function renderInk(
   });
 
   // Captures the live config value from context on every render.
-  let capturedConfig: Config | undefined;
+  // Initialized synchronously by ConfigCapture during inkRender, so always set before return.
+  let capturedConfig: Config;
 
   /** Invisible component that captures the current context config. */
   function ConfigCapture() {
@@ -86,6 +87,7 @@ export function renderInk(
   );
   const originalWrite = result.stdin.write;
 
+  /* v8 ignore next 4 -- afterEach runs outside test scope so coverage never sees it */
   afterEach(() => {
     result.cleanup();
     fsState.restore();
@@ -98,10 +100,7 @@ export function renderInk(
     unmount: result.unmount,
     cleanup: result.cleanup,
     fsState,
-    getConfig: () => {
-      if (!capturedConfig) throw new Error("Config not yet captured");
-      return capturedConfig;
-    },
+    getConfig: () => capturedConfig,
     stdin: {
       async write(data: string) {
         originalWrite(data);

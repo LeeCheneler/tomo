@@ -6,7 +6,12 @@ import { modelCommand } from "./model";
 import { createCommandRegistry } from "./registry";
 
 /** Default context for tests. */
-const DEFAULT_CONTEXT: CommandContext = { usage: null, contextWindow: 8192 };
+const DEFAULT_CONTEXT: CommandContext = {
+  usage: null,
+  contextWindow: 8192,
+  resetSession: () => {},
+  loadSession: () => {},
+};
 
 describe("modelCommand", () => {
   it("is named model", () => {
@@ -27,7 +32,7 @@ describe("modelCommand", () => {
     if (result.type !== "takeover") return;
     const onDone = vi.fn();
     const { lastFrame } = renderInk(
-      createElement(Fragment, null, result.render(onDone)),
+      createElement(Fragment, null, result.render(onDone, DEFAULT_CONTEXT)),
     );
     expect(lastFrame()).toContain("Select Model");
   });

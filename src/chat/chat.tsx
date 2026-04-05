@@ -12,7 +12,14 @@ import { DEFAULT_CONTEXT_WINDOW } from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import { buildProviderMessages } from "../provider/messages";
 import { buildSystemPrompt } from "../prompt/build-system-prompt";
+import {
+  appendSessionMessage,
+  createSessionPath,
+  readSessionMessages,
+} from "../session/session";
+import { AppHeader } from "../ui/app-header";
 import { LoadingIndicator } from "../ui/loading-indicator";
+import { version } from "../utils/version";
 import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
 import { ChatList, LiveAssistantMessage } from "./chat-list";
@@ -45,6 +52,8 @@ function useChat(props: UseChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const completion = useCompletion(provider, model);
   const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
+  const [sessionKey, setSessionKey] = useState(() => crypto.randomUUID());
+  const sessionPath = useRef(createSessionPath());
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -55,9 +64,10 @@ function useChat(props: UseChatProps) {
     client.fetchContextWindow(model).then(setContextWindow);
   }, [provider, model]);
 
-  /** Appends a message to the chat list. */
+  /** Appends a message to the chat list and writes it to the session file. */
   const appendMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => [...prev, msg]);
+    appendSessionMessage(sessionPath.current, msg);
   }, []);
 
   /** Handles an invoke result — either enters takeover mode or appends an inline message. */
@@ -105,14 +115,31 @@ function useChat(props: UseChatProps) {
     }
   }, [completion.state, completion.content, completion.error, appendMessage]);
 
+  /** Builds the current command context for handler and takeover commands. */
+  function buildCommandContext(): CommandContext {
+    return {
+      usage: completion.usage,
+      contextWindow,
+      resetSession: () => {
+        process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
+        setMessages([]);
+        sessionPath.current = createSessionPath();
+        setSessionKey(crypto.randomUUID());
+      },
+      loadSession: (path) => {
+        process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
+        setMessages(readSessionMessages(path));
+        sessionPath.current = path;
+        setSessionKey(crypto.randomUUID());
+      },
+    };
+  }
+
   /** Handles submitted input — dispatches commands or creates user messages. */
   async function handleMessage(message: string) {
     const commandRegistry = props.commandRegistry ?? createCommandRegistry();
     if (isCommand(message)) {
-      const context: CommandContext = {
-        usage: completion.usage,
-        contextWindow,
-      };
+      const context = buildCommandContext();
       handleInvokeResult(await commandRegistry.invoke(message, context));
       return;
     }
@@ -178,13 +205,16 @@ function useChat(props: UseChatProps) {
   const isStreaming = completion.state === "streaming";
 
   return {
+    config,
     mode,
     history,
     messages,
+    sessionKey,
     isStreaming,
     streamingContent: completion.content,
     abort: completion.abort,
     autocompleteItems,
+    buildCommandContext,
     handleMessage,
     handleUp,
     handleSelected,
@@ -201,13 +231,16 @@ interface ChatProps {
 /** Chat router — renders ChatInput, MessageHistory, or takeover content based on mode. */
 export function Chat(props: ChatProps) {
   const {
+    config,
     mode,
     history,
     messages,
+    sessionKey,
     isStreaming,
     streamingContent,
     abort,
     autocompleteItems,
+    buildCommandContext,
     handleMessage,
     handleUp,
     handleSelected,
@@ -221,10 +254,20 @@ export function Chat(props: ChatProps) {
   if (mode.kind === "takeover") {
     return (
       <>
-        <ChatList messages={messages} />
+        <ChatList
+          key={sessionKey}
+          messages={messages}
+          header={
+            <AppHeader
+              version={version}
+              model={config.activeModel}
+              provider={config.activeProvider}
+            />
+          }
+        />
         {isStreaming && <LiveAssistantMessage content={streamingContent} />}
         {isStreaming && <LoadingIndicator text="Thinking" />}
-        {mode.render(handleTakeoverDone)}
+        {mode.render(handleTakeoverDone, buildCommandContext())}
       </>
     );
   }
@@ -232,7 +275,17 @@ export function Chat(props: ChatProps) {
   if (mode.kind === "history") {
     return (
       <>
-        <ChatList messages={messages} />
+        <ChatList
+          key={sessionKey}
+          messages={messages}
+          header={
+            <AppHeader
+              version={version}
+              model={config.activeModel}
+              provider={config.activeProvider}
+            />
+          }
+        />
         {isStreaming && <LiveAssistantMessage content={streamingContent} />}
         {isStreaming && <LoadingIndicator text="Thinking" />}
         <MessageHistory
@@ -247,7 +300,17 @@ export function Chat(props: ChatProps) {
 
   return (
     <>
-      <ChatList messages={messages} />
+      <ChatList
+        key={sessionKey}
+        messages={messages}
+        header={
+          <AppHeader
+            version={version}
+            model={config.activeModel}
+            provider={config.activeProvider}
+          />
+        }
+      />
       {isStreaming && <LiveAssistantMessage content={streamingContent} />}
       {isStreaming && <LoadingIndicator text="Thinking" />}
       <ChatInput

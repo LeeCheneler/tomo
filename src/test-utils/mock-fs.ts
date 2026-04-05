@@ -44,6 +44,23 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
       files.set(path, data);
     });
 
+  const appendFileSpy = vi
+    .spyOn(fsUtils, "appendFile")
+    .mockImplementation((path, data) => {
+      files.set(path, (files.get(path) ?? "") + data);
+    });
+
+  const listDirSpy = vi
+    .spyOn(fsUtils, "listDir")
+    .mockImplementation((dirPath) => {
+      const prefix = `${dirPath}/`;
+      return [...files.keys()]
+        .filter(
+          (k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/"),
+        )
+        .map((k) => k.slice(prefix.length));
+    });
+
   const ensureDirSpy = vi
     .spyOn(fsUtils, "ensureDir")
     .mockImplementation(() => {});
@@ -59,6 +76,8 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
       fileExistsSpy.mockRestore();
       readFileSpy.mockRestore();
       writeFileSpy.mockRestore();
+      appendFileSpy.mockRestore();
+      listDirSpy.mockRestore();
       ensureDirSpy.mockRestore();
     },
   };
