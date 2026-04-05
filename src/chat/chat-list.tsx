@@ -1,4 +1,5 @@
 import { Box, Static, Text } from "ink";
+import { completePartialMarkdown, renderMarkdown } from "../markdown/render";
 import type { ChatMessage } from "./message";
 import { theme } from "../ui/theme";
 import { Indent } from "../ui/layout/indent";
@@ -18,12 +19,12 @@ function UserMessageView(props: { content: string }) {
   );
 }
 
-/** Renders an assistant response. */
+/** Renders an assistant response with markdown formatting. */
 function AssistantMessageView(props: { content: string }) {
   return (
     <Box paddingBottom={1}>
       <Indent>
-        <Text>{props.content}</Text>
+        <Text>{renderMarkdown(props.content)}</Text>
       </Indent>
     </Box>
   );
@@ -111,7 +112,7 @@ export interface LiveAssistantMessageProps {
   content: string;
 }
 
-/** Renders the in-progress streaming assistant response below the static message list. */
+/** Renders the in-progress streaming assistant response with markdown formatting. */
 export function LiveAssistantMessage(props: LiveAssistantMessageProps) {
   if (!props.content) {
     return null;
@@ -119,7 +120,9 @@ export function LiveAssistantMessage(props: LiveAssistantMessageProps) {
 
   return (
     <Box paddingBottom={1}>
-      <Text>{props.content}</Text>
+      <Indent>
+        <Text>{renderMarkdown(completePartialMarkdown(props.content))}</Text>
+      </Indent>
     </Box>
   );
 }

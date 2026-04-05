@@ -46,6 +46,17 @@ describe("ChatList", () => {
     expect(lastFrame()).toContain("Hello, how can I help?");
   });
 
+  it("renders assistant messages with markdown formatting", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "assistant", content: "- item one\n- item two" },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("•");
+    expect(frame).toContain("item one");
+    expect(frame).toContain("item two");
+  });
+
   it("renders an interrupted message", () => {
     const messages: ChatMessage[] = [{ id: "1", role: "interrupted" }];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
@@ -75,6 +86,15 @@ describe("LiveAssistantMessage", () => {
       <LiveAssistantMessage content="streaming text" />,
     );
     expect(lastFrame()).toContain("streaming text");
+  });
+
+  it("renders streaming content with markdown formatting", () => {
+    const { lastFrame } = renderInk(
+      <LiveAssistantMessage content="- item one\n- item two" />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("•");
+    expect(frame).toContain("item one");
   });
 
   it("renders nothing when content is empty", () => {
