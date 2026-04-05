@@ -10,7 +10,7 @@ import { createCommandRegistry } from "../commands/registry";
 import { DEFAULT_CONTEXT_WINDOW } from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import type { Provider } from "../config/schema";
-import type { ChatMessage as ProviderChatMessage } from "../provider/client";
+import { buildProviderMessages } from "../provider/messages";
 import { buildSystemPrompt } from "../prompt/build-system-prompt";
 import { LoadingIndicator } from "../ui/loading-indicator";
 import type { AutocompleteItem } from "./autocomplete";
@@ -32,25 +32,6 @@ interface UseChatProps {
   commandRegistry?: CommandRegistry;
   provider?: Provider | null;
   model?: string | null;
-}
-
-/** Builds the provider message array from chat messages, with system prompt at index 0. */
-function buildProviderMessages(
-  messages: ChatMessage[],
-  systemPrompt: string,
-): ProviderChatMessage[] {
-  const result: ProviderChatMessage[] = [
-    { role: "system", content: systemPrompt },
-  ];
-  for (const msg of messages) {
-    if (msg.role === "user") {
-      result.push({ role: "user", content: msg.content });
-    }
-    if (msg.role === "assistant") {
-      result.push({ role: "assistant", content: msg.content });
-    }
-  }
-  return result;
 }
 
 /** Manages mode switching between input, history, and takeover screens. */
