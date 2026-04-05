@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { Text, useInput } from "ink";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
 import { mockConfig } from "../test-utils/mock-config";
@@ -9,6 +9,21 @@ import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
 import type { MockFsState } from "../test-utils/mock-fs";
 import { Chat } from "./chat";
+
+vi.mock("node:os", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:os")>()),
+  platform: () => "linux",
+  release: () => "6.1.0",
+  arch: () => "x64",
+  userInfo: () => ({ username: "testuser" }),
+  homedir: () => "/mock-home",
+}));
+
+vi.mock("node:child_process", () => ({
+  execSync: vi.fn(() => {
+    throw new Error("not a git repo");
+  }),
+}));
 
 const COLUMNS = 40;
 
@@ -526,8 +541,9 @@ describe("Chat", () => {
       await new Promise((r) => setTimeout(r, 100));
 
       expect(requestCount).toBe(2);
-      // Second request should have: user "first", assistant "Response 1", user "second"
-      expect(lastMessages).toEqual([
+      // Second request should have: system prompt, user "first", assistant "Response 1", user "second"
+      expect(lastMessages[0]).toHaveProperty("role", "system");
+      expect(lastMessages.slice(1)).toEqual([
         { role: "user", content: "first" },
         { role: "assistant", content: "Response 1" },
         { role: "user", content: "second" },
