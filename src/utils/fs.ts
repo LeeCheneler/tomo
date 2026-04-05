@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 
@@ -31,6 +32,12 @@ export function appendFile(path: string, content: string): void {
 export function listDir(path: string): string[] {
   if (!existsSync(path)) return [];
   return readdirSync(path, "utf-8");
+}
+
+/** Returns true if the path exists and is a directory. */
+export function isDirectory(path: string): boolean {
+  if (!existsSync(path)) return false;
+  return statSync(path).isDirectory();
 }
 
 /** Creates a directory and any missing parents. */
