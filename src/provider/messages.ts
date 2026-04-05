@@ -1,4 +1,5 @@
 import type { ChatMessage as DisplayMessage } from "../chat/message";
+import { stripAnsi } from "../utils/strip-ansi";
 import type { ChatMessage as ProviderMessage } from "./client";
 
 /**
@@ -6,6 +7,10 @@ import type { ChatMessage as ProviderMessage } from "./client";
  * Prepends the system prompt at index 0, then maps user and assistant
  * display messages to the provider format. Other message types (command,
  * error, interrupted) are skipped as they are UI-only.
+ *
+ * Assistant messages are stripped of ANSI escape codes before being sent
+ * to the provider. Display messages contain rendered markdown with ANSI
+ * formatting — sending those codes back would waste context tokens.
  */
 export function buildProviderMessages(
   messages: DisplayMessage[],
@@ -17,7 +22,7 @@ export function buildProviderMessages(
       result.push({ role: "user", content: msg.content });
     }
     if (msg.role === "assistant") {
-      result.push({ role: "assistant", content: msg.content });
+      result.push({ role: "assistant", content: stripAnsi(msg.content) });
     }
   }
   return result;

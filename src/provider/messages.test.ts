@@ -43,4 +43,21 @@ describe("buildProviderMessages", () => {
       { role: "assistant", content: "response" },
     ]);
   });
+
+  it("strips ANSI codes from assistant messages", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "assistant",
+        content: "\x1b[1mbold\x1b[0m and \x1b[31mred\x1b[0m text",
+      },
+    ];
+
+    const result = buildProviderMessages(messages, "sys");
+
+    expect(result[1]).toEqual({
+      role: "assistant",
+      content: "bold and red text",
+    });
+  });
 });
