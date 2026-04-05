@@ -33,10 +33,36 @@ export interface InterruptedMessage {
   role: "interrupted";
 }
 
+/** A tool call from the assistant. */
+export interface ToolCallInfo {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+/** An assistant response that includes tool calls. */
+export interface ToolCallMessage {
+  id: string;
+  role: "tool-call";
+  content: string;
+  toolCalls: ToolCallInfo[];
+}
+
+/** The result of executing a tool. */
+export interface ToolResultMessage {
+  id: string;
+  role: "tool-result";
+  toolCallId: string;
+  toolName: string;
+  output: string;
+}
+
 /** Union of all chat message types. Discriminate on `role`. */
 export type ChatMessage =
   | UserMessage
   | AssistantMessage
   | CommandMessage
   | ErrorMessage
-  | InterruptedMessage;
+  | InterruptedMessage
+  | ToolCallMessage
+  | ToolResultMessage;

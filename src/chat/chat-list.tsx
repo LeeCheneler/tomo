@@ -1,7 +1,7 @@
 import { Box, Static, Text } from "ink";
 import type { ReactNode } from "react";
 import { completePartialMarkdown, renderMarkdown } from "../markdown/render";
-import type { ChatMessage } from "./message";
+import type { ChatMessage, ToolCallInfo } from "./message";
 import { theme } from "../ui/theme";
 import { Indent } from "../ui/layout/indent";
 
@@ -75,6 +75,37 @@ function CommandMessageView(props: { command: string; result: string }) {
   );
 }
 
+/** Renders a tool call from the assistant. */
+function ToolCallMessageView(props: { toolCalls: ToolCallInfo[] }) {
+  return (
+    <Box paddingBottom={1}>
+      <Indent>
+        {props.toolCalls.map((tc) => (
+          <Text key={tc.id} dimColor>
+            ⚙ {tc.name}
+          </Text>
+        ))}
+      </Indent>
+    </Box>
+  );
+}
+
+/** Renders a tool execution result. */
+function ToolResultMessageView(props: { toolName: string; output: string }) {
+  return (
+    <Box paddingBottom={1}>
+      <Indent>
+        <Text dimColor>
+          ↳ {props.toolName}:{" "}
+          {props.output.length > 200
+            ? `${props.output.slice(0, 200)}…`
+            : props.output}
+        </Text>
+      </Indent>
+    </Box>
+  );
+}
+
 /** Renders the chat message list. Messages are rendered once and persist on screen. */
 export function ChatList(props: ChatListProps) {
   const items: StaticItem[] = [];
@@ -122,6 +153,23 @@ export function ChatList(props: ChatListProps) {
               key={message.id}
               command={message.command}
               result={message.result}
+            />
+          );
+        }
+        if (message.role === "tool-call") {
+          return (
+            <ToolCallMessageView
+              key={message.id}
+              toolCalls={message.toolCalls}
+            />
+          );
+        }
+        if (message.role === "tool-result") {
+          return (
+            <ToolResultMessageView
+              key={message.id}
+              toolName={message.toolName}
+              output={message.output}
             />
           );
         }

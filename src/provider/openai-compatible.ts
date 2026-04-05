@@ -41,7 +41,7 @@ const toolCallDeltaSchema = z.object({
 
 /** Schema for a single choice delta in an SSE chunk. */
 const deltaSchema = z.object({
-  content: z.string().optional(),
+  content: z.string().nullish(),
   tool_calls: z.array(toolCallDeltaSchema).optional(),
 });
 

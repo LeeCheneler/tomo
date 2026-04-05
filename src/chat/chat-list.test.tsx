@@ -95,6 +95,55 @@ describe("ChatList", () => {
     expect(lastFrame()).toContain("Something went wrong");
   });
 
+  it("renders a tool-call message with tool names", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-call",
+        content: "",
+        toolCalls: [
+          { id: "call_1", name: "read_file", arguments: '{"path":"foo"}' },
+        ],
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("read_file");
+    expect(frame).toContain("⚙");
+  });
+
+  it("renders a tool-result message with tool name and output", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-result",
+        toolCallId: "call_1",
+        toolName: "read_file",
+        output: "file contents here",
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("read_file");
+    expect(frame).toContain("file contents here");
+  });
+
+  it("truncates long tool-result output", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-result",
+        toolCallId: "call_1",
+        toolName: "read_file",
+        output: "x".repeat(300),
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("…");
+    expect(frame).not.toContain("x".repeat(201));
+  });
+
   it("skips unknown message roles", () => {
     const messages = [
       { id: "1", role: "unknown", content: "should not render" },

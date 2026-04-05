@@ -5,6 +5,8 @@ import { newCommand } from "./commands/new";
 import { createCommandRegistry } from "./commands/registry";
 import { sessionCommand } from "./commands/session";
 import { settingsCommand } from "./commands/settings";
+import { readFileTool } from "./tools/read-file";
+import { createToolRegistry } from "./tools/registry";
 
 /** Creates the application command registry with all built-in commands. */
 function buildCommandRegistry() {
@@ -17,9 +19,17 @@ function buildCommandRegistry() {
   return registry;
 }
 
+/** Creates the application tool registry with all built-in tools. */
+function buildToolRegistry() {
+  const registry = createToolRegistry();
+  registry.register(readFileTool);
+  return registry;
+}
+
 /** Root application component. Renders the chat UI. */
 export function App() {
   const commandRegistry = buildCommandRegistry();
+  const toolRegistry = buildToolRegistry();
 
-  return <Chat commandRegistry={commandRegistry} />;
+  return <Chat commandRegistry={commandRegistry} toolRegistry={toolRegistry} />;
 }

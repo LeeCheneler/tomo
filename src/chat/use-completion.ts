@@ -1,10 +1,21 @@
 import { useCallback, useRef, useState } from "react";
 import type { Provider } from "../config/schema";
-import type { ChatMessage, TokenUsage } from "../provider/client";
+import type {
+  ChatMessage,
+  TokenUsage,
+  ToolCall,
+  ToolDefinition,
+} from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 
 /** Completion state machine states. */
 type CompletionState = "idle" | "streaming" | "complete" | "aborted" | "error";
+
+/** Options for a send() call. */
+export interface SendOptions {
+  messages: ChatMessage[];
+  tools?: ToolDefinition[];
+}
 
 /** Return value of useCompletion. */
 export interface UseCompletionResult {
@@ -16,8 +27,10 @@ export interface UseCompletionResult {
   error: string | null;
   /** Token usage, available after the stream completes. */
   usage: TokenUsage | null;
+  /** Tool calls from the completed stream, empty if none. */
+  toolCalls: ToolCall[];
   /** Starts a streaming completion request. Only call when not already streaming. */
-  send: (messages: ChatMessage[]) => void;
+  send: (options: SendOptions) => void;
   /** Aborts the in-flight stream. Keeps partial content and sets state to "complete". */
   abort: () => void;
 }
@@ -39,11 +52,12 @@ export function useCompletion(
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<TokenUsage | null>(null);
+  const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   /** Starts a streaming completion request. */
   const send = useCallback(
-    (messages: ChatMessage[]) => {
+    (options: SendOptions) => {
       if (!provider || !model) return;
 
       // Reset state for new request
@@ -51,6 +65,7 @@ export function useCompletion(
       setContent("");
       setError(null);
       setUsage(null);
+      setToolCalls([]);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -60,8 +75,9 @@ export function useCompletion(
       client
         .streamCompletion({
           model,
-          messages,
+          messages: options.messages,
           signal: controller.signal,
+          tools: options.tools,
         })
         .then(async (stream) => {
           let accumulated = "";
@@ -74,6 +90,7 @@ export function useCompletion(
 
           if (controller.signal.aborted) return;
           setUsage(stream.getUsage());
+          setToolCalls(stream.getToolCalls());
           setState("complete");
         })
         .catch((err: Error) => {
@@ -96,5 +113,5 @@ export function useCompletion(
     setState("aborted");
   }, []);
 
-  return { state, content, error, usage, send, abort };
+  return { state, content, error, usage, toolCalls, send, abort };
 }

@@ -8,6 +8,7 @@ import type {
 } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
 import { useConfig } from "../config/hook";
+import type { ToolDefinition } from "../provider/client";
 import { DEFAULT_CONTEXT_WINDOW } from "../provider/client";
 import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import { buildProviderMessages } from "../provider/messages";
@@ -17,6 +18,9 @@ import {
   createSessionPath,
   readSessionMessages,
 } from "../session/session";
+import type { ToolRegistry } from "../tools/registry";
+import type { ToolContext } from "../tools/types";
+import { parseToolArgs } from "../tools/types";
 import { AppHeader } from "../ui/app-header";
 import { LoadingIndicator } from "../ui/loading-indicator";
 import { version } from "../utils/version";
@@ -37,6 +41,7 @@ type ChatMode =
 /** Props for useChat. */
 interface UseChatProps {
   commandRegistry?: CommandRegistry;
+  toolRegistry: ToolRegistry;
 }
 
 /** Manages mode switching between input, history, and takeover screens. */
@@ -84,14 +89,105 @@ function useChat(props: UseChatProps) {
     });
   }
 
-  // When streaming completes, append the result to the static message list
+  /** Returns tool definitions from the registry, or undefined if none. */
+  function getToolDefinitions(): ToolDefinition[] | undefined {
+    const defs = props.toolRegistry.getDefinitions();
+    return defs.length > 0 ? defs : undefined;
+  }
+
+  // When streaming completes, handle tool calls or append the final response.
   useEffect(() => {
-    if (completion.state === "complete" && completion.content) {
-      appendMessage({
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: completion.content,
-      });
+    if (completion.state === "complete") {
+      if (completion.toolCalls.length > 0) {
+        // Execute tool calls and send results back for another completion round.
+        (async () => {
+          const registry = props.toolRegistry;
+          const toolContext: ToolContext = {
+            permissions: config.permissions,
+            /* v8 ignore start -- placeholder until interactive confirm UI is built */
+            confirm: async () => true,
+            /* v8 ignore stop */
+            signal: new AbortController().signal,
+          };
+
+          // Build messages locally since React state updates from appendMessage
+          // won't be reflected in messagesRef until the next render.
+          const newMessages: ChatMessage[] = [];
+
+          const toolCallMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: "tool-call",
+            content: completion.content,
+            toolCalls: completion.toolCalls.map((tc) => ({
+              id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            })),
+          };
+          appendMessage(toolCallMsg);
+          newMessages.push(toolCallMsg);
+
+          for (const tc of completion.toolCalls) {
+            const tool = registry.get(tc.function.name);
+            if (!tool) {
+              const resultMsg: ChatMessage = {
+                id: crypto.randomUUID(),
+                role: "tool-result",
+                toolCallId: tc.id,
+                toolName: tc.function.name,
+                output: `Unknown tool: ${tc.function.name}`,
+              };
+              appendMessage(resultMsg);
+              newMessages.push(resultMsg);
+              continue;
+            }
+
+            let output: string;
+            try {
+              const parsed = parseToolArgs(
+                tool.argsSchema,
+                tc.function.arguments,
+              );
+              const result = await tool.execute(parsed, toolContext);
+              output = result.output;
+            } catch (e) {
+              /* v8 ignore start -- non-Error throws are unlikely but handled */
+              output = `Tool error: ${e instanceof Error ? e.message : "unknown error"}`;
+              /* v8 ignore stop */
+            }
+
+            const resultMsg: ChatMessage = {
+              id: crypto.randomUUID(),
+              role: "tool-result",
+              toolCallId: tc.id,
+              toolName: tc.function.name,
+              output,
+            };
+            appendMessage(resultMsg);
+            newMessages.push(resultMsg);
+          }
+
+          const allMessages = [...messagesRef.current, ...newMessages];
+          const systemPrompt = buildSystemPrompt();
+          const providerMessages = buildProviderMessages(
+            allMessages,
+            systemPrompt,
+          );
+          const defs = registry.getDefinitions();
+          completion.send({
+            messages: providerMessages,
+            tools: defs.length > 0 ? defs : undefined,
+          });
+        })();
+        return;
+      }
+      if (completion.content) {
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: completion.content,
+        });
+      }
     }
     if (completion.state === "aborted") {
       if (completion.content) {
@@ -113,7 +209,16 @@ function useChat(props: UseChatProps) {
         content: completion.error,
       });
     }
-  }, [completion.state, completion.content, completion.error, appendMessage]);
+  }, [
+    completion.state,
+    completion.content,
+    completion.error,
+    completion.toolCalls,
+    completion.send,
+    appendMessage,
+    props.toolRegistry,
+    config.permissions,
+  ]);
 
   /** Builds the current command context for handler and takeover commands. */
   function buildCommandContext(): CommandContext {
@@ -158,7 +263,10 @@ function useChat(props: UseChatProps) {
       [...messagesRef.current, userMsg],
       systemPrompt,
     );
-    completion.send(providerMessages);
+    completion.send({
+      messages: providerMessages,
+      tools: getToolDefinitions(),
+    });
   }
 
   /** Handles a takeover screen completing. Drops an optional result message and returns to input. */
@@ -226,6 +334,7 @@ function useChat(props: UseChatProps) {
 /** Props for Chat. */
 interface ChatProps {
   commandRegistry?: CommandRegistry;
+  toolRegistry: ToolRegistry;
 }
 
 /** Chat router — renders ChatInput, MessageHistory, or takeover content based on mode. */
@@ -248,6 +357,7 @@ export function Chat(props: ChatProps) {
     handleTakeoverDone,
   } = useChat({
     commandRegistry: props.commandRegistry,
+    toolRegistry: props.toolRegistry,
   });
 
   /* v8 ignore start -- streaming persists across mode changes but testing all combinations is impractical */

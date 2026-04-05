@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
 import { SESSIONS_DIR } from "../session/session";
+import { z } from "zod";
+import { createToolRegistry } from "../tools/registry";
+import { ok } from "../tools/types";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
@@ -40,10 +43,18 @@ describe("Chat", () => {
     setColumns(undefined);
   });
 
+  /** Empty tool registry for tests that don't need tools. */
+  const emptyToolRegistry = createToolRegistry();
+
   /** Renders Chat with a fixed terminal width and optional commandRegistry. */
   function renderChat(commandRegistry?: CommandRegistry) {
     setColumns(COLUMNS);
-    return renderInk(<Chat commandRegistry={commandRegistry} />);
+    return renderInk(
+      <Chat
+        commandRegistry={commandRegistry}
+        toolRegistry={emptyToolRegistry}
+      />,
+    );
   }
 
   describe("input mode", () => {
@@ -356,7 +367,7 @@ describe("Chat", () => {
     /** Renders Chat with a provider configured via config context. */
     function renderChatWithProvider() {
       setColumns(COLUMNS);
-      return renderInk(<Chat />, {
+      return renderInk(<Chat toolRegistry={emptyToolRegistry} />, {
         global: {
           providers: [PROVIDER],
           activeProvider: PROVIDER.name,
@@ -487,6 +498,27 @@ describe("Chat", () => {
       expect(frame).toContain("Hello from LLM");
     });
 
+    it("handles empty completion without appending a message", async () => {
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () =>
+            new HttpResponse("data: [DONE]\n\n", {
+              headers: { "Content-Type": "text/event-stream" },
+            }),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+      const frame = lastFrame() ?? "";
+      // User message is shown but no assistant response
+      expect(frame).toContain("hi");
+      expect(frame).not.toContain("assistant");
+    });
+
     it("shows error message on completion failure", async () => {
       mswServer.use(
         http.post(
@@ -608,7 +640,10 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, fsState } = renderInk(
-        <Chat commandRegistry={commandRegistry} />,
+        <Chat
+          commandRegistry={commandRegistry}
+          toolRegistry={emptyToolRegistry}
+        />,
         {
           global: {
             providers: [PROVIDER],
@@ -660,7 +695,10 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, fsState } = renderInk(
-        <Chat commandRegistry={commandRegistry} />,
+        <Chat
+          commandRegistry={commandRegistry}
+          toolRegistry={emptyToolRegistry}
+        />,
       );
 
       // Send a message so the first session file has content.
@@ -732,7 +770,10 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, fsState } = renderInk(
-        <Chat commandRegistry={commandRegistry} />,
+        <Chat
+          commandRegistry={commandRegistry}
+          toolRegistry={emptyToolRegistry}
+        />,
       );
 
       // Write the session file into the mock fs before invoking the command.
@@ -765,6 +806,297 @@ describe("Chat", () => {
         role: "user",
         content: "new message",
       });
+    });
+  });
+
+  describe("tool execution", () => {
+    const mswServer = setupMsw();
+
+    const PROVIDER = {
+      name: "test-ollama",
+      type: "ollama" as const,
+      baseUrl: "http://localhost:11434",
+    };
+
+    /** Builds an SSE response body from data objects. */
+    function sseBody(chunks: unknown[]): string {
+      return (
+        chunks.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n") +
+        "\n\ndata: [DONE]\n\n"
+      );
+    }
+
+    it("executes tool calls, includes results in follow-up request", async () => {
+      let requestCount = 0;
+      let secondRequestMessages: unknown[] = [];
+
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          async (info) => {
+            requestCount++;
+            if (requestCount === 1) {
+              // First response: LLM requests a tool call
+              return new HttpResponse(
+                sseBody([
+                  {
+                    choices: [
+                      {
+                        delta: {
+                          tool_calls: [
+                            {
+                              index: 0,
+                              id: "call_1",
+                              function: {
+                                name: "test_tool",
+                                arguments: "{}",
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                ]),
+                { headers: { "Content-Type": "text/event-stream" } },
+              );
+            }
+            // Capture the second request to verify tool results were included
+            const body = (await info.request.json()) as {
+              messages: unknown[];
+            };
+            secondRequestMessages = body.messages;
+            return new HttpResponse(
+              sseBody([
+                { choices: [{ delta: { content: "Tool result was: hello" } }] },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          },
+        ),
+      );
+
+      const toolExecute = vi.fn(async () => ok("hello"));
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "test_tool",
+        description: "A test tool",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        execute: toolExecute,
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("use the tool");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Two requests made: first triggers tool call, second sends results
+      expect(requestCount).toBe(2);
+      // Tool was actually executed
+      expect(toolExecute).toHaveBeenCalledOnce();
+      // Final response is rendered
+      expect(lastFrame()).toContain("Tool result was: hello");
+
+      // Second request includes the tool call and result in the message history
+      const toolCallMsg = secondRequestMessages.find(
+        (m: unknown) =>
+          (m as { role: string }).role === "assistant" &&
+          (m as { tool_calls?: unknown[] }).tool_calls,
+      );
+      expect(toolCallMsg).toBeDefined();
+      expect(
+        (toolCallMsg as { tool_calls: { function: { name: string } }[] })
+          .tool_calls[0].function.name,
+      ).toBe("test_tool");
+
+      const toolResultMsg = secondRequestMessages.find(
+        (m: unknown) => (m as { role: string }).role === "tool",
+      );
+      expect(toolResultMsg).toBeDefined();
+      expect((toolResultMsg as { content: string }).content).toBe("hello");
+    });
+
+    it("handles unknown tool calls gracefully", async () => {
+      let requestCount = 0;
+      let secondRequestMessages: unknown[] = [];
+
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          async (info) => {
+            requestCount++;
+            if (requestCount === 1) {
+              return new HttpResponse(
+                sseBody([
+                  {
+                    choices: [
+                      {
+                        delta: {
+                          tool_calls: [
+                            {
+                              index: 0,
+                              id: "call_1",
+                              function: {
+                                name: "nonexistent_tool",
+                                arguments: "{}",
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                ]),
+                { headers: { "Content-Type": "text/event-stream" } },
+              );
+            }
+            const body = (await info.request.json()) as {
+              messages: unknown[];
+            };
+            secondRequestMessages = body.messages;
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [{ delta: { content: "I see the tool failed" } }],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          },
+        ),
+      );
+
+      const toolRegistry = createToolRegistry();
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("call something");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+      expect(lastFrame()).toContain("I see the tool failed");
+
+      // The unknown tool error is sent as a tool result
+      const toolResultMsg = secondRequestMessages.find(
+        (m: unknown) => (m as { role: string }).role === "tool",
+      );
+      expect(toolResultMsg).toBeDefined();
+      expect((toolResultMsg as { content: string }).content).toContain(
+        "Unknown tool",
+      );
+    });
+
+    it("catches tool execution errors and sends error as result", async () => {
+      let requestCount = 0;
+      let secondRequestMessages: unknown[] = [];
+
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          async (info) => {
+            requestCount++;
+            if (requestCount === 1) {
+              return new HttpResponse(
+                sseBody([
+                  {
+                    choices: [
+                      {
+                        delta: {
+                          tool_calls: [
+                            {
+                              index: 0,
+                              id: "call_1",
+                              function: {
+                                name: "broken_tool",
+                                arguments: "{}",
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                ]),
+                { headers: { "Content-Type": "text/event-stream" } },
+              );
+            }
+            const body = (await info.request.json()) as {
+              messages: unknown[];
+            };
+            secondRequestMessages = body.messages;
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [{ delta: { content: "Tool had an error" } }],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          },
+        ),
+      );
+
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "broken_tool",
+        description: "A broken tool",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        execute: async () => {
+          throw new Error("something exploded");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("break it");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+      expect(lastFrame()).toContain("Tool had an error");
+
+      // The error message was sent as a tool result
+      const toolResultMsg = secondRequestMessages.find(
+        (m: unknown) => (m as { role: string }).role === "tool",
+      );
+      expect(toolResultMsg).toBeDefined();
+      expect((toolResultMsg as { content: string }).content).toContain(
+        "something exploded",
+      );
     });
   });
 });
