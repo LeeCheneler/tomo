@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/file";
-import { mockConfig } from "../test-utils/mock-config";
+import type { RenderInkConfig } from "../test-utils/ink";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { ProvidersScreen } from "./providers";
 
 const COLUMNS = 80;
@@ -34,7 +33,6 @@ const OPENROUTER_PROVIDER = {
 
 describe("ProvidersScreen", () => {
   const server = setupMsw();
-  let fsState: MockFsState;
 
   // Default handler so connection checks don't leak unhandled requests.
   // Individual tests override with server.use() when they need specific responses.
@@ -53,19 +51,17 @@ describe("ProvidersScreen", () => {
   });
 
   afterEach(() => {
-    fsState?.restore();
     setColumns(undefined);
   });
 
   /** Renders ProvidersScreen with mocked config and fixed terminal width. */
-  function renderProviders(
-    config: Parameters<typeof mockConfig>[0] = { global: {} },
-  ) {
+  function renderProviders(config: RenderInkConfig = {}) {
     setColumns(COLUMNS);
-    fsState = mockConfig(config);
     const onBack = vi.fn();
-    const result = renderInk(<ProvidersScreen onBack={onBack} />);
-    return { ...result, onBack };
+    return {
+      ...renderInk(<ProvidersScreen onBack={onBack} />, config),
+      onBack,
+    };
   }
 
   describe("rendering", () => {

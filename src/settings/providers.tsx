@@ -103,7 +103,7 @@ interface ConnectionStatus {
 
 /** Manages provider list state, persistence, and options form routing. */
 function useProvidersScreen(props: ProvidersScreenProps) {
-  const config = useConfig();
+  const { config } = useConfig();
   const [providers, setProviders] = useState<Provider[]>(
     () => config.providers,
   );

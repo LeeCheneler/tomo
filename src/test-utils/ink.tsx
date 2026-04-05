@@ -1,5 +1,10 @@
 import { render as inkRender } from "ink-testing-library";
 import type { ReactElement } from "react";
+import { afterEach } from "vitest";
+import { ConfigProvider } from "../config/hook";
+import type { Config } from "../config/schema";
+import type { MockFsState } from "./mock-fs";
+import { mockConfig } from "./mock-config";
 
 /**
  * Flushes Ink's pending input parser and React re-renders.
@@ -19,6 +24,12 @@ interface AsyncStdin {
   write: (data: string) => Promise<void>;
 }
 
+/** Config options for renderInk. Mirrors mockConfig's shape. */
+export interface RenderInkConfig {
+  global?: Partial<Config>;
+  local?: Partial<Config>;
+}
+
 /** Return value of renderInk. Same as ink-testing-library's render but with async stdin.write. */
 export interface InkRenderResult {
   stdin: AsyncStdin;
@@ -27,18 +38,41 @@ export interface InkRenderResult {
   rerender: (tree: ReactElement) => void;
   unmount: () => void;
   cleanup: () => void;
+  /** Mock filesystem state. Call restore() in afterEach. */
+  fsState: MockFsState;
 }
 
 /**
- * Wraps ink-testing-library's render with auto-flushing stdin.
+ * Wraps ink-testing-library's render with auto-flushing stdin and ConfigProvider.
  *
  * Every `stdin.write()` call automatically waits for Ink's input parser
  * and React re-renders to complete, eliminating manual `flushInkFrames()`
  * calls in tests.
+ *
+ * The tree is wrapped in a ConfigProvider backed by a mock filesystem.
+ * Pass config overrides via the second argument to customise the config
+ * for a specific test.
+ *
+ * Cleanup is automatic — an `afterEach` hook is registered that unmounts
+ * the Ink instance and restores the mock filesystem. Tests do not need to
+ * call cleanup() or fsState.restore() manually.
  */
-export function renderInk(tree: ReactElement): InkRenderResult {
-  const result = inkRender(tree);
+export function renderInk(
+  tree: ReactElement,
+  config: RenderInkConfig = {},
+): InkRenderResult {
+  const fsState = mockConfig({
+    global: config.global ?? {},
+    ...(config.local && { local: config.local }),
+  });
+
+  const result = inkRender(<ConfigProvider>{tree}</ConfigProvider>);
   const originalWrite = result.stdin.write;
+
+  afterEach(() => {
+    result.cleanup();
+    fsState.restore();
+  });
 
   return {
     lastFrame: result.lastFrame,
@@ -46,6 +80,7 @@ export function renderInk(tree: ReactElement): InkRenderResult {
     rerender: result.rerender,
     unmount: result.unmount,
     cleanup: result.cleanup,
+    fsState,
     stdin: {
       async write(data: string) {
         originalWrite(data);

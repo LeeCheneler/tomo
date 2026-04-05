@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/file";
-import { mockConfig } from "../test-utils/mock-config";
+import type { RenderInkConfig } from "../test-utils/ink";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { ToolsScreen } from "./tools";
 
 const COLUMNS = 40;
@@ -18,22 +17,15 @@ function setColumns(width: number | undefined) {
 }
 
 describe("ToolsScreen", () => {
-  let fsState: MockFsState;
-
   afterEach(() => {
-    fsState?.restore();
     setColumns(undefined);
   });
 
   /** Renders ToolsScreen with mocked config and fixed terminal width. */
-  function renderTools(
-    config: Parameters<typeof mockConfig>[0] = { global: {} },
-  ) {
+  function renderTools(config: RenderInkConfig = {}) {
     setColumns(COLUMNS);
-    fsState = mockConfig(config);
     const onBack = vi.fn();
-    const result = renderInk(<ToolsScreen onBack={onBack} />);
-    return { ...result, onBack };
+    return { ...renderInk(<ToolsScreen onBack={onBack} />, config), onBack };
   }
 
   describe("rendering", () => {
@@ -227,7 +219,6 @@ describe("ToolsScreen", () => {
   describe("terminal width fallback", () => {
     it("uses 80 as default width when columns is undefined", () => {
       setColumns(undefined);
-      fsState = mockConfig({ global: {} });
       const onBack = vi.fn();
       const { lastFrame } = renderInk(<ToolsScreen onBack={onBack} />);
       expect(lastFrame()).toContain("─".repeat(80));

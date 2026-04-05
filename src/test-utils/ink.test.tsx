@@ -1,6 +1,8 @@
 import { Text, useInput } from "ink";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
+import { useConfig } from "../config/hook";
+import type { Config } from "../config/schema";
 import { keys } from "./keys";
 import { renderInk } from "./ink";
 
@@ -14,6 +16,54 @@ describe("renderInk", () => {
     const { stdin } = renderInk(<Text>test</Text>);
     const result = stdin.write("x");
     expect(result).toBeInstanceOf(Promise);
+  });
+
+  it("provides default config via ConfigProvider", () => {
+    let captured: Config | undefined;
+
+    /** Captures config from context. */
+    function Harness() {
+      const { config } = useConfig();
+      captured = config;
+      return null;
+    }
+
+    renderInk(<Harness />);
+    expect(captured).toBeDefined();
+    expect(captured?.providers).toEqual([]);
+  });
+
+  it("provides global config overrides via second argument", () => {
+    let captured: Config | undefined;
+
+    /** Captures config from context. */
+    function Harness() {
+      const { config } = useConfig();
+      captured = config;
+      return null;
+    }
+
+    renderInk(<Harness />, {
+      global: { activeModel: "llama3", activeProvider: "my-ollama" },
+    });
+    expect(captured?.activeModel).toBe("llama3");
+    expect(captured?.activeProvider).toBe("my-ollama");
+  });
+
+  it("provides local config overrides via second argument", () => {
+    let captured: Config | undefined;
+
+    /** Captures config from context. */
+    function Harness() {
+      const { config } = useConfig();
+      captured = config;
+      return null;
+    }
+
+    renderInk(<Harness />, {
+      local: { allowedCommands: ["npm test"] },
+    });
+    expect(captured?.allowedCommands).toEqual(["npm test"]);
   });
 
   it("stdin.write auto-flushes so escape key state is visible", async () => {

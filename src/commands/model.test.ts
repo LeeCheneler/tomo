@@ -1,22 +1,14 @@
 import { createElement, Fragment } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { mockConfig } from "../test-utils/mock-config";
+import { describe, expect, it, vi } from "vitest";
 import { renderInk } from "../test-utils/ink";
-import type { MockFsState } from "../test-utils/mock-fs";
 import type { CommandContext } from "./registry";
-
-/** Default context for tests. */
-const DEFAULT_CONTEXT: CommandContext = { usage: null, contextWindow: 8192 };
 import { modelCommand } from "./model";
 import { createCommandRegistry } from "./registry";
 
+/** Default context for tests. */
+const DEFAULT_CONTEXT: CommandContext = { usage: null, contextWindow: 8192 };
+
 describe("modelCommand", () => {
-  let fsState: MockFsState;
-
-  afterEach(() => {
-    fsState?.restore();
-  });
-
   it("is named model", () => {
     expect(modelCommand.name).toBe("model");
   });
@@ -29,7 +21,6 @@ describe("modelCommand", () => {
   });
 
   it("renders the model selector when invoked", async () => {
-    fsState = mockConfig({ global: {} });
     const registry = createCommandRegistry();
     registry.register(modelCommand);
     const result = await registry.invoke("/model", DEFAULT_CONTEXT);

@@ -39,7 +39,7 @@ function buildProviderItems(
 
 /** Manages model selector step routing. */
 function useModelSelector(props: ModelSelectorProps) {
-  const config = useConfig();
+  const { config } = useConfig();
   const [providers] = useState<Provider[]>(() => config.providers);
   const [step, setStep] = useState<Step>({ kind: "providers" });
 

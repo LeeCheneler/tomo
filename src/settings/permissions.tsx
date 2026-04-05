@@ -45,7 +45,7 @@ export interface PermissionsScreenProps {
 
 /** Manages permissions state and persistence. */
 function usePermissionsScreen(props: PermissionsScreenProps) {
-  const config = useConfig();
+  const { config } = useConfig();
   const [permissions, setPermissions] = useState<Permissions>(
     () => config.permissions,
   );

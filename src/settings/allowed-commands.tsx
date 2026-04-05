@@ -23,7 +23,7 @@ export interface AllowedCommandsScreenProps {
 
 /** Manages allowed commands state and persistence. */
 function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
-  const config = useConfig();
+  const { config } = useConfig();
   const [commands, setCommands] = useState<string[]>(
     () => config.allowedCommands,
   );

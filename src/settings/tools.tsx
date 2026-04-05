@@ -104,7 +104,7 @@ interface ActiveToolOptions {
 
 /** Manages tools state, persistence, and sub-screen routing. */
 function useToolsScreen(props: ToolsScreenProps) {
-  const config = useConfig();
+  const { config } = useConfig();
   const [tools, setTools] = useState<Tools>(() => config.tools);
   const [activeOptions, setActiveOptions] = useState<ActiveToolOptions | null>(
     null,

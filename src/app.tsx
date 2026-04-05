@@ -19,7 +19,7 @@ function buildCommandRegistry() {
 
 /** Root application component. Renders the header and chat UI. */
 export function App() {
-  const config = useConfig();
+  const { config } = useConfig();
   const commandRegistry = buildCommandRegistry();
   const staticItems = [{ id: "__header__" }];
 

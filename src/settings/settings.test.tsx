@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { Settings } from "./settings";
 
 const COLUMNS = 40;
@@ -17,20 +15,15 @@ function setColumns(width: number | undefined) {
 }
 
 describe("Settings", () => {
-  let fsState: MockFsState;
-
   afterEach(() => {
-    fsState?.restore();
     setColumns(undefined);
   });
 
   /** Renders Settings with a spy onDone callback, mocked config, and fixed terminal width. */
   function renderSettings() {
     setColumns(COLUMNS);
-    fsState = mockConfig({ global: {} });
     const onDone = vi.fn();
-    const result = renderInk(<Settings onDone={onDone} />);
-    return { ...result, onDone };
+    return { ...renderInk(<Settings onDone={onDone} />), onDone };
   }
 
   describe("menu", () => {

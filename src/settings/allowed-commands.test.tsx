@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/file";
-import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { AllowedCommandsScreen } from "./allowed-commands";
 
 const COLUMNS = 40;
@@ -18,26 +16,23 @@ function setColumns(width: number | undefined) {
 }
 
 describe("AllowedCommandsScreen", () => {
-  let fsState: MockFsState;
-
   afterEach(() => {
-    fsState?.restore();
     setColumns(undefined);
   });
 
   /** Renders AllowedCommandsScreen with mocked config and fixed terminal width. */
   function renderAllowedCommands(localOverrides: Record<string, unknown> = {}) {
     setColumns(COLUMNS);
-    fsState = mockConfig({
-      global: {},
-      local: {
-        allowedCommands: ["npm test", "npm run build"],
-        ...localOverrides,
-      },
-    });
     const onBack = vi.fn();
-    const result = renderInk(<AllowedCommandsScreen onBack={onBack} />);
-    return { ...result, onBack };
+    return {
+      ...renderInk(<AllowedCommandsScreen onBack={onBack} />, {
+        local: {
+          allowedCommands: ["npm test", "npm run build"],
+          ...localOverrides,
+        },
+      }),
+      onBack,
+    };
   }
 
   describe("rendering", () => {
@@ -67,7 +62,6 @@ describe("AllowedCommandsScreen", () => {
 
     it("falls back to 80 columns when undefined", () => {
       setColumns(undefined);
-      fsState = mockConfig({ global: {} });
       const { lastFrame } = renderInk(
         <AllowedCommandsScreen onBack={() => {}} />,
       );
