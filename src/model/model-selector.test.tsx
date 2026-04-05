@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/file";
-import { mockConfig } from "../test-utils/mock-config";
+import type { RenderInkConfig } from "../test-utils/ink";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { ModelSelector } from "./model-selector";
 
 const COLUMNS = 80;
@@ -34,7 +33,6 @@ const OPENROUTER_PROVIDER = {
 
 describe("ModelSelector", () => {
   const server = setupMsw();
-  let fsState: MockFsState;
 
   // Default handler so model fetches don't leak unhandled requests.
   // Individual tests override with server.use() when they need specific responses.
@@ -47,19 +45,14 @@ describe("ModelSelector", () => {
   });
 
   afterEach(() => {
-    fsState?.restore();
     setColumns(undefined);
   });
 
   /** Renders ModelSelector with mocked config. */
-  function renderModelSelector(
-    config: Parameters<typeof mockConfig>[0] = { global: {} },
-  ) {
+  function renderModelSelector(config: RenderInkConfig = {}) {
     setColumns(COLUMNS);
-    fsState = mockConfig(config);
     const onDone = vi.fn();
-    const result = renderInk(<ModelSelector onDone={onDone} />);
-    return { ...result, onDone };
+    return { ...renderInk(<ModelSelector onDone={onDone} />, config), onDone };
   }
 
   describe("provider list", () => {
@@ -175,7 +168,7 @@ describe("ModelSelector", () => {
         ),
       );
 
-      const { stdin, onDone } = renderModelSelector({
+      const { stdin, onDone, getConfig } = renderModelSelector({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.enter);
@@ -185,6 +178,9 @@ describe("ModelSelector", () => {
       const config = loadConfig();
       expect(config.activeProvider).toBe("my-ollama");
       expect(config.activeModel).toBe("llama3");
+      // Verify config context was reloaded
+      expect(getConfig().activeProvider).toBe("my-ollama");
+      expect(getConfig().activeModel).toBe("llama3");
     });
 
     it("shows error message on fetch failure", async () => {

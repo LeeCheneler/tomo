@@ -1,11 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/file";
-import { mockConfig } from "../test-utils/mock-config";
+import type { RenderInkConfig } from "../test-utils/ink";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { PermissionsScreen } from "./permissions";
-import { vi } from "vitest";
 
 const COLUMNS = 40;
 
@@ -19,22 +17,18 @@ function setColumns(width: number | undefined) {
 }
 
 describe("PermissionsScreen", () => {
-  let fsState: MockFsState;
-
   afterEach(() => {
-    fsState?.restore();
     setColumns(undefined);
   });
 
   /** Renders PermissionsScreen with mocked config and fixed terminal width. */
-  function renderPermissions(
-    config: Parameters<typeof mockConfig>[0] = { global: {} },
-  ) {
+  function renderPermissions(config: RenderInkConfig = {}) {
     setColumns(COLUMNS);
-    fsState = mockConfig(config);
     const onBack = vi.fn();
-    const result = renderInk(<PermissionsScreen onBack={onBack} />);
-    return { ...result, onBack };
+    return {
+      ...renderInk(<PermissionsScreen onBack={onBack} />, config),
+      onBack,
+    };
   }
 
   describe("rendering", () => {
@@ -93,13 +87,14 @@ describe("PermissionsScreen", () => {
 
   describe("toggling", () => {
     it("toggles a permission on space and persists to config", async () => {
-      const { stdin, lastFrame } = renderPermissions({ global: {} });
+      const { stdin, lastFrame, getConfig } = renderPermissions({ global: {} });
       // cwdReadFile starts as true, toggle it off
       await stdin.write(keys.space);
       expect(lastFrame()).toContain("[ ] Read files (current directory)");
-      // Verify persisted
+      // Verify persisted to disk and reloaded into context
       const config = loadConfig();
       expect(config.permissions.cwdReadFile).toBe(false);
+      expect(getConfig().permissions.cwdReadFile).toBe(false);
     });
 
     it("toggles a permission on space", async () => {
@@ -130,7 +125,6 @@ describe("PermissionsScreen", () => {
   describe("terminal width fallback", () => {
     it("uses 80 as default width when columns is undefined", () => {
       setColumns(undefined);
-      fsState = mockConfig({ global: {} });
       const onBack = vi.fn();
       const { lastFrame } = renderInk(<PermissionsScreen onBack={onBack} />);
       expect(lastFrame()).toContain("─".repeat(80));

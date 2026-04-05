@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/file";
-import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { AllowedCommandsScreen } from "./allowed-commands";
 
 const COLUMNS = 40;
@@ -18,26 +16,23 @@ function setColumns(width: number | undefined) {
 }
 
 describe("AllowedCommandsScreen", () => {
-  let fsState: MockFsState;
-
   afterEach(() => {
-    fsState?.restore();
     setColumns(undefined);
   });
 
   /** Renders AllowedCommandsScreen with mocked config and fixed terminal width. */
   function renderAllowedCommands(localOverrides: Record<string, unknown> = {}) {
     setColumns(COLUMNS);
-    fsState = mockConfig({
-      global: {},
-      local: {
-        allowedCommands: ["npm test", "npm run build"],
-        ...localOverrides,
-      },
-    });
     const onBack = vi.fn();
-    const result = renderInk(<AllowedCommandsScreen onBack={onBack} />);
-    return { ...result, onBack };
+    return {
+      ...renderInk(<AllowedCommandsScreen onBack={onBack} />, {
+        local: {
+          allowedCommands: ["npm test", "npm run build"],
+          ...localOverrides,
+        },
+      }),
+      onBack,
+    };
   }
 
   describe("rendering", () => {
@@ -67,7 +62,6 @@ describe("AllowedCommandsScreen", () => {
 
     it("falls back to 80 columns when undefined", () => {
       setColumns(undefined);
-      fsState = mockConfig({ global: {} });
       const { lastFrame } = renderInk(
         <AllowedCommandsScreen onBack={() => {}} />,
       );
@@ -77,7 +71,7 @@ describe("AllowedCommandsScreen", () => {
 
   describe("adding a command", () => {
     it("persists a new command to config", async () => {
-      const { stdin } = renderAllowedCommands();
+      const { stdin, getConfig } = renderAllowedCommands();
       // Cursor starts on add row
       await stdin.write("npm lint");
       await stdin.write(keys.enter);
@@ -87,6 +81,8 @@ describe("AllowedCommandsScreen", () => {
         "npm run build",
         "npm lint",
       ]);
+      // Verify config context was reloaded
+      expect(getConfig().allowedCommands).toEqual(config.allowedCommands);
     });
 
     it("rejects duplicate commands", async () => {
@@ -100,19 +96,21 @@ describe("AllowedCommandsScreen", () => {
 
   describe("editing a command", () => {
     it("persists an edited command to config", async () => {
-      const { stdin } = renderAllowedCommands();
+      const { stdin, getConfig } = renderAllowedCommands();
       // Navigate to first item (down wraps from add row to item 0)
       await stdin.write(keys.down);
       await stdin.write(" --watch");
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.allowedCommands).toContain("npm test --watch");
+      // Verify config context was reloaded
+      expect(getConfig().allowedCommands).toContain("npm test --watch");
     });
   });
 
   describe("removing a command", () => {
     it("persists removal to config on enter when empty", async () => {
-      const { stdin } = renderAllowedCommands();
+      const { stdin, getConfig } = renderAllowedCommands();
       // Navigate to first item
       await stdin.write(keys.down);
       // Clear "npm test" (8 chars) then enter to remove
@@ -122,6 +120,8 @@ describe("AllowedCommandsScreen", () => {
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.allowedCommands).toEqual(["npm run build"]);
+      // Verify config context was reloaded
+      expect(getConfig().allowedCommands).toEqual(["npm run build"]);
     });
   });
 

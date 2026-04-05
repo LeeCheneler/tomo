@@ -3,11 +3,9 @@ import { Text, useInput } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
-import { mockConfig } from "../test-utils/mock-config";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { Chat } from "./chat";
 
 vi.mock("node:os", async (importOriginal) => ({
@@ -339,7 +337,6 @@ describe("Chat", () => {
 
   describe("completion", () => {
     const mswServer = setupMsw();
-    let fsState: MockFsState;
 
     /** Builds an SSE response body from data objects. */
     function sseBody(chunks: unknown[]): string {
@@ -355,15 +352,16 @@ describe("Chat", () => {
       baseUrl: "http://localhost:11434",
     };
 
-    afterEach(() => {
-      fsState?.restore();
-    });
-
-    /** Renders Chat with a provider configured. */
+    /** Renders Chat with a provider configured via config context. */
     function renderChatWithProvider() {
       setColumns(COLUMNS);
-      fsState = mockConfig({ global: { providers: [PROVIDER] } });
-      return renderInk(<Chat provider={PROVIDER} model="llama3" />);
+      return renderInk(<Chat />, {
+        global: {
+          providers: [PROVIDER],
+          activeProvider: PROVIDER.name,
+          activeModel: "llama3",
+        },
+      });
     }
 
     it("shows live streaming content below message list", async () => {

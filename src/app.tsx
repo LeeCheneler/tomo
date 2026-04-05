@@ -19,7 +19,7 @@ function buildCommandRegistry() {
 
 /** Root application component. Renders the header and chat UI. */
 export function App() {
-  const config = useConfig();
+  const { config } = useConfig();
   const commandRegistry = buildCommandRegistry();
   const staticItems = [{ id: "__header__" }];
 
@@ -36,13 +36,7 @@ export function App() {
           </Box>
         )}
       </Static>
-      <Chat
-        commandRegistry={commandRegistry}
-        provider={
-          config.providers.find((p) => p.name === config.activeProvider) ?? null
-        }
-        model={config.activeModel ?? null}
-      />
+      <Chat commandRegistry={commandRegistry} />
     </>
   );
 }

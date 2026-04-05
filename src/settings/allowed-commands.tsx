@@ -23,7 +23,7 @@ export interface AllowedCommandsScreenProps {
 
 /** Manages allowed commands state and persistence. */
 function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
-  const config = useConfig();
+  const { config, reload } = useConfig();
   const [commands, setCommands] = useState<string[]>(
     () => config.allowedCommands,
   );
@@ -33,6 +33,7 @@ function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
     const updated = [...commands, value];
     setCommands(updated);
     updateAllowedCommands(updated);
+    reload();
   }
 
   /** Removes a command by index and saves to local config. */
@@ -40,6 +41,7 @@ function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
     const updated = commands.filter((_, i) => i !== index);
     setCommands(updated);
     updateAllowedCommands(updated);
+    reload();
   }
 
   /** Updates a command at the given index and saves to local config. */
@@ -47,6 +49,7 @@ function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
     const updated = commands.map((cmd, i) => (i === index ? value : cmd));
     setCommands(updated);
     updateAllowedCommands(updated);
+    reload();
   }
 
   return {

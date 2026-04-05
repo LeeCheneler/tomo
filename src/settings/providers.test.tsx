@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/file";
-import { mockConfig } from "../test-utils/mock-config";
+import type { RenderInkConfig } from "../test-utils/ink";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
-import type { MockFsState } from "../test-utils/mock-fs";
 import { ProvidersScreen } from "./providers";
 
 const COLUMNS = 80;
@@ -34,7 +33,6 @@ const OPENROUTER_PROVIDER = {
 
 describe("ProvidersScreen", () => {
   const server = setupMsw();
-  let fsState: MockFsState;
 
   // Default handler so connection checks don't leak unhandled requests.
   // Individual tests override with server.use() when they need specific responses.
@@ -53,19 +51,17 @@ describe("ProvidersScreen", () => {
   });
 
   afterEach(() => {
-    fsState?.restore();
     setColumns(undefined);
   });
 
   /** Renders ProvidersScreen with mocked config and fixed terminal width. */
-  function renderProviders(
-    config: Parameters<typeof mockConfig>[0] = { global: {} },
-  ) {
+  function renderProviders(config: RenderInkConfig = {}) {
     setColumns(COLUMNS);
-    fsState = mockConfig(config);
     const onBack = vi.fn();
-    const result = renderInk(<ProvidersScreen onBack={onBack} />);
-    return { ...result, onBack };
+    return {
+      ...renderInk(<ProvidersScreen onBack={onBack} />, config),
+      onBack,
+    };
   }
 
   describe("rendering", () => {
@@ -117,7 +113,7 @@ describe("ProvidersScreen", () => {
 
   describe("adding providers", () => {
     it("adds a provider with ollama defaults on enter", async () => {
-      const { stdin, lastFrame } = renderProviders();
+      const { stdin, lastFrame, getConfig } = renderProviders();
       await stdin.write("my-ollama");
       await stdin.write(keys.enter);
       expect(lastFrame()).toContain("my-ollama");
@@ -126,6 +122,8 @@ describe("ProvidersScreen", () => {
       expect(config.providers[0].name).toBe("my-ollama");
       expect(config.providers[0].type).toBe("ollama");
       expect(config.providers[0].baseUrl).toBe("http://localhost:11434");
+      // Verify config context was reloaded
+      expect(getConfig().providers).toHaveLength(1);
     });
 
     it("does not add duplicate provider names", async () => {
@@ -148,7 +146,7 @@ describe("ProvidersScreen", () => {
 
   describe("removing providers", () => {
     it("removes a provider when enter is pressed on empty draft", async () => {
-      const { stdin } = renderProviders({
+      const { stdin, getConfig } = renderProviders({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       // Navigate to provider
@@ -160,12 +158,14 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.providers).toHaveLength(0);
+      // Verify config context was reloaded
+      expect(getConfig().providers).toHaveLength(0);
     });
   });
 
   describe("renaming providers", () => {
     it("renames a provider on enter with changed draft", async () => {
-      const { stdin } = renderProviders({
+      const { stdin, getConfig } = renderProviders({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.up);
@@ -173,6 +173,8 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.providers[0].name).toBe("my-ollama-renamed");
+      // Verify config context was reloaded
+      expect(getConfig().providers[0].name).toBe("my-ollama-renamed");
     });
 
     it("preserves provider type and url when renaming", async () => {
@@ -289,7 +291,7 @@ describe("ProvidersScreen", () => {
     });
 
     it("saves changes on enter", async () => {
-      const { stdin } = renderProviders({
+      const { stdin, getConfig } = renderProviders({
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.up);
@@ -302,6 +304,8 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.enter);
       const config = loadConfig();
       expect(config.providers[0].apiKey).toBe("sk-saved");
+      // Verify config context was reloaded
+      expect(getConfig().providers[0].apiKey).toBe("sk-saved");
     });
 
     it("returns to list after saving", async () => {
