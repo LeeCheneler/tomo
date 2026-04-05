@@ -20,8 +20,8 @@ afterEach(() => {
   vi.mocked(execSync).mockReset();
 });
 
-/** Configures execSync to return different values based on the command string. */
-function mockGitCommands(commands: Record<string, string>) {
+/** Configures execSync to return different values based on command substring matching. */
+function mockCommands(commands: Record<string, string>) {
   vi.mocked(execSync).mockImplementation((cmd) => {
     const command = String(cmd);
     for (const [pattern, value] of Object.entries(commands)) {
@@ -33,7 +33,7 @@ function mockGitCommands(commands: Record<string, string>) {
 
 describe("isGitRepo", () => {
   it("returns true when rev-parse succeeds", () => {
-    mockGitCommands({ "rev-parse --is-inside-work-tree": "true" });
+    mockCommands({ "rev-parse --is-inside-work-tree": "true" });
     expect(isGitRepo("/repo")).toBe(true);
   });
 
@@ -47,14 +47,14 @@ describe("isGitRepo", () => {
 
 describe("getGitBranch", () => {
   it("returns the current branch name", () => {
-    mockGitCommands({ "rev-parse --abbrev-ref HEAD": "feat/my-branch\n" });
+    mockCommands({ "rev-parse --abbrev-ref HEAD": "feat/my-branch\n" });
     expect(getGitBranch("/repo")).toBe("feat/my-branch");
   });
 });
 
 describe("getDefaultBranch", () => {
   it("returns the default branch from origin HEAD", () => {
-    mockGitCommands({
+    mockCommands({
       "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/develop\n",
     });
     expect(getDefaultBranch("/repo")).toBe("develop");
@@ -70,31 +70,31 @@ describe("getDefaultBranch", () => {
 
 describe("getGitStatusSummary", () => {
   it("returns clean when status is empty", () => {
-    mockGitCommands({ "status --porcelain": "" });
+    mockCommands({ "status --porcelain": "" });
     expect(getGitStatusSummary("/repo")).toBe("clean");
   });
 
   it("returns singular file count for one change", () => {
-    mockGitCommands({ "status --porcelain": " M file.ts\n" });
+    mockCommands({ "status --porcelain": " M file.ts\n" });
     expect(getGitStatusSummary("/repo")).toBe("1 changed file");
   });
 
   it("returns plural file count for multiple changes", () => {
-    mockGitCommands({ "status --porcelain": " M a.ts\n M b.ts\n M c.ts\n" });
+    mockCommands({ "status --porcelain": " M a.ts\n M b.ts\n M c.ts\n" });
     expect(getGitStatusSummary("/repo")).toBe("3 changed files");
   });
 });
 
 describe("getGitLog", () => {
   it("returns commit log output", () => {
-    mockGitCommands({ "log --oneline": "abc1234 first commit\n" });
+    mockCommands({ "log --oneline": "abc1234 first commit\n" });
     expect(getGitLog("/repo", 5)).toBe("abc1234 first commit");
   });
 });
 
 describe("getGitRemoteUrl", () => {
   it("returns the origin remote URL", () => {
-    mockGitCommands({
+    mockCommands({
       "remote get-url origin": "git@github.com:user/repo.git\n",
     });
     expect(getGitRemoteUrl("/repo")).toBe("git@github.com:user/repo.git");
@@ -110,14 +110,14 @@ describe("getGitRemoteUrl", () => {
 
 describe("isGitHubRemote", () => {
   it("returns true when remote contains github.com", () => {
-    mockGitCommands({
+    mockCommands({
       "remote get-url origin": "git@github.com:user/repo.git\n",
     });
     expect(isGitHubRemote("/repo")).toBe(true);
   });
 
   it("returns false when remote does not contain github.com", () => {
-    mockGitCommands({
+    mockCommands({
       "remote get-url origin": "git@gitlab.com:user/repo.git\n",
     });
     expect(isGitHubRemote("/repo")).toBe(false);
@@ -133,7 +133,7 @@ describe("isGitHubRemote", () => {
 
 describe("isGhCliAvailable", () => {
   it("returns true when which gh succeeds", () => {
-    mockGitCommands({ "which gh": "/usr/local/bin/gh\n" });
+    mockCommands({ "which gh": "/usr/local/bin/gh\n" });
     expect(isGhCliAvailable()).toBe(true);
   });
 
@@ -154,7 +154,7 @@ describe("getGitContext", () => {
   });
 
   it("returns formatted context with branch, status, and commits", () => {
-    mockGitCommands({
+    mockCommands({
       "rev-parse --is-inside-work-tree": "true",
       "rev-parse --abbrev-ref HEAD": "feat/my-branch\n",
       "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
@@ -174,7 +174,7 @@ describe("getGitContext", () => {
   });
 
   it("omits recent commits section when log is empty", () => {
-    mockGitCommands({
+    mockCommands({
       "rev-parse --is-inside-work-tree": "true",
       "rev-parse --abbrev-ref HEAD": "main\n",
       "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
@@ -189,7 +189,7 @@ describe("getGitContext", () => {
   });
 
   it("includes GitHub hint when remote is GitHub and gh is available", () => {
-    mockGitCommands({
+    mockCommands({
       "rev-parse --is-inside-work-tree": "true",
       "rev-parse --abbrev-ref HEAD": "main\n",
       "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
