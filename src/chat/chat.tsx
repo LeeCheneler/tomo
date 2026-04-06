@@ -76,6 +76,9 @@ function useChat(props: UseChatProps) {
   const sessionPath = useRef(createSessionPath());
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  const permissionsRef = useRef(config.permissions);
+  permissionsRef.current = config.permissions;
+  const handledStateRef = useRef<string | null>(null);
 
   // Fetch the real context window size when provider/model are configured
   useEffect(() => {
@@ -111,14 +114,27 @@ function useChat(props: UseChatProps) {
   }
 
   // When streaming completes, handle tool calls or append the final response.
+  // Guard against duplicate handling: other deps (e.g. completion.send) can
+  // change without a real state transition, so skip if we already handled this state.
   useEffect(() => {
+    if (
+      completion.state === "idle" ||
+      completion.state === "streaming" ||
+      completion.state === handledStateRef.current
+    ) {
+      return;
+    }
+    handledStateRef.current = completion.state;
+
     if (completion.state === "complete") {
       if (completion.toolCalls.length > 0) {
         // Execute tool calls and send results back for another completion round.
+        // Reset handled state so the next completion transition is processed.
+        handledStateRef.current = null;
         (async () => {
           const registry = props.toolRegistry;
           const toolContext: ToolContext = {
-            permissions: config.permissions,
+            permissions: permissionsRef.current,
             confirm: (message, options) =>
               new Promise<boolean>((resolve) => {
                 confirmResolveRef.current = resolve;
@@ -189,7 +205,6 @@ function useChat(props: UseChatProps) {
     completion.send,
     appendMessage,
     props.toolRegistry,
-    config.permissions,
   ]);
 
   /** Builds the current command context for handler and takeover commands. */
@@ -235,6 +250,7 @@ function useChat(props: UseChatProps) {
       [...messagesRef.current, userMsg],
       systemPrompt,
     );
+    handledStateRef.current = null;
     completion.send({
       messages: providerMessages,
       tools: getToolDefinitions(),

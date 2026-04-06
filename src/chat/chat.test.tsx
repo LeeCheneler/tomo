@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useEffect } from "react";
 import { Text, useInput } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
@@ -10,6 +10,7 @@ import { ok } from "../tools/types";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
+import { useConfig } from "../config/hook";
 import { Chat } from "./chat";
 
 vi.mock("node:os", async (importOriginal) => ({
@@ -370,15 +371,21 @@ describe("Chat", () => {
     };
 
     /** Renders Chat with a provider configured via config context. */
-    function renderChatWithProvider() {
+    function renderChatWithProvider(commandRegistry?: CommandRegistry) {
       setColumns(COLUMNS);
-      return renderInk(<Chat toolRegistry={emptyToolRegistry} />, {
-        global: {
-          providers: [PROVIDER],
-          activeProvider: PROVIDER.name,
-          activeModel: "llama3",
+      return renderInk(
+        <Chat
+          commandRegistry={commandRegistry}
+          toolRegistry={emptyToolRegistry}
+        />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
         },
-      });
+      );
     }
 
     it("shows live streaming content below message list", async () => {
@@ -478,6 +485,101 @@ describe("Chat", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("Interrupted");
       expect(frame).not.toContain("assistant");
+    });
+
+    it("does not duplicate interrupted message when config reloads after abort", async () => {
+      /** Takeover component that reloads config on mount, exits on escape. */
+      function ConfigReloader(props: { onDone: TakeoverDone }) {
+        const { reload } = useConfig();
+        useEffect(() => {
+          reload();
+        }, [reload]);
+        useInput((_input, key) => {
+          if (key.escape) props.onDone();
+        });
+        return createElement(Text, null, "RELOADER");
+      }
+
+      const commandRegistry = createCommandRegistry();
+      commandRegistry.register({
+        name: "reload",
+        description: "Reloads config",
+        takeover: (onDone) => createElement(ConfigReloader, { onDone }),
+      });
+
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          () => new Promise(() => {}),
+        ),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider(commandRegistry);
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Abort the stream
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+
+      const frameAfterAbort = lastFrame() ?? "";
+      const countAfterAbort = frameAfterAbort.split("Interrupted").length - 1;
+      expect(countAfterAbort).toBe(1);
+
+      // Open takeover that reloads config (simulates toggling a permission)
+      await stdin.write("/reload ");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(lastFrame()).toContain("RELOADER");
+
+      // Exit takeover
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Should still have exactly one "Interrupted" — no duplicates
+      const frameAfterReload = lastFrame() ?? "";
+      const countAfterReload = frameAfterReload.split("Interrupted").length - 1;
+      expect(countAfterReload).toBe(1);
+    });
+
+    it("accepts new messages after abort without stale interrupted state", async () => {
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", () => {
+          requestCount++;
+          if (requestCount === 1) {
+            // First request: hang forever so the user can abort
+            return new Promise(() => {});
+          }
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "Second response" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      const { stdin, lastFrame } = renderChatWithProvider();
+      await stdin.write("first");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Abort
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(lastFrame()).toContain("Interrupted");
+
+      // Send a new message — should get a normal response
+      await stdin.write("second");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Second response");
+      // Only the one "Interrupted" from the first abort
+      const count = frame.split("Interrupted").length - 1;
+      expect(count).toBe(1);
     });
 
     it("sends user message to LLM and renders assistant response", async () => {
