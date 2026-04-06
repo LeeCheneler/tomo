@@ -32,7 +32,7 @@ function createHarness(provider: Provider | null, model: string | null) {
 
   /** Captures hook result into the shared ref. */
   function Harness() {
-    const result = useCompletion(provider, model);
+    const result = useCompletion(provider, model, 8192);
     const refObj = useRef(ref);
     refObj.current.current = result;
     // Also update the outer ref directly for synchronous access

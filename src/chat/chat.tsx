@@ -67,8 +67,8 @@ function useChat(props: UseChatProps) {
   const [mode, setMode] = useState<ChatMode>({ kind: "input" });
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const completion = useCompletion(provider, model);
   const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
+  const completion = useCompletion(provider, model, contextWindow);
   const [sessionKey, setSessionKey] = useState(() => crypto.randomUUID());
   const [pendingConfirm, setPendingConfirm] = useState<{
     message: string;

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { Provider } from "../config/schema";
+import { truncateMessages } from "../context/truncate";
 import type {
   ChatMessage,
   TokenUsage,
@@ -47,6 +48,7 @@ export interface UseCompletionResult {
 export function useCompletion(
   provider: Provider | null,
   model: string | null,
+  contextWindow: number,
 ): UseCompletionResult {
   const [state, setState] = useState<CompletionState>("idle");
   const [content, setContent] = useState("");
@@ -54,6 +56,8 @@ export function useCompletion(
   const [usage, setUsage] = useState<TokenUsage | null>(null);
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const contextWindowRef = useRef(contextWindow);
+  contextWindowRef.current = contextWindow;
 
   /** Starts a streaming completion request. */
   const send = useCallback(
@@ -67,6 +71,11 @@ export function useCompletion(
       setUsage(null);
       setToolCalls([]);
 
+      const messages = truncateMessages(
+        options.messages,
+        contextWindowRef.current,
+      );
+
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -75,7 +84,7 @@ export function useCompletion(
       client
         .streamCompletion({
           model,
-          messages: options.messages,
+          messages,
           signal: controller.signal,
           tools: options.tools,
         })
