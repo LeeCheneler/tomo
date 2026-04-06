@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSkill } from "./is-skill";
+import { isSkill, parseSkillInput } from "./utils";
 
 describe("isSkill", () => {
   it("returns true for a skill invocation", () => {
@@ -32,5 +32,28 @@ describe("isSkill", () => {
 
   it("returns false for triple slash", () => {
     expect(isSkill("///something")).toBe(false);
+  });
+});
+
+describe("parseSkillInput", () => {
+  it("parses skill name without user text", () => {
+    expect(parseSkillInput("//review")).toEqual({
+      name: "review",
+      userText: "",
+    });
+  });
+
+  it("parses skill name with user text", () => {
+    expect(parseSkillInput("//review check this function")).toEqual({
+      name: "review",
+      userText: "check this function",
+    });
+  });
+
+  it("trims whitespace from user text", () => {
+    expect(parseSkillInput("//review   extra spaces  ")).toEqual({
+      name: "review",
+      userText: "extra spaces",
+    });
   });
 });

@@ -87,6 +87,16 @@ function CommandMessageView(props: { command: string; result: string }) {
   );
 }
 
+/** Renders a skill invocation with the skill name in the skill color. */
+function SkillMessageView(props: { skillName: string }) {
+  return (
+    <Box paddingBottom={1}>
+      <Text color={theme.skill}>{"❯ "}</Text>
+      <Text color={theme.skill}>skill ({props.skillName})</Text>
+    </Box>
+  );
+}
+
 /** Renders a tool call from the assistant. */
 function ToolCallMessageView(props: { toolCalls: ToolCallInfo[] }) {
   return (
@@ -200,6 +210,11 @@ export function ChatList(props: ChatListProps) {
               command={message.command}
               result={message.result}
             />
+          );
+        }
+        if (message.role === "skill") {
+          return (
+            <SkillMessageView key={message.id} skillName={message.skillName} />
           );
         }
         if (message.role === "tool-call") {

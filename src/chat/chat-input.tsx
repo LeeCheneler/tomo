@@ -162,7 +162,6 @@ function useChatInput(props: ChatInputProps) {
     instructions,
     showAutocomplete,
     autocomplete,
-    autocompletePrefix,
   };
 }
 
@@ -175,7 +174,6 @@ export function ChatInput(props: ChatInputProps) {
     instructions,
     showAutocomplete,
     autocomplete,
-    autocompletePrefix,
   } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
@@ -202,12 +200,7 @@ export function ChatInput(props: ChatInputProps) {
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
       </Box>
-      {showAutocomplete && (
-        <AutocompleteList
-          autocomplete={autocomplete}
-          prefix={autocompletePrefix}
-        />
-      )}
+      {showAutocomplete && <AutocompleteList autocomplete={autocomplete} />}
     </Box>
   );
 }

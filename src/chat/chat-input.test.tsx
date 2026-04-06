@@ -298,9 +298,9 @@ describe("ChatInput", () => {
       });
       await stdin.write("/");
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("/help");
-      expect(frame).toContain("/ping");
-      expect(frame).toContain("/pong");
+      expect(frame).toContain("help");
+      expect(frame).toContain("ping");
+      expect(frame).toContain("pong");
     });
 
     it("filters autocomplete list as user types", async () => {
@@ -309,8 +309,8 @@ describe("ChatInput", () => {
       });
       await stdin.write("/pi");
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("/ping");
-      expect(frame).not.toContain("/help");
+      expect(frame).toContain("ping");
+      expect(frame).not.toContain("help");
     });
 
     it("hides autocomplete after space", async () => {
@@ -328,7 +328,7 @@ describe("ChatInput", () => {
         commandAutocompleteItems: testItems,
       });
       await stdin.write("hello");
-      expect(lastFrame()).not.toContain("/ping");
+      expect(lastFrame()).not.toContain("Responds with pong");
     });
 
     it("does not show autocomplete for // prefix", async () => {
@@ -336,7 +336,7 @@ describe("ChatInput", () => {
         commandAutocompleteItems: testItems,
       });
       await stdin.write("//");
-      expect(lastFrame()).not.toContain("/ping");
+      expect(lastFrame()).not.toContain("Responds with pong");
     });
 
     it("navigates down through autocomplete with up/down", async () => {
@@ -348,7 +348,7 @@ describe("ChatInput", () => {
       const frame = lastFrame() ?? "";
       // Items are sorted alphabetically: help, ping, pong.
       // Down from 0 selects index 1 (ping).
-      expect(frame).toContain("/ping");
+      expect(frame).toContain("ping");
     });
 
     it("navigates up through autocomplete", async () => {
@@ -359,7 +359,7 @@ describe("ChatInput", () => {
       await stdin.write(keys.down);
       await stdin.write(keys.up);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("/help");
+      expect(frame).toContain("help");
     });
 
     it("loops autocomplete selection", async () => {
@@ -370,7 +370,7 @@ describe("ChatInput", () => {
       // Up from index 0 loops to last (pong).
       await stdin.write(keys.up);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("/pong");
+      expect(frame).toContain("pong");
     });
 
     it("fills input with selected command on enter and appends space", async () => {
@@ -464,8 +464,8 @@ describe("ChatInput", () => {
       // Type more to change filter — selection should reset.
       await stdin.write("h");
       const frame = lastFrame() ?? "";
-      // /help is the only match and should be at index 0.
-      expect(frame).toContain("/help");
+      // help is the only match and should be at index 0.
+      expect(frame).toContain("help");
     });
 
     it("scrolls through all items with sliding window when more than 5 exist", async () => {
@@ -481,7 +481,7 @@ describe("ChatInput", () => {
       await stdin.write(keys.down);
       const frame = lastFrame() ?? "";
       // Window should slide to show fff.
-      expect(frame).toContain("/fff");
+      expect(frame).toContain("fff");
     });
 
     it("loops back to first item after scrolling past last", async () => {
@@ -494,7 +494,7 @@ describe("ChatInput", () => {
         await stdin.write(keys.down);
       }
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("/aaa");
+      expect(frame).toContain("aaa");
     });
 
     it("does nothing on down arrow when autocomplete is not visible", async () => {
@@ -536,8 +536,8 @@ describe("ChatInput", () => {
       });
       await stdin.write("//");
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("//deploy");
-      expect(frame).toContain("//review");
+      expect(frame).toContain("deploy");
+      expect(frame).toContain("review");
     });
 
     it("filters skill autocomplete as user types", async () => {
@@ -546,8 +546,8 @@ describe("ChatInput", () => {
       });
       await stdin.write("//dep");
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("//deploy");
-      expect(frame).not.toContain("//review");
+      expect(frame).toContain("deploy");
+      expect(frame).not.toContain("review");
     });
 
     it("fills input with //name on enter", async () => {
@@ -557,6 +557,7 @@ describe("ChatInput", () => {
       await stdin.write("//dep");
       await stdin.write(keys.enter);
       const frame = lastFrame() ?? "";
+      // Input text should contain //deploy (user typed it)
       expect(frame).toContain("//deploy");
       // Autocomplete dismissed after selection
       expect(frame).not.toContain("Deploy app");
@@ -578,8 +579,8 @@ describe("ChatInput", () => {
       });
       await stdin.write("//");
       const frame = lastFrame() ?? "";
-      expect(frame).not.toContain("/ping");
-      expect(frame).toContain("//deploy");
+      expect(frame).not.toContain("Responds with pong");
+      expect(frame).toContain("deploy");
     });
 
     it("hides skill autocomplete after space", async () => {

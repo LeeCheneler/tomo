@@ -69,6 +69,16 @@ export interface ToolResultMessage {
   format: "plain" | "diff";
 }
 
+/** A skill invocation, rendered as a distinct entry in the chat list. */
+export interface SkillMessage {
+  id: string;
+  role: "skill";
+  /** The skill name for display. */
+  skillName: string;
+  /** The prompt content from the SKILL.md body, sent to the LLM as user context. */
+  content: string;
+}
+
 /** Union of all chat message types. Discriminate on `role`. */
 export type ChatMessage =
   | UserMessage
@@ -77,5 +87,6 @@ export type ChatMessage =
   | ErrorMessage
   | InterruptedMessage
   | InfoMessage
+  | SkillMessage
   | ToolCallMessage
   | ToolResultMessage;

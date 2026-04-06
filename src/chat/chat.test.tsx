@@ -3,6 +3,7 @@ import { Text, useInput } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
+import { createSkillRegistry } from "../skills/registry";
 import { SESSIONS_DIR } from "../session/session";
 import { z } from "zod";
 import { createToolRegistry } from "../tools/registry";
@@ -53,12 +54,16 @@ describe("Chat", () => {
   /** Empty tool registry for tests that don't need tools. */
   const emptyToolRegistry = createToolRegistry();
 
+  /** Empty skill registry for tests that don't need skills. */
+  const emptySkillRegistry = createSkillRegistry();
+
   /** Renders Chat with a fixed terminal width and optional commandRegistry. */
   function renderChat(commandRegistry?: CommandRegistry) {
     setColumns(COLUMNS);
     return renderInk(
       <Chat
         commandRegistry={commandRegistry}
+        skillRegistry={emptySkillRegistry}
         toolRegistry={emptyToolRegistry}
       />,
     );
@@ -154,7 +159,7 @@ describe("Chat", () => {
       const { stdin, lastFrame } = renderChat(commandRegistry);
       await stdin.write("/");
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("/ping");
+      expect(frame).toContain("ping");
       expect(frame).toContain("Responds with pong");
     });
 
@@ -219,6 +224,100 @@ describe("Chat", () => {
       const { stdin, lastFrame } = renderChat(commandRegistry);
       await stdin.write("hello");
       expect(lastFrame()).not.toContain("Responds with pong");
+    });
+  });
+
+  describe("skill invocation", () => {
+    it("prepends skill content to user message", async () => {
+      const skillRegistry = createSkillRegistry();
+      skillRegistry.register({
+        name: "review",
+        description: "Review code",
+        content: "You are a code reviewer.",
+        source: "global",
+      });
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat skillRegistry={skillRegistry} toolRegistry={emptyToolRegistry} />,
+      );
+      await stdin.write("//review check this");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("skill (review)");
+      expect(frame).toContain("check this");
+    });
+
+    it("shows error for unknown skill", async () => {
+      const skillRegistry = createSkillRegistry();
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat skillRegistry={skillRegistry} toolRegistry={emptyToolRegistry} />,
+      );
+      await stdin.write("//nonexistent ");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Unknown skill");
+      expect(frame).toContain("nonexistent");
+    });
+
+    it("shows skill message without user text when none provided", async () => {
+      const skillRegistry = createSkillRegistry();
+      skillRegistry.register({
+        name: "review",
+        description: "Review code",
+        content: "You are a code reviewer.",
+        source: "global",
+      });
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat skillRegistry={skillRegistry} toolRegistry={emptyToolRegistry} />,
+      );
+      await stdin.write("//review ");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("skill (review)");
+    });
+
+    it("tags local skills with (local) when name clashes with global", async () => {
+      const skillRegistry = createSkillRegistry();
+      skillRegistry.register({
+        name: "review",
+        description: "Global review",
+        content: "Global prompt.",
+        source: "global",
+      });
+      skillRegistry.register({
+        name: "review",
+        description: "Local review",
+        content: "Local prompt.",
+        source: "local",
+      });
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat skillRegistry={skillRegistry} toolRegistry={emptyToolRegistry} />,
+      );
+      await stdin.write("//");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("(local)");
+    });
+
+    it("truncates long skill descriptions to 60 characters", async () => {
+      const skillRegistry = createSkillRegistry();
+      skillRegistry.register({
+        name: "verbose",
+        description:
+          "This is a very long description that exceeds sixty characters and should be truncated",
+        content: "Prompt.",
+        source: "global",
+      });
+      setColumns(120);
+      const { stdin, lastFrame } = renderInk(
+        <Chat skillRegistry={skillRegistry} toolRegistry={emptyToolRegistry} />,
+      );
+      await stdin.write("//");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("...");
+      expect(frame).not.toContain("truncated");
     });
   });
 
@@ -377,6 +476,7 @@ describe("Chat", () => {
       return renderInk(
         <Chat
           commandRegistry={commandRegistry}
+          skillRegistry={emptySkillRegistry}
           toolRegistry={emptyToolRegistry}
         />,
         {
@@ -640,7 +740,7 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, lastFrame } = renderInk(
-        <Chat toolRegistry={toolRegistry} />,
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
         {
           global: {
             providers: [PROVIDER],
@@ -810,6 +910,7 @@ describe("Chat", () => {
       const { stdin, fsState } = renderInk(
         <Chat
           commandRegistry={commandRegistry}
+          skillRegistry={emptySkillRegistry}
           toolRegistry={emptyToolRegistry}
         />,
         {
@@ -865,6 +966,7 @@ describe("Chat", () => {
       const { stdin, fsState } = renderInk(
         <Chat
           commandRegistry={commandRegistry}
+          skillRegistry={emptySkillRegistry}
           toolRegistry={emptyToolRegistry}
         />,
       );
@@ -940,6 +1042,7 @@ describe("Chat", () => {
       const { stdin, fsState } = renderInk(
         <Chat
           commandRegistry={commandRegistry}
+          skillRegistry={emptySkillRegistry}
           toolRegistry={emptyToolRegistry}
         />,
       );
@@ -1048,7 +1151,7 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, lastFrame } = renderInk(
-        <Chat toolRegistry={toolRegistry} />,
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
         {
           global: {
             providers: [PROVIDER],
@@ -1122,26 +1225,29 @@ describe("Chat", () => {
       });
 
       setColumns(COLUMNS);
-      const { stdin } = renderInk(<Chat toolRegistry={toolRegistry} />, {
-        global: {
-          providers: [PROVIDER],
-          activeProvider: PROVIDER.name,
-          activeModel: "llama3",
-          allowedCommands: ["git:*", "npm test"],
-          tools: {
-            agent: { enabled: true },
-            ask: { enabled: true },
-            editFile: { enabled: true },
-            glob: { enabled: true },
-            grep: { enabled: true },
-            readFile: { enabled: true },
-            runCommand: { enabled: true },
-            skill: { enabled: true },
-            webSearch: { enabled: true, apiKey: "tavily-test-key" },
-            writeFile: { enabled: true },
+      const { stdin } = renderInk(
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+            allowedCommands: ["git:*", "npm test"],
+            tools: {
+              agent: { enabled: true },
+              ask: { enabled: true },
+              editFile: { enabled: true },
+              glob: { enabled: true },
+              grep: { enabled: true },
+              readFile: { enabled: true },
+              runCommand: { enabled: true },
+              skill: { enabled: true },
+              webSearch: { enabled: true, apiKey: "tavily-test-key" },
+              writeFile: { enabled: true },
+            },
           },
         },
-      });
+      );
 
       await stdin.write("use the tool");
       await stdin.write(keys.enter);
@@ -1217,7 +1323,7 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, lastFrame } = renderInk(
-        <Chat toolRegistry={toolRegistry} />,
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
         {
           global: {
             providers: [PROVIDER],
@@ -1303,7 +1409,7 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, lastFrame } = renderInk(
-        <Chat toolRegistry={toolRegistry} />,
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
         {
           global: {
             providers: [PROVIDER],
@@ -1383,7 +1489,7 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, lastFrame } = renderInk(
-        <Chat toolRegistry={toolRegistry} />,
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
         {
           global: {
             providers: [PROVIDER],
@@ -1466,7 +1572,7 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, lastFrame } = renderInk(
-        <Chat toolRegistry={toolRegistry} />,
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
         {
           global: {
             providers: [PROVIDER],
@@ -1554,7 +1660,7 @@ describe("Chat", () => {
 
       setColumns(COLUMNS);
       const { stdin, lastFrame } = renderInk(
-        <Chat toolRegistry={toolRegistry} />,
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
         {
           global: {
             providers: [PROVIDER],

@@ -8,4 +8,5 @@ export const theme = {
   settings: "green",
   key: "yellow",
   tool: "yellow",
+  skill: "magenta",
 } as const;

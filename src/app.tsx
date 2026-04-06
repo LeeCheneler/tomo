@@ -5,6 +5,8 @@ import { newCommand } from "./commands/new";
 import { createCommandRegistry } from "./commands/registry";
 import { sessionCommand } from "./commands/session";
 import { settingsCommand } from "./commands/settings";
+import { loadAllSkills } from "./skills/loader";
+import { createSkillRegistry } from "./skills/registry";
 import { askTool } from "./tools/ask";
 import { editFileTool } from "./tools/edit-file";
 import { globTool } from "./tools/glob";
@@ -26,6 +28,15 @@ function buildCommandRegistry() {
   return registry;
 }
 
+/** Creates the application skill registry from global and local SKILL.md files. */
+function buildSkillRegistry() {
+  const registry = createSkillRegistry();
+  for (const skill of loadAllSkills()) {
+    registry.register(skill);
+  }
+  return registry;
+}
+
 /** Creates the application tool registry with all built-in tools. */
 function buildToolRegistry() {
   const registry = createToolRegistry();
@@ -43,7 +54,14 @@ function buildToolRegistry() {
 /** Root application component. Renders the chat UI. */
 export function App() {
   const commandRegistry = buildCommandRegistry();
+  const skillRegistry = buildSkillRegistry();
   const toolRegistry = buildToolRegistry();
 
-  return <Chat commandRegistry={commandRegistry} toolRegistry={toolRegistry} />;
+  return (
+    <Chat
+      commandRegistry={commandRegistry}
+      skillRegistry={skillRegistry}
+      toolRegistry={toolRegistry}
+    />
+  );
 }

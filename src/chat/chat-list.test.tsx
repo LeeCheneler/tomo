@@ -62,6 +62,20 @@ describe("ChatList", () => {
     expect(frame).toContain("pong");
   });
 
+  it("renders a skill message with skill name", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "skill",
+        skillName: "review",
+        content: "<skill>prompt</skill>",
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("skill (review)");
+  });
+
   it("renders an assistant message", () => {
     const messages: ChatMessage[] = [
       { id: "1", role: "assistant", content: "Hello, how can I help?" },

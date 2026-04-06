@@ -1,6 +1,8 @@
 import { Box, Text } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isCommand } from "../commands/is-command";
+import { isSkill, parseSkillInput } from "../skills/utils";
+import type { SkillRegistry } from "../skills/registry";
 import type {
   CommandContext,
   CommandRegistry,
@@ -53,6 +55,7 @@ type ChatMode =
 /** Props for useChat. */
 interface UseChatProps {
   commandRegistry?: CommandRegistry;
+  skillRegistry: SkillRegistry;
   toolRegistry: ToolRegistry;
 }
 
@@ -287,12 +290,54 @@ function useChat(props: UseChatProps) {
     };
   }
 
-  /** Handles submitted input — dispatches commands or creates user messages. */
+  /** Handles submitted input — dispatches commands, skills, or creates user messages. */
   async function handleMessage(message: string) {
     const commandRegistry = props.commandRegistry ?? createCommandRegistry();
     if (isCommand(message)) {
       const context = buildCommandContext();
       handleInvokeResult(await commandRegistry.invoke(message, context));
+      return;
+    }
+
+    // Skill invocations emit a skill message (+ optional user message) instead
+    // of a single combined user message, so the chat list renders them distinctly.
+    if (isSkill(message)) {
+      const parsed = parseSkillInput(message);
+      const skill = props.skillRegistry.get(parsed.name);
+      if (!skill) {
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "error",
+          content: `Unknown skill: ${parsed.name}`,
+        });
+        return;
+      }
+      const skillContent = `<skill name="${skill.name}">\n${skill.content}\n</skill>`;
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "skill",
+        skillName: skill.name,
+        content: skillContent,
+      });
+      if (parsed.userText) {
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "user",
+          content: parsed.userText,
+        });
+      }
+      history.push(message);
+      const systemPrompt = buildSystemPrompt();
+      const providerMessages = buildProviderMessages(
+        messagesRef.current,
+        systemPrompt,
+      );
+      handledStateRef.current = null;
+      emptyRetryRef.current = 0;
+      completion.send({
+        messages: providerMessages,
+        tools: getToolDefinitions(),
+      });
       return;
     }
 
@@ -360,6 +405,26 @@ function useChat(props: UseChatProps) {
     }));
   }, [props.commandRegistry]);
 
+  /** Maps skill registry to autocomplete items, tagging locals when clashes exist. */
+  const skillAutocompleteItems: readonly AutocompleteItem[] = useMemo(() => {
+    const registry = props.skillRegistry;
+    return registry.list().map((skill) => {
+      const desc =
+        skill.description.length > 60
+          ? `${skill.description.slice(0, 57)}...`
+          : skill.description;
+      return {
+        key: `${skill.name}:${skill.source}`,
+        name: skill.name,
+        description: desc,
+        tag:
+          skill.source === "local" && registry.hasClash(skill.name)
+            ? "(local)"
+            : undefined,
+      };
+    });
+  }, [props.skillRegistry]);
+
   /** Resolves the pending confirm prompt and clears it. */
   function handleConfirmResult(approved: boolean) {
     confirmResolveRef.current?.(approved);
@@ -389,6 +454,7 @@ function useChat(props: UseChatProps) {
     liveToolOutput,
     abort: completion.abort,
     commandAutocompleteItems,
+    skillAutocompleteItems,
     buildCommandContext,
     handleMessage,
     handleUp,
@@ -404,6 +470,7 @@ function useChat(props: UseChatProps) {
 /** Props for Chat. */
 interface ChatProps {
   commandRegistry?: CommandRegistry;
+  skillRegistry: SkillRegistry;
   toolRegistry: ToolRegistry;
 }
 
@@ -421,6 +488,7 @@ export function Chat(props: ChatProps) {
     liveToolOutput,
     abort,
     commandAutocompleteItems,
+    skillAutocompleteItems,
     buildCommandContext,
     handleMessage,
     handleUp,
@@ -432,58 +500,9 @@ export function Chat(props: ChatProps) {
     handleAskResult,
   } = useChat({
     commandRegistry: props.commandRegistry,
+    skillRegistry: props.skillRegistry,
     toolRegistry: props.toolRegistry,
   });
-
-  /* v8 ignore start -- streaming persists across mode changes but testing all combinations is impractical */
-  if (mode.kind === "takeover") {
-    return (
-      <>
-        <ChatList
-          key={sessionKey}
-          messages={messages}
-          header={
-            <AppHeader
-              version={version}
-              model={config.activeModel}
-              provider={config.activeProvider}
-            />
-          }
-        />
-        {isStreaming && <LiveAssistantMessage content={streamingContent} />}
-        {isStreaming && <LoadingIndicator text="Thinking" />}
-        {liveToolOutput && <LiveToolOutput output={liveToolOutput} />}
-        {mode.render(handleTakeoverDone, buildCommandContext())}
-      </>
-    );
-  }
-
-  if (mode.kind === "history") {
-    return (
-      <>
-        <ChatList
-          key={sessionKey}
-          messages={messages}
-          header={
-            <AppHeader
-              version={version}
-              model={config.activeModel}
-              provider={config.activeProvider}
-            />
-          }
-        />
-        {isStreaming && <LiveAssistantMessage content={streamingContent} />}
-        {isStreaming && <LoadingIndicator text="Thinking" />}
-        {liveToolOutput && <LiveToolOutput output={liveToolOutput} />}
-        <MessageHistory
-          entries={history.entries}
-          onSelected={handleSelected}
-          onExit={handleExit}
-        />
-      </>
-    );
-  }
-  /* v8 ignore stop */
 
   return (
     <>
@@ -501,7 +520,16 @@ export function Chat(props: ChatProps) {
       {isStreaming && <LiveAssistantMessage content={streamingContent} />}
       {isStreaming && <LoadingIndicator text="Thinking" />}
       {liveToolOutput && <LiveToolOutput output={liveToolOutput} />}
-      {pendingConfirm && (
+      {mode.kind === "takeover" &&
+        mode.render(handleTakeoverDone, buildCommandContext())}
+      {mode.kind === "history" && (
+        <MessageHistory
+          entries={history.entries}
+          onSelected={handleSelected}
+          onExit={handleExit}
+        />
+      )}
+      {mode.kind === "input" && pendingConfirm && (
         <>
           {pendingConfirm.diff && (
             <Box paddingBottom={1}>
@@ -518,14 +546,14 @@ export function Chat(props: ChatProps) {
           <ConfirmPrompt onResult={handleConfirmResult} />
         </>
       )}
-      {pendingAsk && (
+      {mode.kind === "input" && pendingAsk && (
         <AskPrompt
           question={pendingAsk.question}
           options={pendingAsk.options}
           onResult={handleAskResult}
         />
       )}
-      {!pendingConfirm && !pendingAsk && (
+      {mode.kind === "input" && !pendingConfirm && !pendingAsk && (
         <ChatInput
           onMessage={handleMessage}
           onUp={handleUp}
@@ -533,6 +561,7 @@ export function Chat(props: ChatProps) {
           initialValue={mode.initialValue}
           hasHistory={history.entries.length > 0}
           commandAutocompleteItems={commandAutocompleteItems}
+          skillAutocompleteItems={skillAutocompleteItems}
         />
       )}
     </>

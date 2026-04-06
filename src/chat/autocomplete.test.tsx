@@ -149,10 +149,9 @@ describe("AutocompleteList", () => {
   function HarnessWithList(props: {
     items: readonly AutocompleteItem[];
     filter: string;
-    prefix?: string;
   }) {
     nav = useAutocompleteNavigation(props.items, props.filter, true);
-    return <AutocompleteList autocomplete={nav} prefix={props.prefix ?? "/"} />;
+    return <AutocompleteList autocomplete={nav} />;
   }
 
   it("renders nothing when no items match", () => {
@@ -167,8 +166,9 @@ describe("AutocompleteList", () => {
       <HarnessWithList items={items} filter="" />,
     );
     const frame = lastFrame() ?? "";
-    const commandLines = frame.split("\n").filter((l) => l.includes("/"));
-    expect(commandLines).toHaveLength(5);
+    // 5 visible items, each on its own line with a name from the items array.
+    const lines = frame.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(5);
   });
 
   it("shows command descriptions", () => {
@@ -204,14 +204,6 @@ describe("AutocompleteList", () => {
     expect(frame).not.toContain("clear");
   });
 
-  it("renders // prefix for skills", () => {
-    const { lastFrame } = renderInk(
-      <HarnessWithList items={items} filter="ping" prefix="//" />,
-    );
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("//ping");
-  });
-
   it("renders tag when present", () => {
     const taggedItems: AutocompleteItem[] = [
       {
@@ -222,7 +214,7 @@ describe("AutocompleteList", () => {
       },
     ];
     const { lastFrame } = renderInk(
-      <HarnessWithList items={taggedItems} filter="" prefix="//" />,
+      <HarnessWithList items={taggedItems} filter="" />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("(local)");

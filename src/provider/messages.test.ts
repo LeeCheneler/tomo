@@ -99,6 +99,24 @@ describe("buildProviderMessages", () => {
     });
   });
 
+  it("maps skill messages to user role", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "skill",
+        skillName: "review",
+        content: "<skill>prompt</skill>",
+      },
+    ];
+
+    const result = buildProviderMessages(messages, "sys");
+
+    expect(result[1]).toEqual({
+      role: "user",
+      content: "<skill>prompt</skill>",
+    });
+  });
+
   it("strips ANSI codes from assistant messages", () => {
     const messages: ChatMessage[] = [
       {

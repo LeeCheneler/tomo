@@ -18,7 +18,7 @@ export function buildProviderMessages(
 ): ProviderMessage[] {
   const result: ProviderMessage[] = [{ role: "system", content: systemPrompt }];
   for (const msg of messages) {
-    if (msg.role === "user") {
+    if (msg.role === "user" || msg.role === "skill") {
       result.push({ role: "user", content: msg.content });
     }
     if (msg.role === "assistant") {

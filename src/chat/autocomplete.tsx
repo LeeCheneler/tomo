@@ -130,8 +130,6 @@ export function useAutocompleteNavigation(
 interface AutocompleteListProps {
   /** The autocomplete navigation state. */
   autocomplete: AutocompleteNavigation;
-  /** Prefix to display before each item name ("/" for commands, "//" for skills). */
-  prefix: string;
 }
 
 /** Filtered autocomplete list shown below the input. Shows a sliding window of MAX_VISIBLE items. */
@@ -143,9 +141,7 @@ export function AutocompleteList(props: AutocompleteListProps) {
   }
 
   const visible = filtered.slice(windowStart, windowStart + MAX_VISIBLE);
-  const nameWidth = Math.max(
-    ...visible.map((item) => props.prefix.length + item.name.length),
-  );
+  const nameWidth = Math.max(...visible.map((item) => item.name.length));
 
   return (
     <Box flexDirection="column">
@@ -155,7 +151,7 @@ export function AutocompleteList(props: AutocompleteListProps) {
         return (
           <Box key={item.key} gap={2}>
             <Text color={isSelected ? "cyan" : "white"} bold={isSelected}>
-              {`${props.prefix}${item.name}`.padEnd(nameWidth)}
+              {item.name.padEnd(nameWidth)}
             </Text>
             {item.tag && <Text color="magenta">{item.tag}</Text>}
             <Text dimColor>{item.description}</Text>
