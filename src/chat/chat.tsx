@@ -59,8 +59,14 @@ interface UseChatProps {
 /** Manages mode switching between input, history, and takeover screens. */
 function useChat(props: UseChatProps) {
   const { config } = useConfig();
-  const provider =
-    config.providers.find((p) => p.name === config.activeProvider) ?? null;
+  // Memoize provider to maintain a stable reference — .find() creates a new
+  // object each render, which would cascade into useCompletion recreating its
+  // send callback and re-triggering the completion effect on every render.
+  const provider = useMemo(
+    () =>
+      config.providers.find((p) => p.name === config.activeProvider) ?? null,
+    [config.providers, config.activeProvider],
+  );
   const model = config.activeModel ?? null;
 
   const history = useHistory();
@@ -262,13 +268,15 @@ function useChat(props: UseChatProps) {
       usage: completion.usage,
       contextWindow,
       resetSession: () => {
-        process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
+        /* v8 ignore next -- terminal escape sequences don't run in test environments */
+        if (process.stdout.isTTY) process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
         setMessages([]);
         sessionPath.current = createSessionPath();
         setSessionKey(crypto.randomUUID());
       },
       loadSession: (path) => {
-        process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
+        /* v8 ignore next -- terminal escape sequences don't run in test environments */
+        if (process.stdout.isTTY) process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
         setMessages(readSessionMessages(path));
         sessionPath.current = path;
         setSessionKey(crypto.randomUUID());
