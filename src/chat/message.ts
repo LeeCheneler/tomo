@@ -33,6 +33,13 @@ export interface InterruptedMessage {
   role: "interrupted";
 }
 
+/** A dimmed informational notice in the chat (e.g. empty response nudge). */
+export interface InfoMessage {
+  id: string;
+  role: "info";
+  content: string;
+}
+
 /** A tool call from the assistant. */
 export interface ToolCallInfo {
   id: string;
@@ -69,5 +76,6 @@ export type ChatMessage =
   | CommandMessage
   | ErrorMessage
   | InterruptedMessage
+  | InfoMessage
   | ToolCallMessage
   | ToolResultMessage;

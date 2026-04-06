@@ -605,25 +605,85 @@ describe("Chat", () => {
       expect(frame).toContain("Hello from LLM");
     });
 
-    it("handles empty completion without appending a message", async () => {
+    it("nudges LLM on empty response then accepts content", async () => {
+      let requestCount = 0;
+
       mswServer.use(
-        http.post(
-          "http://localhost:11434/v1/chat/completions",
-          () =>
-            new HttpResponse("data: [DONE]\n\n", {
+        http.post("http://localhost:11434/v1/chat/completions", () => {
+          requestCount++;
+          if (requestCount === 1) {
+            // First response: empty
+            return new HttpResponse("data: [DONE]\n\n", {
               headers: { "Content-Type": "text/event-stream" },
-            }),
-        ),
+            });
+          }
+          // Nudge response: actual content
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "Nudged response" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      // Use a registry with a tool so the nudge re-send includes tool definitions
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "stub",
+        displayName: "Stub",
+        description: "stub",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        formatCall: () => "",
+        execute: async () => ok("ok"),
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+      await stdin.write("hi");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("empty response");
+      expect(frame).toContain("Nudged response");
+    });
+
+    it("stops nudging after max retries on persistent empty responses", async () => {
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", () => {
+          requestCount++;
+          return new HttpResponse("data: [DONE]\n\n", {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }),
       );
 
       const { stdin, lastFrame } = renderChatWithProvider();
       await stdin.write("hi");
       await stdin.write(keys.enter);
-      await new Promise((r) => setTimeout(r, 100));
+      // 1 original + 3 nudge retries = 4 requests; allow enough time
+      await new Promise((r) => setTimeout(r, 400));
+
+      // 1 original + 3 nudge retries
+      expect(requestCount).toBe(4);
       const frame = lastFrame() ?? "";
       // User message is shown but no assistant response
       expect(frame).toContain("hi");
       expect(frame).not.toContain("assistant");
+      // Terminal info message after exhausting retries
+      expect(frame).toContain("empty responses after multiple attempts");
     });
 
     it("shows error message on completion failure", async () => {

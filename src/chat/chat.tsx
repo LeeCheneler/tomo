@@ -37,6 +37,13 @@ import { MessageHistory } from "./message-history";
 import { useCompletion } from "./use-completion";
 import { useHistory } from "./use-history";
 
+/** Maximum number of nudge retries when the LLM returns an empty response. */
+const MAX_EMPTY_RETRIES = 3;
+
+/** Nudge message sent to the LLM when it returns an empty response. */
+const EMPTY_NUDGE_CONTENT =
+  "Your previous response was empty. Continue working on the task. If you need to use a tool, call it now. If you are done, summarize what was accomplished.";
+
 /** Chat mode — typing input, browsing history, or a takeover screen. */
 type ChatMode =
   | { kind: "input"; initialValue?: string }
@@ -79,6 +86,7 @@ function useChat(props: UseChatProps) {
   const permissionsRef = useRef(config.permissions);
   permissionsRef.current = config.permissions;
   const handledStateRef = useRef<string | null>(null);
+  const emptyRetryRef = useRef(0);
 
   // Fetch the real context window size when provider/model are configured
   useEffect(() => {
@@ -129,8 +137,9 @@ function useChat(props: UseChatProps) {
     if (completion.state === "complete") {
       if (completion.toolCalls.length > 0) {
         // Execute tool calls and send results back for another completion round.
-        // Reset handled state so the next completion transition is processed.
+        // Reset handled state and empty retry counter so the next transition is processed.
         handledStateRef.current = null;
+        emptyRetryRef.current = 0;
         (async () => {
           const registry = props.toolRegistry;
           const toolContext: ToolContext = {
@@ -169,11 +178,45 @@ function useChat(props: UseChatProps) {
         })();
         return;
       }
+
+      // Nudge the LLM if it returned an empty response (no content, no tool calls).
+      if (
+        !completion.content.trim() &&
+        emptyRetryRef.current < MAX_EMPTY_RETRIES
+      ) {
+        emptyRetryRef.current++;
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "info",
+          content: "Model returned an empty response, nudging to continue…",
+        });
+        handledStateRef.current = null;
+        const systemPrompt = buildSystemPrompt();
+        const providerMessages = buildProviderMessages(
+          messagesRef.current,
+          systemPrompt,
+        );
+        providerMessages.push({ role: "user", content: EMPTY_NUDGE_CONTENT });
+        const defs = props.toolRegistry.getDefinitions();
+        completion.send({
+          messages: providerMessages,
+          tools: defs.length > 0 ? defs : undefined,
+        });
+        return;
+      }
+
       if (completion.content) {
         appendMessage({
           id: crypto.randomUUID(),
           role: "assistant",
           content: completion.content,
+        });
+      } else if (emptyRetryRef.current >= MAX_EMPTY_RETRIES) {
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "info",
+          content:
+            "Model returned empty responses after multiple attempts. Try sending another message.",
         });
       }
     }
@@ -251,6 +294,7 @@ function useChat(props: UseChatProps) {
       systemPrompt,
     );
     handledStateRef.current = null;
+    emptyRetryRef.current = 0;
     completion.send({
       messages: providerMessages,
       tools: getToolDefinitions(),

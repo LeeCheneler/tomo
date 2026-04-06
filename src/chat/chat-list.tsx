@@ -50,6 +50,17 @@ function InterruptedMessageView() {
   );
 }
 
+/** Renders a dimmed informational notice. */
+function InfoMessageView(props: { content: string }) {
+  return (
+    <Box paddingBottom={1}>
+      <Indent>
+        <Text dimColor>{props.content}</Text>
+      </Indent>
+    </Box>
+  );
+}
+
 /** Renders an error message in red. */
 function ErrorMessageView(props: { content: string }) {
   return (
@@ -169,6 +180,9 @@ export function ChatList(props: ChatListProps) {
         }
         if (message.role === "interrupted") {
           return <InterruptedMessageView key={message.id} />;
+        }
+        if (message.role === "info") {
+          return <InfoMessageView key={message.id} content={message.content} />;
         }
         if (message.role === "error") {
           return (

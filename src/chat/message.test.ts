@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ChatMessage, CommandMessage, UserMessage } from "./message";
+import type {
+  ChatMessage,
+  CommandMessage,
+  InfoMessage,
+  UserMessage,
+} from "./message";
 
 describe("ChatMessage", () => {
   it("accepts a user message", () => {
@@ -47,6 +52,27 @@ describe("ChatMessage", () => {
       const cmd: CommandMessage = message;
       expect(cmd.command).toBe("ping");
       expect(cmd.result).toBe("pong");
+    }
+  });
+
+  it("accepts an info message", () => {
+    const message: ChatMessage = {
+      id: "3",
+      role: "info",
+      content: "Something happened",
+    };
+    expect(message.role).toBe("info");
+  });
+
+  it("narrows to InfoMessage via role discriminant", () => {
+    const message: ChatMessage = {
+      id: "3",
+      role: "info",
+      content: "Something happened",
+    };
+    if (message.role === "info") {
+      const info: InfoMessage = message;
+      expect(info.content).toBe("Something happened");
     }
   });
 });
