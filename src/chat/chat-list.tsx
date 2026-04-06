@@ -101,17 +101,15 @@ function ToolCallMessageView(props: { toolCalls: ToolCallInfo[] }) {
   );
 }
 
-/** Maximum lines of tool output to display. */
+/** Maximum lines of plain tool output to display. */
 const MAX_TOOL_OUTPUT_LINES = 5;
 
-/** Maximum lines of diff output to display. */
-const MAX_DIFF_OUTPUT_LINES = 12;
-
-/** Truncates output to a maximum number of lines. */
+/** Truncates output to a maximum number of lines, showing a hidden count. */
 function truncateLines(output: string, maxLines: number): string {
   const lines = output.split("\n");
   if (lines.length <= maxLines) return output;
-  return `${lines.slice(0, maxLines).join("\n")}\n…`;
+  const hidden = lines.length - maxLines;
+  return `${lines.slice(0, maxLines).join("\n")}\n…[${hidden} more lines]`;
 }
 
 /** Renders a tool execution result. Errors and denials are shown in red. */
@@ -126,9 +124,7 @@ function ToolResultMessageView(props: {
     return (
       <Box paddingBottom={1}>
         <Indent>
-          <DiffView
-            output={truncateLines(props.output, MAX_DIFF_OUTPUT_LINES)}
-          />
+          <DiffView output={props.output} />
         </Indent>
       </Box>
     );

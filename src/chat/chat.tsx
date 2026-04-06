@@ -211,7 +211,7 @@ function useChat(props: UseChatProps) {
           role: "assistant",
           content: completion.content,
         });
-      } else if (emptyRetryRef.current >= MAX_EMPTY_RETRIES) {
+      } else {
         appendMessage({
           id: crypto.randomUUID(),
           role: "info",

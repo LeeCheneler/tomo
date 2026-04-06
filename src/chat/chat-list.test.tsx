@@ -199,7 +199,7 @@ describe("ChatList", () => {
     expect(frame).toContain("The user denied this read.");
   });
 
-  it("truncates tool-result output to 5 lines", () => {
+  it("truncates plain tool-result output to 5 lines with hidden count", () => {
     const lines = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);
     const messages: ChatMessage[] = [
       {
@@ -216,7 +216,7 @@ describe("ChatList", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("line 1");
     expect(frame).toContain("line 5");
-    expect(frame).toContain("…");
+    expect(frame).toContain("…[5 more lines]");
     expect(frame).not.toContain("line 6");
   });
 
@@ -240,8 +240,8 @@ describe("ChatList", () => {
     expect(frame).toContain("context");
   });
 
-  it("truncates diff output to 12 lines", () => {
-    const lines = Array.from({ length: 20 }, (_, i) => `+line ${i + 1}`);
+  it("shows full diff output without truncation", () => {
+    const lines = Array.from({ length: 50 }, (_, i) => `+line ${i + 1}`);
     const messages: ChatMessage[] = [
       {
         id: "1",
@@ -256,9 +256,8 @@ describe("ChatList", () => {
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
     expect(frame).toContain("+line 1");
-    expect(frame).toContain("+line 12");
-    expect(frame).toContain("…");
-    expect(frame).not.toContain("+line 13");
+    expect(frame).toContain("+line 50");
+    expect(frame).not.toContain("…");
   });
 
   it("falls back to plain rendering for diff format with error status", () => {
