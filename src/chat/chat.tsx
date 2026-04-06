@@ -135,10 +135,9 @@ function useChat(props: UseChatProps) {
             allMessages,
             systemPrompt,
           );
-          const defs = registry.getDefinitions();
           completion.send({
             messages: providerMessages,
-            tools: defs.length > 0 ? defs : undefined,
+            tools: registry.getDefinitions(),
           });
         })();
         return;

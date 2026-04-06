@@ -122,6 +122,28 @@ describe("globTool", () => {
       expect(result.output).toContain("bad pattern");
     });
 
+    it("searches in a custom path when provided", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(globSync).mockReturnValue(["file.ts"] as never);
+
+      const result = await globTool.execute(
+        { pattern: "*.ts", path: "/tmp/project" },
+        stubContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: true,
+            globalWriteFile: false,
+          },
+        }),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(vi.mocked(globSync)).toHaveBeenCalledWith("*.ts", {
+        cwd: "/tmp/project",
+      });
+    });
+
     it("includes untracked files from git ls-files", async () => {
       vi.mocked(isGitRepo).mockReturnValue(true);
       vi.mocked(execSync)

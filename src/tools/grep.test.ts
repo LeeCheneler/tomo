@@ -111,6 +111,21 @@ describe("grepTool", () => {
       expect(cmd).toContain("**/*.ts");
     });
 
+    it("preserves include path with slash for git grep", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(true);
+      vi.mocked(execSync).mockReturnValue("a.ts:1:x\n");
+
+      await grepTool.execute(
+        { pattern: "x", include: "src/**/*.ts" },
+        stubContext(),
+      );
+
+      const cmd = String(vi.mocked(execSync).mock.calls[0]?.[0]);
+      expect(cmd).toContain("git grep");
+      // Should NOT prepend **/ since the include already has a path
+      expect(cmd).toContain("src/**/*.ts");
+    });
+
     it("passes include filter to regular grep", async () => {
       vi.mocked(isGitRepo).mockReturnValue(false);
       vi.mocked(execSync).mockReturnValue("a.ts:1:x\n");

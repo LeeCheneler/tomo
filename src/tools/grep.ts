@@ -3,6 +3,7 @@ import { statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { isGitRepo } from "../prompt/git-context";
+import { getErrorMessage } from "../utils/error";
 import { checkFilePermission } from "./permissions";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { denied, err, ok } from "./types";
@@ -66,7 +67,7 @@ function runGrep(
     ) {
       return ok("No matches found.");
     }
-    return err(e instanceof Error ? e.message : "unknown error");
+    return err(getErrorMessage(e));
   }
 }
 

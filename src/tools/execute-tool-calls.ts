@@ -1,5 +1,6 @@
-import type { ToolCall } from "../provider/client";
 import type { ChatMessage } from "../chat/message";
+import type { ToolCall } from "../provider/client";
+import { getErrorMessage } from "../utils/error";
 import type { ToolRegistry } from "./registry";
 import type { ToolContext } from "./types";
 import { parseToolArgs } from "./types";
@@ -79,7 +80,7 @@ export async function executeToolCalls(
       status = result.status;
       format = result.format;
     } catch (e) {
-      output = `Tool error: ${e instanceof Error ? e.message : "unknown error"}`;
+      output = `Tool error: ${getErrorMessage(e)}`;
       status = "error";
     }
 

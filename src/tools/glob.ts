@@ -3,6 +3,7 @@ import { globSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
 import { isGitRepo } from "../prompt/git-context";
+import { getErrorMessage } from "../utils/error";
 import { checkFilePermission } from "./permissions";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { denied, err, ok } from "./types";
@@ -44,7 +45,7 @@ function runGlob(pattern: string, cwd: string, gitignore: boolean): ToolResult {
     }
     return ok(matches.join("\n"));
   } catch (e) {
-    return err(e instanceof Error ? e.message : "unknown error");
+    return err(getErrorMessage(e));
   }
 }
 
