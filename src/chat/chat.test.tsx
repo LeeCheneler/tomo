@@ -1100,5 +1100,175 @@ describe("Chat", () => {
         "something exploded",
       );
     });
+
+    it("shows confirm prompt and proceeds on approval", async () => {
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", async () => {
+          requestCount++;
+          if (requestCount === 1) {
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_1",
+                            function: {
+                              name: "confirm_tool",
+                              arguments: "{}",
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          }
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "Approved result" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "confirm_tool",
+        displayName: "Confirm Tool",
+        description: "A tool that needs confirmation",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        execute: async (_args, context) => {
+          const approved = await context.confirm("Allow this action?");
+          return ok(approved ? "was approved" : "was denied");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("do the thing");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Confirm prompt should be visible
+      expect(lastFrame()).toContain("Awaiting approval");
+      expect(lastFrame()).toContain("Approve");
+      expect(lastFrame()).toContain("Deny");
+
+      // Approve
+      await stdin.write("y");
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+      expect(lastFrame()).toContain("Approved result");
+    });
+
+    it("shows confirm prompt and returns denied on rejection", async () => {
+      let requestCount = 0;
+      let secondRequestMessages: unknown[] = [];
+
+      mswServer.use(
+        http.post(
+          "http://localhost:11434/v1/chat/completions",
+          async (info) => {
+            requestCount++;
+            if (requestCount === 1) {
+              return new HttpResponse(
+                sseBody([
+                  {
+                    choices: [
+                      {
+                        delta: {
+                          tool_calls: [
+                            {
+                              index: 0,
+                              id: "call_1",
+                              function: {
+                                name: "confirm_tool",
+                                arguments: "{}",
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                ]),
+                { headers: { "Content-Type": "text/event-stream" } },
+              );
+            }
+            const body = (await info.request.json()) as {
+              messages: unknown[];
+            };
+            secondRequestMessages = body.messages;
+            return new HttpResponse(
+              sseBody([{ choices: [{ delta: { content: "Denied result" } }] }]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          },
+        ),
+      );
+
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "confirm_tool",
+        displayName: "Confirm Tool",
+        description: "A tool that needs confirmation",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        execute: async (_args, context) => {
+          const approved = await context.confirm("Allow this action?");
+          return ok(approved ? "was approved" : "was denied");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("do the thing");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Deny
+      await stdin.write("n");
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+      expect(lastFrame()).toContain("Denied result");
+
+      // The denied result was sent to the LLM
+      const toolResultMsg = secondRequestMessages.find(
+        (m: unknown) => (m as { role: string }).role === "tool",
+      );
+      expect(toolResultMsg).toBeDefined();
+      expect((toolResultMsg as { content: string }).content).toBe("was denied");
+    });
   });
 });

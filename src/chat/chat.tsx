@@ -1,3 +1,4 @@
+import { Box, Text } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isCommand } from "../commands/is-command";
 import type {
@@ -22,6 +23,8 @@ import type { ToolRegistry } from "../tools/registry";
 import type { ToolContext } from "../tools/types";
 import { parseToolArgs } from "../tools/types";
 import { AppHeader } from "../ui/app-header";
+import { ConfirmPrompt } from "../ui/confirm-prompt";
+import { Indent } from "../ui/layout/indent";
 import { LoadingIndicator } from "../ui/loading-indicator";
 import { version } from "../utils/version";
 import type { AutocompleteItem } from "./autocomplete";
@@ -58,6 +61,8 @@ function useChat(props: UseChatProps) {
   const completion = useCompletion(provider, model);
   const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
   const [sessionKey, setSessionKey] = useState(() => crypto.randomUUID());
+  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  const confirmResolveRef = useRef<((approved: boolean) => void) | null>(null);
   const sessionPath = useRef(createSessionPath());
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -104,9 +109,11 @@ function useChat(props: UseChatProps) {
           const registry = props.toolRegistry;
           const toolContext: ToolContext = {
             permissions: config.permissions,
-            /* v8 ignore start -- placeholder until interactive confirm UI is built */
-            confirm: async () => true,
-            /* v8 ignore stop */
+            confirm: (message) =>
+              new Promise<boolean>((resolve) => {
+                confirmResolveRef.current = resolve;
+                setPendingConfirm(message);
+              }),
             signal: new AbortController().signal,
           };
 
@@ -311,6 +318,13 @@ function useChat(props: UseChatProps) {
       .map((cmd) => ({ name: cmd.name, description: cmd.description }));
   }, [props.commandRegistry]);
 
+  /** Resolves the pending confirm prompt and clears it. */
+  function handleConfirmResult(approved: boolean) {
+    confirmResolveRef.current?.(approved);
+    confirmResolveRef.current = null;
+    setPendingConfirm(null);
+  }
+
   /** Whether the assistant is currently streaming a response. */
   const isStreaming = completion.state === "streaming";
 
@@ -320,6 +334,7 @@ function useChat(props: UseChatProps) {
     history,
     messages,
     sessionKey,
+    pendingConfirm,
     isStreaming,
     streamingContent: completion.content,
     abort: completion.abort,
@@ -330,6 +345,7 @@ function useChat(props: UseChatProps) {
     handleSelected,
     handleExit,
     handleTakeoverDone,
+    handleConfirmResult,
   };
 }
 
@@ -347,6 +363,7 @@ export function Chat(props: ChatProps) {
     history,
     messages,
     sessionKey,
+    pendingConfirm,
     isStreaming,
     streamingContent,
     abort,
@@ -357,6 +374,7 @@ export function Chat(props: ChatProps) {
     handleSelected,
     handleExit,
     handleTakeoverDone,
+    handleConfirmResult,
   } = useChat({
     commandRegistry: props.commandRegistry,
     toolRegistry: props.toolRegistry,
@@ -425,14 +443,26 @@ export function Chat(props: ChatProps) {
       />
       {isStreaming && <LiveAssistantMessage content={streamingContent} />}
       {isStreaming && <LoadingIndicator text="Thinking" />}
-      <ChatInput
-        onMessage={handleMessage}
-        onUp={handleUp}
-        onAbort={isStreaming ? abort : undefined}
-        initialValue={mode.initialValue}
-        hasHistory={history.entries.length > 0}
-        autocompleteItems={autocompleteItems}
-      />
+      {pendingConfirm && (
+        <>
+          <Box paddingBottom={1}>
+            <Indent>
+              <Text dimColor>Awaiting approval</Text>
+            </Indent>
+          </Box>
+          <ConfirmPrompt onResult={handleConfirmResult} />
+        </>
+      )}
+      {!pendingConfirm && (
+        <ChatInput
+          onMessage={handleMessage}
+          onUp={handleUp}
+          onAbort={isStreaming ? abort : undefined}
+          initialValue={mode.initialValue}
+          hasHistory={history.entries.length > 0}
+          autocompleteItems={autocompleteItems}
+        />
+      )}
     </>
   );
 }

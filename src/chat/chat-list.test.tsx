@@ -113,7 +113,7 @@ describe("ChatList", () => {
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("⚙ Read File");
+    expect(frame).toContain("Read File");
     expect(frame).toContain("(path: ./foo.ts)");
   });
 
@@ -135,7 +135,7 @@ describe("ChatList", () => {
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("⚙");
+    expect(frame).toContain("Test");
     expect(frame).toContain("Test");
     expect(frame).not.toContain("just a string");
   });
@@ -158,7 +158,6 @@ describe("ChatList", () => {
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("⚙");
     expect(frame).toContain("Broken");
   });
 

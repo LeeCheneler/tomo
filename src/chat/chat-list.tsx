@@ -96,7 +96,7 @@ function ToolCallMessageView(props: { toolCalls: ToolCallInfo[] }) {
         const args = formatArgs(tc.arguments);
         return (
           <Indent key={tc.id}>
-            <Text color={theme.tool}>⚙ {tc.displayName}</Text>
+            <Text color={theme.tool}>{tc.displayName}</Text>
             {args ? <Text dimColor> ({args})</Text> : null}
           </Indent>
         );
