@@ -12,6 +12,7 @@ export function mockToolContext(
       globalReadFile: false,
       globalWriteFile: false,
     },
+    allowedCommands: [],
     confirm: vi.fn(async () => false),
     ask: vi.fn(async () => ""),
     signal: new AbortController().signal,

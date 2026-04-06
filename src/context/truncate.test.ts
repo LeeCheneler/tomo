@@ -99,4 +99,14 @@ describe("truncateMessages", () => {
     // RESPONSE_RESERVE (4096) > contextWindow * 0.95
     expect(truncateMessages(messages, 100)).toEqual(messages);
   });
+
+  it("returns messages unchanged when the only non-system message exceeds budget", () => {
+    // Budget with 5000 context: floor(5000 * 0.95) - 4096 = 654
+    // System (5 tokens) + one huge user message (700+ tokens) > 654
+    // But we can't drop the only non-system message, so dropCount stays 0
+    const words = Array.from({ length: 700 }, (_, i) => `w${i}`).join(" ");
+    const messages = [msg("system", "sys"), msg("user", words)];
+    const result = truncateMessages(messages, 5000);
+    expect(result).toEqual(messages);
+  });
 });

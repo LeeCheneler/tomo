@@ -112,6 +112,14 @@ function truncateLines(output: string, maxLines: number): string {
   return `${lines.slice(0, maxLines).join("\n")}\n…[${hidden} more lines]`;
 }
 
+/** Keeps only the last N lines of output, showing a hidden count for the rest. */
+function tailLines(output: string, maxLines: number): string {
+  const lines = output.split("\n");
+  if (lines.length <= maxLines) return output;
+  const hidden = lines.length - maxLines;
+  return `…[${hidden} more lines]\n${lines.slice(-maxLines).join("\n")}`;
+}
+
 /** Renders a tool execution result. Errors and denials are shown in red. */
 function ToolResultMessageView(props: {
   output: string;
@@ -233,6 +241,26 @@ export function LiveAssistantMessage(props: LiveAssistantMessageProps) {
     <Box paddingBottom={1}>
       <Indent>
         <Text>{renderMarkdown(completePartialMarkdown(props.content))}</Text>
+      </Indent>
+    </Box>
+  );
+}
+
+/** Props for LiveToolOutput. */
+export interface LiveToolOutputProps {
+  output: string;
+}
+
+/** Renders streaming tool output, showing only the last few lines. */
+export function LiveToolOutput(props: LiveToolOutputProps) {
+  if (!props.output) {
+    return null;
+  }
+
+  return (
+    <Box paddingBottom={1}>
+      <Indent>
+        <Text dimColor>{tailLines(props.output, MAX_TOOL_OUTPUT_LINES)}</Text>
       </Indent>
     </Box>
   );

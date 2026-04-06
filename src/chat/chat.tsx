@@ -31,7 +31,7 @@ import { LoadingIndicator } from "../ui/loading-indicator";
 import { version } from "../utils/version";
 import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
-import { ChatList, LiveAssistantMessage } from "./chat-list";
+import { ChatList, LiveAssistantMessage, LiveToolOutput } from "./chat-list";
 import type { ChatMessage } from "./message";
 import { MessageHistory } from "./message-history";
 import { useCompletion } from "./use-completion";
@@ -85,6 +85,9 @@ function useChat(props: UseChatProps) {
   messagesRef.current = messages;
   const permissionsRef = useRef(config.permissions);
   permissionsRef.current = config.permissions;
+  const allowedCommandsRef = useRef(config.allowedCommands);
+  allowedCommandsRef.current = config.allowedCommands;
+  const [liveToolOutput, setLiveToolOutput] = useState<string | null>(null);
   const handledStateRef = useRef<string | null>(null);
   const emptyRetryRef = useRef(0);
 
@@ -144,6 +147,7 @@ function useChat(props: UseChatProps) {
           const registry = props.toolRegistry;
           const toolContext: ToolContext = {
             permissions: permissionsRef.current,
+            allowedCommands: allowedCommandsRef.current,
             confirm: (message, options) =>
               new Promise<boolean>((resolve) => {
                 confirmResolveRef.current = resolve;
@@ -154,6 +158,7 @@ function useChat(props: UseChatProps) {
                 askResolveRef.current = resolve;
                 setPendingAsk({ question, options });
               }),
+            onProgress: (output) => setLiveToolOutput(output),
             signal: new AbortController().signal,
           };
 
@@ -164,6 +169,7 @@ function useChat(props: UseChatProps) {
             toolContext,
             appendMessage,
           );
+          setLiveToolOutput(null);
 
           const allMessages = [...messagesRef.current, ...newMessages];
           const systemPrompt = buildSystemPrompt();
@@ -367,6 +373,7 @@ function useChat(props: UseChatProps) {
     pendingConfirm,
     isStreaming,
     streamingContent: completion.content,
+    liveToolOutput,
     abort: completion.abort,
     autocompleteItems,
     buildCommandContext,
@@ -398,6 +405,7 @@ export function Chat(props: ChatProps) {
     pendingConfirm,
     isStreaming,
     streamingContent,
+    liveToolOutput,
     abort,
     autocompleteItems,
     buildCommandContext,
@@ -431,6 +439,7 @@ export function Chat(props: ChatProps) {
         />
         {isStreaming && <LiveAssistantMessage content={streamingContent} />}
         {isStreaming && <LoadingIndicator text="Thinking" />}
+        {liveToolOutput && <LiveToolOutput output={liveToolOutput} />}
         {mode.render(handleTakeoverDone, buildCommandContext())}
       </>
     );
@@ -452,6 +461,7 @@ export function Chat(props: ChatProps) {
         />
         {isStreaming && <LiveAssistantMessage content={streamingContent} />}
         {isStreaming && <LoadingIndicator text="Thinking" />}
+        {liveToolOutput && <LiveToolOutput output={liveToolOutput} />}
         <MessageHistory
           entries={history.entries}
           onSelected={handleSelected}
@@ -477,6 +487,7 @@ export function Chat(props: ChatProps) {
       />
       {isStreaming && <LiveAssistantMessage content={streamingContent} />}
       {isStreaming && <LoadingIndicator text="Thinking" />}
+      {liveToolOutput && <LiveToolOutput output={liveToolOutput} />}
       {pendingConfirm && (
         <>
           {pendingConfirm.diff && (

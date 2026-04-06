@@ -11,6 +11,7 @@ import { globTool } from "./tools/glob";
 import { grepTool } from "./tools/grep";
 import { readFileTool } from "./tools/read-file";
 import { createToolRegistry } from "./tools/registry";
+import { runCommandTool } from "./tools/run-command";
 import { writeFileTool } from "./tools/write-file";
 
 /** Creates the application command registry with all built-in commands. */
@@ -33,6 +34,7 @@ function buildToolRegistry() {
   registry.register(editFileTool);
   registry.register(globTool);
   registry.register(grepTool);
+  registry.register(runCommandTool);
   return registry;
 }
 

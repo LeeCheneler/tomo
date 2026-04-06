@@ -71,4 +71,20 @@ describe("countMessageTokens", () => {
     };
     expect(countMessageTokens(msg)).toBeGreaterThan(0);
   });
+
+  it("skips non-text content parts", () => {
+    const textOnly: ChatMessage = {
+      role: "user",
+      content: [{ type: "text", text: "hello" }],
+    };
+    const withImage: ChatMessage = {
+      role: "user",
+      content: [
+        { type: "text", text: "hello" },
+        { type: "image_url", image_url: { url: "data:image/png;base64,abc" } },
+      ],
+    };
+    // Image part adds no tokens — counts should be equal
+    expect(countMessageTokens(withImage)).toBe(countMessageTokens(textOnly));
+  });
 });

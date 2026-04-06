@@ -44,10 +44,14 @@ export interface ConfirmOptions {
 export interface ToolContext {
   /** Resolved file access permissions from config. */
   permissions: Permissions;
+  /** Auto-approved command patterns from config (e.g. "git:*", "npm test"). */
+  allowedCommands: readonly string[];
   /** Prompts the user for confirmation. Returns true if approved, false if denied. */
   confirm: (message: string, options?: ConfirmOptions) => Promise<boolean>;
   /** Prompts the user with a question. Returns the answer, or null if the user cancels. */
   ask: (question: string, options?: string[]) => Promise<string | null>;
+  /** Reports incremental output during tool execution (for streaming display). */
+  onProgress?: (output: string) => void;
   /** Abort signal from the parent conversation. */
   signal: AbortSignal;
 }

@@ -1,7 +1,7 @@
 import { Text } from "ink";
 import { describe, expect, it } from "vitest";
 import { renderInk } from "../test-utils/ink";
-import { ChatList, LiveAssistantMessage } from "./chat-list";
+import { ChatList, LiveAssistantMessage, LiveToolOutput } from "./chat-list";
 import type { ChatMessage } from "./message";
 
 describe("ChatList", () => {
@@ -306,5 +306,39 @@ describe("LiveAssistantMessage", () => {
   it("renders nothing when content is empty", () => {
     const { lastFrame } = renderInk(<LiveAssistantMessage content="" />);
     expect(lastFrame()).toBe("");
+  });
+});
+
+describe("LiveToolOutput", () => {
+  it("renders output when provided", () => {
+    const { lastFrame } = renderInk(<LiveToolOutput output="build ok" />);
+    expect(lastFrame()).toContain("build ok");
+  });
+
+  it("renders nothing when output is empty", () => {
+    const { lastFrame } = renderInk(<LiveToolOutput output="" />);
+    expect(lastFrame()).toBe("");
+  });
+
+  it("shows all lines when output is within the limit", () => {
+    const { lastFrame } = renderInk(
+      <LiveToolOutput output="line 1\nline 2\nline 3" />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("line 1");
+    expect(frame).toContain("line 2");
+    expect(frame).toContain("line 3");
+  });
+
+  it("shows only the last 5 lines with a hidden count when output exceeds limit", () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);
+    const { lastFrame } = renderInk(
+      <LiveToolOutput output={lines.join("\n")} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("line 6");
+    expect(frame).toContain("line 10");
+    expect(frame).toContain("…[5 more lines]");
+    expect(frame).not.toContain("line 5");
   });
 });
