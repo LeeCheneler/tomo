@@ -38,6 +38,11 @@ function setColumns(width: number | undefined) {
   });
 }
 
+/** Default handler for Ollama context window requests. */
+const ollamaShowHandler = http.post("http://localhost:11434/api/show", () =>
+  HttpResponse.json({ model_info: { num_ctx: 8192 } }),
+);
+
 describe("Chat", () => {
   afterEach(() => {
     setColumns(undefined);
@@ -348,7 +353,7 @@ describe("Chat", () => {
   });
 
   describe("completion", () => {
-    const mswServer = setupMsw();
+    const mswServer = setupMsw(ollamaShowHandler);
 
     /** Builds an SSE response body from data objects. */
     function sseBody(chunks: unknown[]): string {
@@ -583,7 +588,7 @@ describe("Chat", () => {
   });
 
   describe("session persistence", () => {
-    const mswServer = setupMsw();
+    const mswServer = setupMsw(ollamaShowHandler);
 
     /** Builds an SSE response body from data objects. */
     function sseBody(chunks: unknown[]): string {
@@ -810,7 +815,7 @@ describe("Chat", () => {
   });
 
   describe("tool execution", () => {
-    const mswServer = setupMsw();
+    const mswServer = setupMsw(ollamaShowHandler);
 
     const PROVIDER = {
       name: "test-ollama",

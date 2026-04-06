@@ -8,12 +8,23 @@ const server = setupServer();
 /**
  * Sets up MSW lifecycle hooks for the current test suite.
  * Call once at the top of a describe block that needs network mocking.
- * Use `server.use(...)` inside individual tests to add handlers.
+ * Pass default handlers that persist across all tests in the suite —
+ * they are re-applied after each reset so per-test handlers don't clear them.
+ * Use `server.use(...)` inside individual tests to add per-test handlers.
  */
-export function setupMsw(): typeof server {
+export function setupMsw(...defaultHandlers: RequestHandler[]): typeof server {
   beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-  afterEach(() => server.resetHandlers());
+  afterEach(() => {
+    server.resetHandlers();
+    if (defaultHandlers.length > 0) {
+      server.use(...defaultHandlers);
+    }
+  });
   afterAll(() => server.close());
+  // Apply defaults immediately so they're active for the first test
+  if (defaultHandlers.length > 0) {
+    beforeAll(() => server.use(...defaultHandlers));
+  }
   return server;
 }
 
