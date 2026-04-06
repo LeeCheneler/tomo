@@ -56,6 +56,7 @@ export interface ToolResultMessage {
   toolCallId: string;
   toolName: string;
   output: string;
+  status: "ok" | "error" | "denied";
 }
 
 /** Union of all chat message types. Discriminate on `role`. */

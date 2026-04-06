@@ -115,12 +115,16 @@ function truncateLines(output: string, maxLines: number): string {
   return `${lines.slice(0, maxLines).join("\n")}\n…`;
 }
 
-/** Renders a tool execution result. */
-function ToolResultMessageView(props: { output: string }) {
+/** Renders a tool execution result. Errors and denials are shown in red. */
+function ToolResultMessageView(props: {
+  output: string;
+  status: "ok" | "error" | "denied";
+}) {
+  const isError = props.status === "error" || props.status === "denied";
   return (
     <Box paddingBottom={1}>
       <Indent>
-        <Text dimColor>
+        <Text dimColor={!isError} color={isError ? theme.error : undefined}>
           {truncateLines(props.output, MAX_TOOL_OUTPUT_LINES)}
         </Text>
       </Indent>
@@ -188,7 +192,11 @@ export function ChatList(props: ChatListProps) {
         }
         if (message.role === "tool-result") {
           return (
-            <ToolResultMessageView key={message.id} output={message.output} />
+            <ToolResultMessageView
+              key={message.id}
+              output={message.output}
+              status={message.status}
+            />
           );
         }
         return null;

@@ -84,6 +84,7 @@ describe("buildProviderMessages", () => {
         toolCallId: "call_1",
         toolName: "read_file",
         output: "file contents here",
+        status: "ok",
       },
     ];
 

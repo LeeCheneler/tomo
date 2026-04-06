@@ -145,6 +145,7 @@ function useChat(props: UseChatProps) {
                 toolCallId: tc.id,
                 toolName: tc.function.name,
                 output: `Unknown tool: ${tc.function.name}`,
+                status: "error",
               };
               appendMessage(resultMsg);
               newMessages.push(resultMsg);
@@ -152,6 +153,7 @@ function useChat(props: UseChatProps) {
             }
 
             let output: string;
+            let status: "ok" | "error" | "denied" = "ok";
             try {
               const parsed = parseToolArgs(
                 tool.argsSchema,
@@ -159,9 +161,11 @@ function useChat(props: UseChatProps) {
               );
               const result = await tool.execute(parsed, toolContext);
               output = result.output;
+              status = result.status;
             } catch (e) {
               /* v8 ignore start -- non-Error throws are unlikely but handled */
               output = `Tool error: ${e instanceof Error ? e.message : "unknown error"}`;
+              status = "error";
               /* v8 ignore stop */
             }
 
@@ -171,6 +175,7 @@ function useChat(props: UseChatProps) {
               toolCallId: tc.id,
               toolName: tc.function.name,
               output,
+              status,
             };
             appendMessage(resultMsg);
             newMessages.push(resultMsg);

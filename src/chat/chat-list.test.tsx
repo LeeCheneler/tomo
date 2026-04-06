@@ -169,11 +169,44 @@ describe("ChatList", () => {
         toolCallId: "call_1",
         toolName: "read_file",
         output: "file contents here",
+        status: "ok",
       },
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
     expect(frame).toContain("file contents here");
+  });
+
+  it("renders error tool-result in red", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-result",
+        toolCallId: "call_1",
+        toolName: "read_file",
+        output: "file not found: nope.txt",
+        status: "error",
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("file not found: nope.txt");
+  });
+
+  it("renders denied tool-result in red", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-result",
+        toolCallId: "call_1",
+        toolName: "read_file",
+        output: "The user denied this read.",
+        status: "denied",
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("The user denied this read.");
   });
 
   it("truncates tool-result output to 5 lines", () => {
@@ -185,6 +218,7 @@ describe("ChatList", () => {
         toolCallId: "call_1",
         toolName: "read_file",
         output: lines.join("\n"),
+        status: "ok",
       },
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
