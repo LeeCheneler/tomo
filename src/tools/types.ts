@@ -50,6 +50,8 @@ export interface ToolContext {
   confirm: (message: string, options?: ConfirmOptions) => Promise<boolean>;
   /** Prompts the user with a question. Returns the answer, or null if the user cancels. */
   ask: (question: string, options?: string[]) => Promise<string | null>;
+  /** Tavily API key for web search, if configured. */
+  webSearchApiKey?: string;
   /** Reports incremental output during tool execution (for streaming display). */
   onProgress?: (output: string) => void;
   /** Abort signal from the parent conversation. */

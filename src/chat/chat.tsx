@@ -93,6 +93,8 @@ function useChat(props: UseChatProps) {
   permissionsRef.current = config.permissions;
   const allowedCommandsRef = useRef(config.allowedCommands);
   allowedCommandsRef.current = config.allowedCommands;
+  const webSearchApiKeyRef = useRef(config.tools.webSearch.apiKey);
+  webSearchApiKeyRef.current = config.tools.webSearch.apiKey;
   const [liveToolOutput, setLiveToolOutput] = useState<string | null>(null);
   const handledStateRef = useRef<string | null>(null);
   const emptyRetryRef = useRef(0);
@@ -154,6 +156,7 @@ function useChat(props: UseChatProps) {
           const toolContext: ToolContext = {
             permissions: permissionsRef.current,
             allowedCommands: allowedCommandsRef.current,
+            webSearchApiKey: webSearchApiKeyRef.current,
             confirm: (message, options) =>
               new Promise<boolean>((resolve) => {
                 confirmResolveRef.current = resolve;

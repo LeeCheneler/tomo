@@ -7,6 +7,7 @@ import { SESSIONS_DIR } from "../session/session";
 import { z } from "zod";
 import { createToolRegistry } from "../tools/registry";
 import { ok } from "../tools/types";
+import type { ToolContext } from "../tools/types";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
@@ -1065,6 +1066,94 @@ describe("Chat", () => {
       expect(requestCount).toBe(2);
       expect(toolExecute).toHaveBeenCalledOnce();
       expect(lastFrame()).toContain("Tool result was: hello");
+    });
+
+    it("passes allowedCommands and webSearchApiKey from config into tool context", async () => {
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", async () => {
+          requestCount++;
+          if (requestCount === 1) {
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_ctx",
+                            function: {
+                              name: "ctx_tool",
+                              arguments: "{}",
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          }
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "done" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      const capturedContexts: ToolContext[] = [];
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "ctx_tool",
+        displayName: "Context Tool",
+        description: "Captures its context for assertion",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        formatCall: () => "",
+        async execute(_args, context) {
+          capturedContexts.push(context);
+          return ok("ok");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin } = renderInk(<Chat toolRegistry={toolRegistry} />, {
+        global: {
+          providers: [PROVIDER],
+          activeProvider: PROVIDER.name,
+          activeModel: "llama3",
+          allowedCommands: ["git:*", "npm test"],
+          tools: {
+            agent: { enabled: true },
+            ask: { enabled: true },
+            editFile: { enabled: true },
+            glob: { enabled: true },
+            grep: { enabled: true },
+            readFile: { enabled: true },
+            runCommand: { enabled: true },
+            skill: { enabled: true },
+            webSearch: { enabled: true, apiKey: "tavily-test-key" },
+            writeFile: { enabled: true },
+          },
+        },
+      });
+
+      await stdin.write("use the tool");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+      expect(capturedContexts).toHaveLength(1);
+      expect(capturedContexts[0]?.allowedCommands).toEqual([
+        "git:*",
+        "npm test",
+      ]);
+      expect(capturedContexts[0]?.webSearchApiKey).toBe("tavily-test-key");
     });
 
     it("renders live tool output when a tool reports progress", async () => {
