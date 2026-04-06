@@ -7,4 +7,5 @@ export const theme = {
   success: "green",
   settings: "green",
   key: "yellow",
+  tool: "yellow",
 } as const;

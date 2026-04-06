@@ -60,7 +60,7 @@ describe("useCompletion", () => {
     const { Harness, ref } = createHarness(null, MODEL);
     renderInk(createElement(Harness));
 
-    ref.current?.send([{ role: "user", content: "hello" }]);
+    ref.current?.send({ messages: [{ role: "user", content: "hello" }] });
     expect(ref.current?.state).toBe("idle");
   });
 
@@ -68,7 +68,7 @@ describe("useCompletion", () => {
     const { Harness, ref } = createHarness(PROVIDER, null);
     renderInk(createElement(Harness));
 
-    ref.current?.send([{ role: "user", content: "hello" }]);
+    ref.current?.send({ messages: [{ role: "user", content: "hello" }] });
     expect(ref.current?.state).toBe("idle");
   });
 
@@ -91,7 +91,7 @@ describe("useCompletion", () => {
     const { Harness, ref } = createHarness(PROVIDER, MODEL);
     renderInk(createElement(Harness));
 
-    ref.current?.send([{ role: "user", content: "hello" }]);
+    ref.current?.send({ messages: [{ role: "user", content: "hello" }] });
     await new Promise((r) => setTimeout(r, 50));
 
     expect(ref.current?.state).toBe("complete");
@@ -114,7 +114,7 @@ describe("useCompletion", () => {
     const { Harness, ref } = createHarness(PROVIDER, MODEL);
     renderInk(createElement(Harness));
 
-    ref.current?.send([{ role: "user", content: "hello" }]);
+    ref.current?.send({ messages: [{ role: "user", content: "hello" }] });
     await new Promise((r) => setTimeout(r, 50));
 
     expect(ref.current?.state).toBe("error");
@@ -160,7 +160,7 @@ describe("useCompletion", () => {
     const { Harness, ref } = createHarness(PROVIDER, MODEL);
     renderInk(createElement(Harness));
 
-    ref.current?.send([{ role: "user", content: "hello" }]);
+    ref.current?.send({ messages: [{ role: "user", content: "hello" }] });
     await new Promise((r) => setTimeout(r, 50));
 
     expect(ref.current?.content).toBe("partial");

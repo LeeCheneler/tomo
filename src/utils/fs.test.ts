@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
@@ -11,6 +12,7 @@ import {
   appendFile,
   ensureDir,
   fileExists,
+  isDirectory,
   listDir,
   readFile,
   writeFile,
@@ -21,6 +23,7 @@ vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
   readdirSync: vi.fn(),
+  statSync: vi.fn(),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
 }));
@@ -66,6 +69,25 @@ describe("listDir", () => {
   it("returns empty array when directory does not exist", () => {
     vi.mocked(existsSync).mockReturnValue(false);
     expect(listDir("/missing")).toEqual([]);
+  });
+});
+
+describe("isDirectory", () => {
+  it("returns true when path is a directory", () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as never);
+    expect(isDirectory("/my/dir")).toBe(true);
+  });
+
+  it("returns false when path is a file", () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(statSync).mockReturnValue({ isDirectory: () => false } as never);
+    expect(isDirectory("/my/file")).toBe(false);
+  });
+
+  it("returns false when path does not exist", () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+    expect(isDirectory("/missing")).toBe(false);
   });
 });
 

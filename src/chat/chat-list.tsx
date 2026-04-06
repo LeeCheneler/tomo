@@ -1,7 +1,7 @@
 import { Box, Static, Text } from "ink";
 import type { ReactNode } from "react";
 import { completePartialMarkdown, renderMarkdown } from "../markdown/render";
-import type { ChatMessage } from "./message";
+import type { ChatMessage, ToolCallInfo } from "./message";
 import { theme } from "../ui/theme";
 import { Indent } from "../ui/layout/indent";
 
@@ -75,6 +75,59 @@ function CommandMessageView(props: { command: string; result: string }) {
   );
 }
 
+/** Formats tool call arguments as a single-line summary (e.g. "path: ./foo.ts"). */
+function formatArgs(argsJson: string): string {
+  try {
+    const parsed = JSON.parse(argsJson);
+    if (typeof parsed !== "object" || parsed === null) return "";
+    return Object.entries(parsed)
+      .map(([key, value]) => `${key}: ${String(value)}`)
+      .join("  ");
+  } catch {
+    return "";
+  }
+}
+
+/** Renders a tool call from the assistant. */
+function ToolCallMessageView(props: { toolCalls: ToolCallInfo[] }) {
+  return (
+    <Box flexDirection="column" paddingBottom={1}>
+      {props.toolCalls.map((tc) => {
+        const args = formatArgs(tc.arguments);
+        return (
+          <Indent key={tc.id}>
+            <Text color={theme.tool}>{tc.displayName}</Text>
+            {args ? <Text dimColor> ({args})</Text> : null}
+          </Indent>
+        );
+      })}
+    </Box>
+  );
+}
+
+/** Maximum lines of tool output to display. */
+const MAX_TOOL_OUTPUT_LINES = 5;
+
+/** Truncates output to a maximum number of lines. */
+function truncateLines(output: string, maxLines: number): string {
+  const lines = output.split("\n");
+  if (lines.length <= maxLines) return output;
+  return `${lines.slice(0, maxLines).join("\n")}\n…`;
+}
+
+/** Renders a tool execution result. */
+function ToolResultMessageView(props: { output: string }) {
+  return (
+    <Box paddingBottom={1}>
+      <Indent>
+        <Text dimColor>
+          {truncateLines(props.output, MAX_TOOL_OUTPUT_LINES)}
+        </Text>
+      </Indent>
+    </Box>
+  );
+}
+
 /** Renders the chat message list. Messages are rendered once and persist on screen. */
 export function ChatList(props: ChatListProps) {
   const items: StaticItem[] = [];
@@ -123,6 +176,19 @@ export function ChatList(props: ChatListProps) {
               command={message.command}
               result={message.result}
             />
+          );
+        }
+        if (message.role === "tool-call") {
+          return (
+            <ToolCallMessageView
+              key={message.id}
+              toolCalls={message.toolCalls}
+            />
+          );
+        }
+        if (message.role === "tool-result") {
+          return (
+            <ToolResultMessageView key={message.id} output={message.output} />
           );
         }
         return null;

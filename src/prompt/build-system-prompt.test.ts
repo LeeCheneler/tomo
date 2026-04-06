@@ -31,9 +31,10 @@ describe("buildSystemPrompt", () => {
 
     const result = buildSystemPrompt();
 
-    expect(result).toBe(
+    expect(result).toContain(
       "System: linux (6.1.0), arch: x64, shell: /bin/bash, user: testuser, cwd: /mock-project",
     );
+    expect(result).toContain("# Tool Usage");
     fs.restore();
   });
 

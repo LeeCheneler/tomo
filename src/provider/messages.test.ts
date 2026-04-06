@@ -44,6 +44,58 @@ describe("buildProviderMessages", () => {
     ]);
   });
 
+  it("maps tool-call messages to assistant with tool_calls", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-call",
+        content: "",
+        toolCalls: [
+          {
+            id: "call_1",
+            name: "read_file",
+            displayName: "Read File",
+            arguments: '{"path":"foo.ts"}',
+          },
+        ],
+      },
+    ];
+
+    const result = buildProviderMessages(messages, "sys");
+
+    expect(result[1]).toEqual({
+      role: "assistant",
+      content: "",
+      tool_calls: [
+        {
+          id: "call_1",
+          type: "function",
+          function: { name: "read_file", arguments: '{"path":"foo.ts"}' },
+        },
+      ],
+    });
+  });
+
+  it("maps tool-result messages to tool role", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-result",
+        toolCallId: "call_1",
+        toolName: "read_file",
+        output: "file contents here",
+      },
+    ];
+
+    const result = buildProviderMessages(messages, "sys");
+
+    expect(result[1]).toEqual({
+      role: "tool",
+      content: "file contents here",
+      tool_call_id: "call_1",
+    });
+  });
+
   it("strips ANSI codes from assistant messages", () => {
     const messages: ChatMessage[] = [
       {

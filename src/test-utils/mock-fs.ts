@@ -61,6 +61,14 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
         .map((k) => k.slice(prefix.length));
     });
 
+  const isDirectorySpy = vi
+    .spyOn(fsUtils, "isDirectory")
+    .mockImplementation((path) => {
+      // A path is a "directory" if any file in the map is nested under it.
+      const prefix = `${path}/`;
+      return [...files.keys()].some((k) => k.startsWith(prefix));
+    });
+
   const ensureDirSpy = vi
     .spyOn(fsUtils, "ensureDir")
     .mockImplementation(() => {});
@@ -78,6 +86,7 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
       writeFileSpy.mockRestore();
       appendFileSpy.mockRestore();
       listDirSpy.mockRestore();
+      isDirectorySpy.mockRestore();
       ensureDirSpy.mockRestore();
     },
   };

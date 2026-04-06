@@ -24,6 +24,24 @@ export function buildProviderMessages(
     if (msg.role === "assistant") {
       result.push({ role: "assistant", content: stripAnsi(msg.content) });
     }
+    if (msg.role === "tool-call") {
+      result.push({
+        role: "assistant",
+        content: msg.content,
+        tool_calls: msg.toolCalls.map((tc) => ({
+          id: tc.id,
+          type: "function" as const,
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+      });
+    }
+    if (msg.role === "tool-result") {
+      result.push({
+        role: "tool",
+        content: msg.output,
+        tool_call_id: msg.toolCallId,
+      });
+    }
   }
   return result;
 }
