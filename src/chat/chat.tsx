@@ -351,11 +351,13 @@ function useChat(props: UseChatProps) {
   }
 
   /** Maps registry commands to autocomplete items. */
-  const autocompleteItems: readonly AutocompleteItem[] = useMemo(() => {
+  const commandAutocompleteItems: readonly AutocompleteItem[] = useMemo(() => {
     const registry = props.commandRegistry ?? createCommandRegistry();
-    return registry
-      .list()
-      .map((cmd) => ({ name: cmd.name, description: cmd.description }));
+    return registry.list().map((cmd) => ({
+      key: cmd.name,
+      name: cmd.name,
+      description: cmd.description,
+    }));
   }, [props.commandRegistry]);
 
   /** Resolves the pending confirm prompt and clears it. */
@@ -386,7 +388,7 @@ function useChat(props: UseChatProps) {
     streamingContent: completion.content,
     liveToolOutput,
     abort: completion.abort,
-    autocompleteItems,
+    commandAutocompleteItems,
     buildCommandContext,
     handleMessage,
     handleUp,
@@ -418,7 +420,7 @@ export function Chat(props: ChatProps) {
     streamingContent,
     liveToolOutput,
     abort,
-    autocompleteItems,
+    commandAutocompleteItems,
     buildCommandContext,
     handleMessage,
     handleUp,
@@ -530,7 +532,7 @@ export function Chat(props: ChatProps) {
           onAbort={isStreaming ? abort : undefined}
           initialValue={mode.initialValue}
           hasHistory={history.entries.length > 0}
-          autocompleteItems={autocompleteItems}
+          commandAutocompleteItems={commandAutocompleteItems}
         />
       )}
     </>

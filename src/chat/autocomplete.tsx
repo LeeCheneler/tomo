@@ -6,9 +6,18 @@ export const MAX_VISIBLE = 5;
 
 /** A single autocomplete suggestion. */
 export interface AutocompleteItem {
+  /** Unique identifier used as the React key. Falls back to name if not set. */
+  key: string;
+  /** Display name shown in the autocomplete list. */
   name: string;
+  /** Description shown alongside the name. */
   description: string;
+  /** Optional tag rendered before the description (e.g. "(local)"). */
+  tag?: string;
 }
+
+/** Which autocomplete list to show based on input prefix. */
+export type AutocompleteMode = "command" | "skill" | "none";
 
 /** Return value of useAutocompleteNavigation. */
 export interface AutocompleteNavigation {
@@ -121,9 +130,11 @@ export function useAutocompleteNavigation(
 interface AutocompleteListProps {
   /** The autocomplete navigation state. */
   autocomplete: AutocompleteNavigation;
+  /** Prefix to display before each item name ("/" for commands, "//" for skills). */
+  prefix: string;
 }
 
-/** Filtered command list shown below the input. Shows a sliding window of MAX_VISIBLE items. */
+/** Filtered autocomplete list shown below the input. Shows a sliding window of MAX_VISIBLE items. */
 export function AutocompleteList(props: AutocompleteListProps) {
   const { filtered, selectedIndex, windowStart } = props.autocomplete;
 
@@ -132,7 +143,9 @@ export function AutocompleteList(props: AutocompleteListProps) {
   }
 
   const visible = filtered.slice(windowStart, windowStart + MAX_VISIBLE);
-  const nameWidth = Math.max(...visible.map((item) => item.name.length + 1));
+  const nameWidth = Math.max(
+    ...visible.map((item) => props.prefix.length + item.name.length),
+  );
 
   return (
     <Box flexDirection="column">
@@ -140,14 +153,32 @@ export function AutocompleteList(props: AutocompleteListProps) {
         const absoluteIndex = windowStart + i;
         const isSelected = absoluteIndex === selectedIndex;
         return (
-          <Box key={item.name} gap={2}>
+          <Box key={item.key} gap={2}>
             <Text color={isSelected ? "cyan" : "white"} bold={isSelected}>
-              {`/${item.name}`.padEnd(nameWidth)}
+              {`${props.prefix}${item.name}`.padEnd(nameWidth)}
             </Text>
+            {item.tag && <Text color="magenta">{item.tag}</Text>}
             <Text dimColor>{item.description}</Text>
           </Box>
         );
       })}
     </Box>
   );
+}
+
+/** Returns the autocomplete mode based on input value and available items. */
+export function getAutocompleteMode(
+  value: string,
+  commandItems: readonly AutocompleteItem[],
+  skillItems: readonly AutocompleteItem[],
+): AutocompleteMode {
+  if (value.includes(" ")) return "none";
+  if (value.startsWith("//") && skillItems.length > 0) return "skill";
+  if (
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    commandItems.length > 0
+  )
+    return "command";
+  return "none";
 }

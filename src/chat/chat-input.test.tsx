@@ -23,20 +23,20 @@ describe("ChatInput", () => {
 
   /** Test autocomplete items. */
   const testItems: AutocompleteItem[] = [
-    { name: "ping", description: "Responds with pong" },
-    { name: "pong", description: "Responds with ping" },
-    { name: "help", description: "Show help" },
+    { key: "ping", name: "ping", description: "Responds with pong" },
+    { key: "pong", name: "pong", description: "Responds with ping" },
+    { key: "help", name: "help", description: "Show help" },
   ];
 
   /** Test items exceeding MAX_VISIBLE (5). */
   const manyItems: AutocompleteItem[] = [
-    { name: "aaa", description: "First" },
-    { name: "bbb", description: "Second" },
-    { name: "ccc", description: "Third" },
-    { name: "ddd", description: "Fourth" },
-    { name: "eee", description: "Fifth" },
-    { name: "fff", description: "Sixth" },
-    { name: "ggg", description: "Seventh" },
+    { key: "aaa", name: "aaa", description: "First" },
+    { key: "bbb", name: "bbb", description: "Second" },
+    { key: "ccc", name: "ccc", description: "Third" },
+    { key: "ddd", name: "ddd", description: "Fourth" },
+    { key: "eee", name: "eee", description: "Fifth" },
+    { key: "fff", name: "fff", description: "Sixth" },
+    { key: "ggg", name: "ggg", description: "Seventh" },
   ];
 
   /** Renders ChatInput with sensible defaults and a fixed terminal width. */
@@ -47,7 +47,8 @@ describe("ChatInput", () => {
       onAbort: () => void;
       initialValue: string;
       hasHistory: boolean;
-      autocompleteItems: readonly AutocompleteItem[];
+      commandAutocompleteItems: readonly AutocompleteItem[];
+      skillAutocompleteItems: readonly AutocompleteItem[];
     }> = {},
   ) {
     setColumns(COLUMNS);
@@ -59,7 +60,8 @@ describe("ChatInput", () => {
         onAbort={overrides.onAbort}
         initialValue={overrides.initialValue}
         hasHistory={overrides.hasHistory}
-        autocompleteItems={overrides.autocompleteItems ?? []}
+        commandAutocompleteItems={overrides.commandAutocompleteItems ?? []}
+        skillAutocompleteItems={overrides.skillAutocompleteItems}
       />,
     );
   }
@@ -82,7 +84,7 @@ describe("ChatInput", () => {
       setColumns(undefined);
 
       const { lastFrame } = renderInk(
-        <ChatInput onMessage={() => {}} autocompleteItems={[]} />,
+        <ChatInput onMessage={() => {}} commandAutocompleteItems={[]} />,
       );
 
       const frame = lastFrame() ?? "";
@@ -167,7 +169,7 @@ describe("ChatInput", () => {
   });
 
   describe("instruction bar", () => {
-    it("always shows enter submit, esc clear, and / command", () => {
+    it("always shows enter submit, esc clear, / command, and // skill", () => {
       const { lastFrame } = renderInput();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("enter");
@@ -176,6 +178,8 @@ describe("ChatInput", () => {
       expect(frame).toContain("clear");
       expect(frame).toContain("/");
       expect(frame).toContain("command");
+      expect(frame).toContain("//");
+      expect(frame).toContain("skill");
     });
 
     it("shows instructions even when input is empty", () => {
@@ -290,7 +294,7 @@ describe("ChatInput", () => {
   describe("autocomplete", () => {
     it("shows autocomplete list when typing /", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       const frame = lastFrame() ?? "";
@@ -301,7 +305,7 @@ describe("ChatInput", () => {
 
     it("filters autocomplete list as user types", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/pi");
       const frame = lastFrame() ?? "";
@@ -311,7 +315,7 @@ describe("ChatInput", () => {
 
     it("hides autocomplete after space", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/ping");
       await stdin.write(keys.space);
@@ -321,7 +325,7 @@ describe("ChatInput", () => {
 
     it("does not show autocomplete for regular text", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("hello");
       expect(lastFrame()).not.toContain("/ping");
@@ -329,7 +333,7 @@ describe("ChatInput", () => {
 
     it("does not show autocomplete for // prefix", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("//");
       expect(lastFrame()).not.toContain("/ping");
@@ -337,7 +341,7 @@ describe("ChatInput", () => {
 
     it("navigates down through autocomplete with up/down", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       await stdin.write(keys.down);
@@ -349,7 +353,7 @@ describe("ChatInput", () => {
 
     it("navigates up through autocomplete", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       await stdin.write(keys.down);
@@ -360,7 +364,7 @@ describe("ChatInput", () => {
 
     it("loops autocomplete selection", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       // Up from index 0 loops to last (pong).
@@ -371,7 +375,7 @@ describe("ChatInput", () => {
 
     it("fills input with selected command on enter and appends space", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       // First item alphabetically is help.
@@ -384,7 +388,7 @@ describe("ChatInput", () => {
 
     it("shows navigate instruction when autocomplete is visible", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       const frame = lastFrame() ?? "";
@@ -394,7 +398,7 @@ describe("ChatInput", () => {
 
     it("shows select instead of submit when autocomplete is visible", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       const frame = lastFrame() ?? "";
@@ -404,7 +408,7 @@ describe("ChatInput", () => {
 
     it("hides history instruction when autocomplete is visible", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
         hasHistory: true,
       });
       await stdin.write("/");
@@ -416,7 +420,7 @@ describe("ChatInput", () => {
       const onUp = vi.fn();
       const { stdin } = renderInput({
         onUp,
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       await stdin.write(keys.up);
@@ -431,7 +435,9 @@ describe("ChatInput", () => {
     });
 
     it("does not show autocomplete when items array is empty", async () => {
-      const { stdin, lastFrame } = renderInput({ autocompleteItems: [] });
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: [],
+      });
       await stdin.write("/");
       const frame = lastFrame() ?? "";
       expect(frame).not.toContain("navigate");
@@ -441,7 +447,7 @@ describe("ChatInput", () => {
       const onMessage = vi.fn();
       const { stdin } = renderInput({
         onMessage,
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       // Type a command that matches no items — autocomplete won't show.
       await stdin.write("/zzz ");
@@ -451,7 +457,7 @@ describe("ChatInput", () => {
 
     it("resets selection when filter changes", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: testItems,
+        commandAutocompleteItems: testItems,
       });
       await stdin.write("/");
       await stdin.write(keys.down);
@@ -464,7 +470,7 @@ describe("ChatInput", () => {
 
     it("scrolls through all items with sliding window when more than 5 exist", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: manyItems,
+        commandAutocompleteItems: manyItems,
       });
       await stdin.write("/");
       // 7 items: aaa-ggg. Down 5 times reaches fff (index 5).
@@ -480,7 +486,7 @@ describe("ChatInput", () => {
 
     it("loops back to first item after scrolling past last", async () => {
       const { stdin, lastFrame } = renderInput({
-        autocompleteItems: manyItems,
+        commandAutocompleteItems: manyItems,
       });
       await stdin.write("/");
       // 7 items. Down 7 times loops back to aaa (index 0).
@@ -500,6 +506,90 @@ describe("ChatInput", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("hello");
       expect(frame).not.toContain("navigate");
+    });
+  });
+
+  describe("skill autocomplete", () => {
+    /** Test skill autocomplete items. */
+    const skillItems: AutocompleteItem[] = [
+      {
+        key: "review:global",
+        name: "review",
+        description: "Review code",
+      },
+      {
+        key: "review:local",
+        name: "review",
+        description: "Review code",
+        tag: "(local)",
+      },
+      {
+        key: "deploy:global",
+        name: "deploy",
+        description: "Deploy app",
+      },
+    ];
+
+    it("shows skill autocomplete list when typing //", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("//deploy");
+      expect(frame).toContain("//review");
+    });
+
+    it("filters skill autocomplete as user types", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//dep");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("//deploy");
+      expect(frame).not.toContain("//review");
+    });
+
+    it("fills input with //name on enter", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//dep");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("//deploy");
+      // Autocomplete dismissed after selection
+      expect(frame).not.toContain("Deploy app");
+    });
+
+    it("shows tag for local skills", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("(local)");
+    });
+
+    it("does not show command autocomplete for // prefix", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("/ping");
+      expect(frame).toContain("//deploy");
+    });
+
+    it("hides skill autocomplete after space", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//deploy");
+      await stdin.write(keys.space);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("Deploy app");
     });
   });
 });

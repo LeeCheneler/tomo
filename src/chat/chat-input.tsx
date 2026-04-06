@@ -3,7 +3,11 @@ import { useRef, useState } from "react";
 import { splitAtCursor } from "../input/cursor";
 import { processTextEdit } from "../input/text-edit";
 import type { AutocompleteItem } from "./autocomplete";
-import { AutocompleteList, useAutocompleteNavigation } from "./autocomplete";
+import {
+  AutocompleteList,
+  getAutocompleteMode,
+  useAutocompleteNavigation,
+} from "./autocomplete";
 import { Border } from "../ui/border";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
@@ -21,19 +25,10 @@ export interface ChatInputProps {
   initialValue?: string;
   /** Whether message history is available for browsing. */
   hasHistory?: boolean;
-  /** Items to show in the autocomplete list when typing a command. */
-  autocompleteItems: readonly AutocompleteItem[];
-}
-
-/** Returns true when autocomplete should be visible for the given input and items. */
-function shouldShowAutocomplete(
-  value: string,
-  items: readonly AutocompleteItem[],
-): boolean {
-  if (items.length === 0) return false;
-  return (
-    value.startsWith("/") && !value.startsWith("//") && !value.includes(" ")
-  );
+  /** Items to show in the autocomplete list when typing a command (/). */
+  commandAutocompleteItems: readonly AutocompleteItem[];
+  /** Items to show in the autocomplete list when typing a skill (//). */
+  skillAutocompleteItems?: readonly AutocompleteItem[];
 }
 
 /** Manages chat input state, cursor, and keyboard handling. */
@@ -45,14 +40,23 @@ function useChatInput(props: ChatInputProps) {
   const valueRef = useRef(initial);
   const cursorRef = useRef(initial.length);
 
-  const showAutocomplete = shouldShowAutocomplete(
+  const skillItems = props.skillAutocompleteItems ?? [];
+  const autocompleteMode = getAutocompleteMode(
     value,
-    props.autocompleteItems,
+    props.commandAutocompleteItems,
+    skillItems,
   );
+  const showAutocomplete = autocompleteMode !== "none";
+
+  const activeItems =
+    autocompleteMode === "skill" ? skillItems : props.commandAutocompleteItems;
+  const autocompletePrefix = autocompleteMode === "skill" ? "//" : "/";
+  const filterText =
+    autocompleteMode === "skill" ? value.slice(2) : value.slice(1);
 
   const autocomplete = useAutocompleteNavigation(
-    props.autocompleteItems,
-    value.startsWith("/") ? value.slice(1) : "",
+    activeItems,
+    showAutocomplete ? filterText : "",
     showAutocomplete,
   );
 
@@ -79,7 +83,7 @@ function useChatInput(props: ChatInputProps) {
         const selected = autocomplete.select();
         /* v8 ignore next -- selectedIndex is always in bounds */
         if (!selected) return;
-        const filled = `/${selected.name} `;
+        const filled = `${autocompletePrefix}${selected.name} `;
         applyChange(filled);
         setCursorPos(filled.length);
         return;
@@ -144,6 +148,7 @@ function useChatInput(props: ChatInputProps) {
       ]
     : [
         { key: "/", description: "command" },
+        { key: "//", description: "skill" },
         { key: "enter", description: "submit" },
         { key: "up", description: "history" },
       ];
@@ -157,6 +162,7 @@ function useChatInput(props: ChatInputProps) {
     instructions,
     showAutocomplete,
     autocomplete,
+    autocompletePrefix,
   };
 }
 
@@ -169,6 +175,7 @@ export function ChatInput(props: ChatInputProps) {
     instructions,
     showAutocomplete,
     autocomplete,
+    autocompletePrefix,
   } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
@@ -195,7 +202,12 @@ export function ChatInput(props: ChatInputProps) {
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
       </Box>
-      {showAutocomplete && <AutocompleteList autocomplete={autocomplete} />}
+      {showAutocomplete && (
+        <AutocompleteList
+          autocomplete={autocomplete}
+          prefix={autocompletePrefix}
+        />
+      )}
     </Box>
   );
 }

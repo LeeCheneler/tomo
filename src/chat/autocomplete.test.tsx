@@ -4,6 +4,7 @@ import { flushInkFrames } from "../test-utils/ink";
 import {
   AutocompleteList,
   filterAutocompleteItems,
+  getAutocompleteMode,
   useAutocompleteNavigation,
 } from "./autocomplete";
 import type { AutocompleteItem, AutocompleteNavigation } from "./autocomplete";
@@ -11,12 +12,12 @@ import { Text } from "ink";
 
 /** Test items covering more than MAX_VISIBLE (5). */
 const items: AutocompleteItem[] = [
-  { name: "ping", description: "Responds with pong" },
-  { name: "settings", description: "Edit settings" },
-  { name: "help", description: "Show help" },
-  { name: "history", description: "Show history" },
-  { name: "clear", description: "Clear chat" },
-  { name: "context", description: "Show context" },
+  { key: "ping", name: "ping", description: "Responds with pong" },
+  { key: "settings", name: "settings", description: "Edit settings" },
+  { key: "help", name: "help", description: "Show help" },
+  { key: "history", name: "history", description: "Show history" },
+  { key: "clear", name: "clear", description: "Clear chat" },
+  { key: "context", name: "context", description: "Show context" },
 ];
 
 describe("filterAutocompleteItems", () => {
@@ -148,9 +149,10 @@ describe("AutocompleteList", () => {
   function HarnessWithList(props: {
     items: readonly AutocompleteItem[];
     filter: string;
+    prefix?: string;
   }) {
     nav = useAutocompleteNavigation(props.items, props.filter, true);
-    return <AutocompleteList autocomplete={nav} />;
+    return <AutocompleteList autocomplete={nav} prefix={props.prefix ?? "/"} />;
   }
 
   it("renders nothing when no items match", () => {
@@ -200,5 +202,79 @@ describe("AutocompleteList", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("settings");
     expect(frame).not.toContain("clear");
+  });
+
+  it("renders // prefix for skills", () => {
+    const { lastFrame } = renderInk(
+      <HarnessWithList items={items} filter="ping" prefix="//" />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("//ping");
+  });
+
+  it("renders tag when present", () => {
+    const taggedItems: AutocompleteItem[] = [
+      {
+        key: "review:local",
+        name: "review",
+        description: "Review code",
+        tag: "(local)",
+      },
+    ];
+    const { lastFrame } = renderInk(
+      <HarnessWithList items={taggedItems} filter="" prefix="//" />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("(local)");
+    expect(frame).toContain("Review code");
+  });
+});
+
+describe("getAutocompleteMode", () => {
+  const commandItems: AutocompleteItem[] = [
+    { key: "ping", name: "ping", description: "Responds with pong" },
+  ];
+  const skillItems: AutocompleteItem[] = [
+    { key: "review", name: "review", description: "Review code" },
+  ];
+
+  it("returns command for / prefix", () => {
+    expect(getAutocompleteMode("/", commandItems, [])).toBe("command");
+  });
+
+  it("returns command for /p prefix", () => {
+    expect(getAutocompleteMode("/p", commandItems, [])).toBe("command");
+  });
+
+  it("returns skill for // prefix", () => {
+    expect(getAutocompleteMode("//", [], skillItems)).toBe("skill");
+  });
+
+  it("returns skill for //r prefix", () => {
+    expect(getAutocompleteMode("//r", [], skillItems)).toBe("skill");
+  });
+
+  it("returns none when input has a space", () => {
+    expect(getAutocompleteMode("/ping ", commandItems, [])).toBe("none");
+  });
+
+  it("returns none for regular text", () => {
+    expect(getAutocompleteMode("hello", commandItems, skillItems)).toBe("none");
+  });
+
+  it("returns none for empty input", () => {
+    expect(getAutocompleteMode("", commandItems, skillItems)).toBe("none");
+  });
+
+  it("returns none for / when no command items exist", () => {
+    expect(getAutocompleteMode("/", [], skillItems)).toBe("none");
+  });
+
+  it("returns none for // when no skill items exist", () => {
+    expect(getAutocompleteMode("//", commandItems, [])).toBe("none");
+  });
+
+  it("returns skill over command for // when both exist", () => {
+    expect(getAutocompleteMode("//", commandItems, skillItems)).toBe("skill");
   });
 });
