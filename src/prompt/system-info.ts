@@ -8,5 +8,6 @@ export function getSystemInfo(): string {
   const shell = env.getOptional("SHELL") ?? "unknown";
   const cwd = process.cwd();
   const username = userInfo().username;
-  return `System: ${os} (${osRelease}), arch: ${arch()}, shell: ${shell}, user: ${username}, cwd: ${cwd}`;
+  const now = new Date().toISOString();
+  return `System: ${os} (${osRelease}), arch: ${arch()}, shell: ${shell}, user: ${username}, cwd: ${cwd}, date: ${now}`;
 }
