@@ -1,4 +1,10 @@
-import { type ReactNode, createContext, useContext, useState } from "react";
+import {
+  type ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+} from "react";
 import { loadConfig } from "./file";
 import type { Config } from "./schema";
 
@@ -21,9 +27,9 @@ export function ConfigProvider(props: ConfigProviderProps) {
   const [config, setConfig] = useState(() => loadConfig());
 
   /** Re-reads config from disk and updates all consumers. */
-  function reload() {
+  const reload = useCallback(() => {
     setConfig(loadConfig());
-  }
+  }, []);
 
   return (
     <ConfigContext.Provider value={{ config, reload }}>
