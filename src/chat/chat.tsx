@@ -22,6 +22,7 @@ import {
 import { executeToolCalls } from "../tools/execute-tool-calls";
 import type { ToolRegistry } from "../tools/registry";
 import type { ToolContext } from "../tools/types";
+import { AskPrompt } from "../ui/ask-prompt";
 import { AppHeader } from "../ui/app-header";
 import { ConfirmPrompt } from "../ui/confirm-prompt";
 import { DiffView } from "../ui/diff-view";
@@ -67,6 +68,11 @@ function useChat(props: UseChatProps) {
     diff?: string;
   } | null>(null);
   const confirmResolveRef = useRef<((approved: boolean) => void) | null>(null);
+  const [pendingAsk, setPendingAsk] = useState<{
+    question: string;
+    options?: string[];
+  } | null>(null);
+  const askResolveRef = useRef<((answer: string | null) => void) | null>(null);
   const sessionPath = useRef(createSessionPath());
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -117,6 +123,11 @@ function useChat(props: UseChatProps) {
               new Promise<boolean>((resolve) => {
                 confirmResolveRef.current = resolve;
                 setPendingConfirm({ message, diff: options?.diff });
+              }),
+            ask: (question, options) =>
+              new Promise<string | null>((resolve) => {
+                askResolveRef.current = resolve;
+                setPendingAsk({ question, options });
               }),
             signal: new AbortController().signal,
           };
@@ -277,6 +288,13 @@ function useChat(props: UseChatProps) {
     setPendingConfirm(null);
   }
 
+  /** Resolves the pending ask prompt and clears it. */
+  function handleAskResult(answer: string | null) {
+    askResolveRef.current?.(answer);
+    askResolveRef.current = null;
+    setPendingAsk(null);
+  }
+
   /** Whether the assistant is currently streaming a response. */
   const isStreaming = completion.state === "streaming";
 
@@ -298,6 +316,8 @@ function useChat(props: UseChatProps) {
     handleExit,
     handleTakeoverDone,
     handleConfirmResult,
+    pendingAsk,
+    handleAskResult,
   };
 }
 
@@ -327,6 +347,8 @@ export function Chat(props: ChatProps) {
     handleExit,
     handleTakeoverDone,
     handleConfirmResult,
+    pendingAsk,
+    handleAskResult,
   } = useChat({
     commandRegistry: props.commandRegistry,
     toolRegistry: props.toolRegistry,
@@ -412,7 +434,14 @@ export function Chat(props: ChatProps) {
           <ConfirmPrompt onResult={handleConfirmResult} />
         </>
       )}
-      {!pendingConfirm && (
+      {pendingAsk && (
+        <AskPrompt
+          question={pendingAsk.question}
+          options={pendingAsk.options}
+          onResult={handleAskResult}
+        />
+      )}
+      {!pendingConfirm && !pendingAsk && (
         <ChatInput
           onMessage={handleMessage}
           onUp={handleUp}

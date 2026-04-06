@@ -1,23 +1,8 @@
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockFs } from "../test-utils/mock-fs";
-import type { ToolContext } from "./types";
+import { mockToolContext } from "../test-utils/stub-context";
 import { readFileTool } from "./read-file";
-
-/** Builds a ToolContext with sensible defaults for testing. */
-function stubContext(overrides: Partial<ToolContext> = {}): ToolContext {
-  return {
-    permissions: {
-      cwdReadFile: true,
-      cwdWriteFile: false,
-      globalReadFile: false,
-      globalWriteFile: false,
-    },
-    confirm: vi.fn(async () => false),
-    signal: new AbortController().signal,
-    ...overrides,
-  };
-}
 
 describe("readFileTool", () => {
   it("has correct name and parameters", () => {
@@ -49,7 +34,7 @@ describe("readFileTool", () => {
 
       const result = await readFileTool.execute(
         { path: "test.txt" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -65,7 +50,7 @@ describe("readFileTool", () => {
 
       const result = await readFileTool.execute(
         { path: "big.txt", startLine: 3, endLine: 5 },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -82,7 +67,7 @@ describe("readFileTool", () => {
 
       const result = await readFileTool.execute(
         { path: "range.txt", startLine: 3 },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -97,7 +82,7 @@ describe("readFileTool", () => {
 
       const result = await readFileTool.execute(
         { path: "range.txt", endLine: 2 },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -112,7 +97,7 @@ describe("readFileTool", () => {
 
       const result = await readFileTool.execute(
         { path: "short.txt", startLine: -5, endLine: 999 },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -127,7 +112,7 @@ describe("readFileTool", () => {
 
       const result = await readFileTool.execute(
         { path: "huge.txt" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -141,7 +126,7 @@ describe("readFileTool", () => {
 
       const result = await readFileTool.execute(
         { path: "nope.txt" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("error");
@@ -152,7 +137,10 @@ describe("readFileTool", () => {
       const dirPath = resolve("src");
       fs = mockFs({ [`${dirPath}/foo.ts`]: "content" });
 
-      const result = await readFileTool.execute({ path: "src" }, stubContext());
+      const result = await readFileTool.execute(
+        { path: "src" },
+        mockToolContext(),
+      );
 
       expect(result.status).toBe("error");
       expect(result.output).toContain("is a directory");
@@ -163,7 +151,7 @@ describe("readFileTool", () => {
         const filePath = resolve("allowed.txt");
         fs = mockFs({ [filePath]: "content" });
         const confirm = vi.fn();
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: false,
@@ -183,7 +171,7 @@ describe("readFileTool", () => {
         const filePath = resolve("restricted.txt");
         fs = mockFs({ [filePath]: "secret" });
         const confirm = vi.fn(async () => true);
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: false,
             cwdWriteFile: false,
@@ -206,7 +194,7 @@ describe("readFileTool", () => {
         const filePath = resolve("restricted.txt");
         fs = mockFs({ [filePath]: "secret" });
         const confirm = vi.fn(async () => false);
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: false,
             cwdWriteFile: false,
@@ -228,7 +216,7 @@ describe("readFileTool", () => {
       it("prompts for global file even when cwd read is allowed", async () => {
         fs = mockFs({ "/etc/hosts": "127.0.0.1 localhost" });
         const confirm = vi.fn(async () => true);
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: false,
@@ -247,7 +235,7 @@ describe("readFileTool", () => {
       it("reads global file without confirmation when globalReadFile is true", async () => {
         fs = mockFs({ "/etc/hosts": "127.0.0.1 localhost" });
         const confirm = vi.fn();
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: false,

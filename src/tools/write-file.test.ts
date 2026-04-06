@@ -1,23 +1,8 @@
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockFs } from "../test-utils/mock-fs";
-import type { ToolContext } from "./types";
+import { mockToolContext } from "../test-utils/stub-context";
 import { writeFileTool } from "./write-file";
-
-/** Builds a ToolContext with sensible defaults for testing. */
-function stubContext(overrides: Partial<ToolContext> = {}): ToolContext {
-  return {
-    permissions: {
-      cwdReadFile: true,
-      cwdWriteFile: true,
-      globalReadFile: false,
-      globalWriteFile: false,
-    },
-    confirm: vi.fn(async () => false),
-    signal: new AbortController().signal,
-    ...overrides,
-  };
-}
 
 describe("writeFileTool", () => {
   it("has correct name and parameters", () => {
@@ -49,7 +34,7 @@ describe("writeFileTool", () => {
 
       const result = await writeFileTool.execute(
         { path: "new.txt", content: "hello\nworld" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -65,7 +50,7 @@ describe("writeFileTool", () => {
 
       const result = await writeFileTool.execute(
         { path: "existing.txt", content: "new content\n" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -81,7 +66,7 @@ describe("writeFileTool", () => {
 
       const result = await writeFileTool.execute(
         { path: "src", content: "nope" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("error");
@@ -92,7 +77,7 @@ describe("writeFileTool", () => {
       it("writes without confirmation when cwd write permission granted", async () => {
         fs = mockFs();
         const confirm = vi.fn();
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: true,
@@ -114,7 +99,7 @@ describe("writeFileTool", () => {
       it("prompts for confirmation with diff when write permission not granted", async () => {
         fs = mockFs();
         const confirm = vi.fn(async () => true);
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: false,
@@ -141,7 +126,7 @@ describe("writeFileTool", () => {
         const filePath = resolve("restricted.txt");
         fs = mockFs();
         const confirm = vi.fn(async () => false);
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: false,
@@ -164,7 +149,7 @@ describe("writeFileTool", () => {
       it("prompts for global file even when cwd write is allowed", async () => {
         fs = mockFs();
         const confirm = vi.fn(async () => true);
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: true,
@@ -186,7 +171,7 @@ describe("writeFileTool", () => {
       it("writes global file without confirmation when globalWriteFile is true", async () => {
         fs = mockFs();
         const confirm = vi.fn();
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: true,

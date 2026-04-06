@@ -3,7 +3,7 @@ import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isGitRepo } from "../prompt/git-context";
-import type { ToolContext } from "./types";
+import { mockToolContext } from "../test-utils/stub-context";
 import { grepTool } from "./grep";
 
 vi.mock("node:child_process", () => ({
@@ -17,21 +17,6 @@ vi.mock("node:fs", () => ({
 vi.mock("../prompt/git-context", () => ({
   isGitRepo: vi.fn(),
 }));
-
-/** Builds a ToolContext with sensible defaults for testing. */
-function stubContext(overrides: Partial<ToolContext> = {}): ToolContext {
-  return {
-    permissions: {
-      cwdReadFile: true,
-      cwdWriteFile: false,
-      globalReadFile: false,
-      globalWriteFile: false,
-    },
-    confirm: vi.fn(async () => false),
-    signal: new AbortController().signal,
-    ...overrides,
-  };
-}
 
 afterEach(() => {
   vi.resetAllMocks();
@@ -59,7 +44,10 @@ describe("grepTool", () => {
       vi.mocked(isGitRepo).mockReturnValue(true);
       vi.mocked(execSync).mockReturnValue("src/foo.ts:10:// TODO fix\n");
 
-      const result = await grepTool.execute({ pattern: "TODO" }, stubContext());
+      const result = await grepTool.execute(
+        { pattern: "TODO" },
+        mockToolContext(),
+      );
 
       expect(result.status).toBe("ok");
       expect(result.output).toBe("src/foo.ts:10:// TODO fix");
@@ -75,7 +63,7 @@ describe("grepTool", () => {
 
       const result = await grepTool.execute(
         { pattern: "match" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -91,7 +79,7 @@ describe("grepTool", () => {
 
       const result = await grepTool.execute(
         { pattern: "hit", gitignore: false },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -104,7 +92,10 @@ describe("grepTool", () => {
       vi.mocked(isGitRepo).mockReturnValue(true);
       vi.mocked(execSync).mockReturnValue("a.ts:1:x\n");
 
-      await grepTool.execute({ pattern: "x", include: "*.ts" }, stubContext());
+      await grepTool.execute(
+        { pattern: "x", include: "*.ts" },
+        mockToolContext(),
+      );
 
       const cmd = String(vi.mocked(execSync).mock.calls[0]?.[0]);
       expect(cmd).toContain("git grep");
@@ -117,7 +108,7 @@ describe("grepTool", () => {
 
       await grepTool.execute(
         { pattern: "x", include: "src/**/*.ts" },
-        stubContext(),
+        mockToolContext(),
       );
 
       const cmd = String(vi.mocked(execSync).mock.calls[0]?.[0]);
@@ -130,7 +121,10 @@ describe("grepTool", () => {
       vi.mocked(isGitRepo).mockReturnValue(false);
       vi.mocked(execSync).mockReturnValue("a.ts:1:x\n");
 
-      await grepTool.execute({ pattern: "x", include: "*.ts" }, stubContext());
+      await grepTool.execute(
+        { pattern: "x", include: "*.ts" },
+        mockToolContext(),
+      );
 
       const cmd = String(vi.mocked(execSync).mock.calls[0]?.[0]);
       expect(cmd).toContain("grep -rn");
@@ -145,7 +139,7 @@ describe("grepTool", () => {
 
       const result = await grepTool.execute(
         { pattern: "match", path: "src/foo.ts" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -160,7 +154,7 @@ describe("grepTool", () => {
 
       const result = await grepTool.execute(
         { pattern: "nothing" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -175,7 +169,10 @@ describe("grepTool", () => {
         throw exitError;
       });
 
-      const result = await grepTool.execute({ pattern: "nope" }, stubContext());
+      const result = await grepTool.execute(
+        { pattern: "nope" },
+        mockToolContext(),
+      );
 
       expect(result.status).toBe("ok");
       expect(result.output).toBe("No matches found.");
@@ -187,7 +184,10 @@ describe("grepTool", () => {
         throw new Error("command not found");
       });
 
-      const result = await grepTool.execute({ pattern: "test" }, stubContext());
+      const result = await grepTool.execute(
+        { pattern: "test" },
+        mockToolContext(),
+      );
 
       expect(result.status).toBe("error");
       expect(result.output).toContain("command not found");
@@ -201,7 +201,7 @@ describe("grepTool", () => {
 
         const result = await grepTool.execute(
           { pattern: "x" },
-          stubContext({ confirm }),
+          mockToolContext({ confirm }),
         );
 
         expect(result.status).toBe("ok");
@@ -215,7 +215,7 @@ describe("grepTool", () => {
 
         const result = await grepTool.execute(
           { pattern: "x" },
-          stubContext({
+          mockToolContext({
             permissions: {
               cwdReadFile: false,
               cwdWriteFile: false,
@@ -235,7 +235,7 @@ describe("grepTool", () => {
 
         const result = await grepTool.execute(
           { pattern: "x" },
-          stubContext({
+          mockToolContext({
             permissions: {
               cwdReadFile: false,
               cwdWriteFile: false,

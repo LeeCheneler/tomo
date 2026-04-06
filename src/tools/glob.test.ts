@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { globSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isGitRepo } from "../prompt/git-context";
-import type { ToolContext } from "./types";
+import { mockToolContext } from "../test-utils/stub-context";
 import { globTool } from "./glob";
 
 vi.mock("node:child_process", () => ({
@@ -16,21 +16,6 @@ vi.mock("node:fs", () => ({
 vi.mock("../prompt/git-context", () => ({
   isGitRepo: vi.fn(),
 }));
-
-/** Builds a ToolContext with sensible defaults for testing. */
-function stubContext(overrides: Partial<ToolContext> = {}): ToolContext {
-  return {
-    permissions: {
-      cwdReadFile: true,
-      cwdWriteFile: false,
-      globalReadFile: false,
-      globalWriteFile: false,
-    },
-    confirm: vi.fn(async () => false),
-    signal: new AbortController().signal,
-    ...overrides,
-  };
-}
 
 afterEach(() => {
   vi.resetAllMocks();
@@ -62,7 +47,7 @@ describe("globTool", () => {
 
       const result = await globTool.execute(
         { pattern: "**/*.ts" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -74,7 +59,10 @@ describe("globTool", () => {
       vi.mocked(isGitRepo).mockReturnValue(false);
       vi.mocked(globSync).mockReturnValue(["a.ts", "b.ts"] as never);
 
-      const result = await globTool.execute({ pattern: "*.ts" }, stubContext());
+      const result = await globTool.execute(
+        { pattern: "*.ts" },
+        mockToolContext(),
+      );
 
       expect(result.status).toBe("ok");
       expect(result.output).toBe("a.ts\nb.ts");
@@ -86,7 +74,7 @@ describe("globTool", () => {
 
       const result = await globTool.execute(
         { pattern: "*.ts", gitignore: false },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -100,7 +88,7 @@ describe("globTool", () => {
 
       const result = await globTool.execute(
         { pattern: "*.xyz" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -115,7 +103,7 @@ describe("globTool", () => {
 
       const result = await globTool.execute(
         { pattern: "[invalid" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("error");
@@ -128,7 +116,7 @@ describe("globTool", () => {
 
       const result = await globTool.execute(
         { pattern: "*.ts", path: "/tmp/project" },
-        stubContext({
+        mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: false,
@@ -152,7 +140,7 @@ describe("globTool", () => {
 
       const result = await globTool.execute(
         { pattern: "**/*.ts" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -168,7 +156,7 @@ describe("globTool", () => {
 
         const result = await globTool.execute(
           { pattern: "*.ts" },
-          stubContext({ confirm }),
+          mockToolContext({ confirm }),
         );
 
         expect(result.status).toBe("ok");
@@ -182,7 +170,7 @@ describe("globTool", () => {
 
         const result = await globTool.execute(
           { pattern: "*.ts" },
-          stubContext({
+          mockToolContext({
             permissions: {
               cwdReadFile: false,
               cwdWriteFile: false,
@@ -202,7 +190,7 @@ describe("globTool", () => {
 
         const result = await globTool.execute(
           { pattern: "*.ts" },
-          stubContext({
+          mockToolContext({
             permissions: {
               cwdReadFile: false,
               cwdWriteFile: false,

@@ -46,6 +46,8 @@ export interface ToolContext {
   permissions: Permissions;
   /** Prompts the user for confirmation. Returns true if approved, false if denied. */
   confirm: (message: string, options?: ConfirmOptions) => Promise<boolean>;
+  /** Prompts the user with a question. Returns the answer, or null if the user cancels. */
+  ask: (question: string, options?: string[]) => Promise<string | null>;
   /** Abort signal from the parent conversation. */
   signal: AbortSignal;
 }

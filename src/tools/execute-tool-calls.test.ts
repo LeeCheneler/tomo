@@ -2,25 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { ToolCall } from "../provider/client";
 import type { ChatMessage } from "../chat/message";
+import { mockToolContext } from "../test-utils/stub-context";
 import { createToolRegistry } from "./registry";
-import type { ToolContext } from "./types";
 import { denied, err, ok, okDiff } from "./types";
 import { executeToolCalls } from "./execute-tool-calls";
-
-/** Builds a ToolContext with sensible defaults for testing. */
-function stubContext(overrides: Partial<ToolContext> = {}): ToolContext {
-  return {
-    permissions: {
-      cwdReadFile: true,
-      cwdWriteFile: true,
-      globalReadFile: false,
-      globalWriteFile: false,
-    },
-    confirm: vi.fn(async () => false),
-    signal: new AbortController().signal,
-    ...overrides,
-  };
-}
 
 /** Creates a minimal tool call from the LLM. */
 function stubToolCall(name: string, args: string, id?: string): ToolCall {
@@ -49,7 +34,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("greet", "{}")],
       "assistant text",
       registry,
-      stubContext(),
+      mockToolContext(),
       onMessage,
     );
 
@@ -77,7 +62,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("test", "{}")],
       "thinking out loud",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -101,7 +86,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("read_file", '{"path":"./foo.ts"}')],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -125,7 +110,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("test", "not json")],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -139,7 +124,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("nonexistent", "{}")],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -156,7 +141,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("mystery", "{}")],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -180,7 +165,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("diff_tool", "{}")],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -206,7 +191,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("deny_tool", "{}")],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -230,7 +215,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("err_tool", "{}")],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -257,7 +242,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("exploding", "{}")],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -298,7 +283,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("first", "{}"), stubToolCall("second", "{}")],
       "",
       registry,
-      stubContext(),
+      mockToolContext(),
       vi.fn(),
     );
 
@@ -327,7 +312,7 @@ describe("executeToolCalls", () => {
       [stubToolCall("confirming", "{}")],
       "",
       registry,
-      stubContext({ confirm }),
+      mockToolContext({ confirm }),
       vi.fn(),
     );
 

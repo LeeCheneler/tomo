@@ -900,6 +900,91 @@ describe("Chat", () => {
       expect(lastFrame()).toContain("Tool result was: hello");
     });
 
+    it("shows ask prompt and returns user answer", async () => {
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", async () => {
+          requestCount++;
+          if (requestCount === 1) {
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_1",
+                            function: {
+                              name: "ask_tool",
+                              arguments:
+                                '{"question":"Pick one","options":["A","B"]}',
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          }
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "Got it" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "ask_tool",
+        displayName: "Ask",
+        description: "Asks a question",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({
+          question: z.string(),
+          options: z.array(z.string()).optional(),
+        }),
+        formatCall: () => "",
+        execute: async (_args, context) => {
+          const parsed = _args as { question: string; options?: string[] };
+          const answer = await context.ask(parsed.question, parsed.options);
+          return ok(answer ?? "cancelled");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("ask me something");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Ask prompt should be visible with the question and options
+      expect(lastFrame()).toContain("Pick one");
+      expect(lastFrame()).toContain("A");
+      expect(lastFrame()).toContain("B");
+
+      // Select first option
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+    });
+
     it("shows confirm prompt and proceeds on approval", async () => {
       let requestCount = 0;
 

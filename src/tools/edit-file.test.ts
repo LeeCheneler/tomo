@@ -1,23 +1,8 @@
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockFs } from "../test-utils/mock-fs";
-import type { ToolContext } from "./types";
+import { mockToolContext } from "../test-utils/stub-context";
 import { editFileTool } from "./edit-file";
-
-/** Builds a ToolContext with sensible defaults for testing. */
-function stubContext(overrides: Partial<ToolContext> = {}): ToolContext {
-  return {
-    permissions: {
-      cwdReadFile: true,
-      cwdWriteFile: true,
-      globalReadFile: false,
-      globalWriteFile: false,
-    },
-    confirm: vi.fn(async () => false),
-    signal: new AbortController().signal,
-    ...overrides,
-  };
-}
 
 describe("editFileTool", () => {
   it("has correct name and parameters", () => {
@@ -49,7 +34,7 @@ describe("editFileTool", () => {
 
       const result = await editFileTool.execute(
         { path: "test.txt", oldString: "world", newString: "earth" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -69,7 +54,7 @@ describe("editFileTool", () => {
           oldString: "line two\nline three",
           newString: "replaced",
         },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("ok");
@@ -82,7 +67,7 @@ describe("editFileTool", () => {
 
       const result = await editFileTool.execute(
         { path: "test.txt", oldString: "missing", newString: "new" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("error");
@@ -95,7 +80,7 @@ describe("editFileTool", () => {
 
       const result = await editFileTool.execute(
         { path: "test.txt", oldString: "foo", newString: "baz" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("error");
@@ -108,7 +93,7 @@ describe("editFileTool", () => {
 
       const result = await editFileTool.execute(
         { path: "test.txt", oldString: "hello", newString: "hello" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("error");
@@ -120,7 +105,7 @@ describe("editFileTool", () => {
 
       const result = await editFileTool.execute(
         { path: "nope.txt", oldString: "a", newString: "b" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("error");
@@ -133,7 +118,7 @@ describe("editFileTool", () => {
 
       const result = await editFileTool.execute(
         { path: "src", oldString: "a", newString: "b" },
-        stubContext(),
+        mockToolContext(),
       );
 
       expect(result.status).toBe("error");
@@ -145,7 +130,7 @@ describe("editFileTool", () => {
         const filePath = resolve("allowed.txt");
         fs = mockFs({ [filePath]: "old content\n" });
         const confirm = vi.fn();
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: true,
@@ -168,7 +153,7 @@ describe("editFileTool", () => {
         const filePath = resolve("restricted.txt");
         fs = mockFs({ [filePath]: "old content\n" });
         const confirm = vi.fn(async () => true);
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: false,
@@ -195,7 +180,7 @@ describe("editFileTool", () => {
         const filePath = resolve("restricted.txt");
         fs = mockFs({ [filePath]: "old content\n" });
         const confirm = vi.fn(async () => false);
-        const ctx = stubContext({
+        const ctx = mockToolContext({
           permissions: {
             cwdReadFile: true,
             cwdWriteFile: false,
