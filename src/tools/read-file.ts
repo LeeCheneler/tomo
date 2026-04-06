@@ -89,6 +89,9 @@ export const readFileTool: Tool = {
     required: ["path"],
   },
   argsSchema,
+  formatCall(args: Record<string, unknown>): string {
+    return String(args.path ?? "");
+  },
   async execute(args: unknown, context: ToolContext): Promise<ToolResult> {
     const parsed = argsSchema.parse(args);
     const filePath = resolve(parsed.path);

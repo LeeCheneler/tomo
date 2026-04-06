@@ -24,6 +24,7 @@ import type { ToolContext } from "../tools/types";
 import { parseToolArgs } from "../tools/types";
 import { AppHeader } from "../ui/app-header";
 import { ConfirmPrompt } from "../ui/confirm-prompt";
+import { DiffView } from "../ui/diff-view";
 import { Indent } from "../ui/layout/indent";
 import { LoadingIndicator } from "../ui/loading-indicator";
 import { version } from "../utils/version";
@@ -61,7 +62,10 @@ function useChat(props: UseChatProps) {
   const completion = useCompletion(provider, model);
   const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
   const [sessionKey, setSessionKey] = useState(() => crypto.randomUUID());
-  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    message: string;
+    diff?: string;
+  } | null>(null);
   const confirmResolveRef = useRef<((approved: boolean) => void) | null>(null);
   const sessionPath = useRef(createSessionPath());
   const messagesRef = useRef(messages);
@@ -109,10 +113,10 @@ function useChat(props: UseChatProps) {
           const registry = props.toolRegistry;
           const toolContext: ToolContext = {
             permissions: config.permissions,
-            confirm: (message) =>
+            confirm: (message, options) =>
               new Promise<boolean>((resolve) => {
                 confirmResolveRef.current = resolve;
-                setPendingConfirm(message);
+                setPendingConfirm({ message, diff: options?.diff });
               }),
             signal: new AbortController().signal,
           };
@@ -125,13 +129,24 @@ function useChat(props: UseChatProps) {
             id: crypto.randomUUID(),
             role: "tool-call",
             content: completion.content,
-            toolCalls: completion.toolCalls.map((tc) => ({
-              id: tc.id,
-              name: tc.function.name,
-              displayName:
-                registry.get(tc.function.name)?.displayName ?? tc.function.name,
-              arguments: tc.function.arguments,
-            })),
+            toolCalls: completion.toolCalls.map((tc) => {
+              const tool = registry.get(tc.function.name);
+              let summary = "";
+              if (tool) {
+                try {
+                  summary = tool.formatCall(JSON.parse(tc.function.arguments));
+                } catch {
+                  // Invalid JSON — leave summary empty
+                }
+              }
+              return {
+                id: tc.id,
+                name: tc.function.name,
+                displayName: tool?.displayName ?? tc.function.name,
+                arguments: tc.function.arguments,
+                summary,
+              };
+            }),
           };
           appendMessage(toolCallMsg);
           newMessages.push(toolCallMsg);
@@ -146,6 +161,7 @@ function useChat(props: UseChatProps) {
                 toolName: tc.function.name,
                 output: `Unknown tool: ${tc.function.name}`,
                 status: "error",
+                format: "plain",
               };
               appendMessage(resultMsg);
               newMessages.push(resultMsg);
@@ -154,6 +170,7 @@ function useChat(props: UseChatProps) {
 
             let output: string;
             let status: "ok" | "error" | "denied" = "ok";
+            let format: "plain" | "diff" = "plain";
             try {
               const parsed = parseToolArgs(
                 tool.argsSchema,
@@ -162,6 +179,7 @@ function useChat(props: UseChatProps) {
               const result = await tool.execute(parsed, toolContext);
               output = result.output;
               status = result.status;
+              format = result.format;
             } catch (e) {
               /* v8 ignore start -- non-Error throws are unlikely but handled */
               output = `Tool error: ${e instanceof Error ? e.message : "unknown error"}`;
@@ -176,6 +194,7 @@ function useChat(props: UseChatProps) {
               toolName: tc.function.name,
               output,
               status,
+              format,
             };
             appendMessage(resultMsg);
             newMessages.push(resultMsg);
@@ -450,6 +469,13 @@ export function Chat(props: ChatProps) {
       {isStreaming && <LoadingIndicator text="Thinking" />}
       {pendingConfirm && (
         <>
+          {pendingConfirm.diff && (
+            <Box paddingBottom={1}>
+              <Indent>
+                <DiffView output={pendingConfirm.diff} />
+              </Indent>
+            </Box>
+          )}
           <Box paddingBottom={1}>
             <Indent>
               <Text dimColor>Awaiting approval</Text>

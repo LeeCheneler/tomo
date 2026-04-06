@@ -12,6 +12,7 @@ function stubTool(name: string): Tool {
     description: `Description for ${name}`,
     parameters: { type: "object", properties: {} },
     argsSchema: z.object({}),
+    formatCall: () => "",
     execute: async () => ok("done"),
   };
 }

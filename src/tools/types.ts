@@ -4,25 +4,40 @@ import type { Permissions } from "../config/schema";
 /** Status of a tool execution result. */
 export type ToolResultStatus = "ok" | "error" | "denied";
 
+/** Display format for tool output in the chat list. */
+export type ToolResultFormat = "plain" | "diff";
+
 /** Structured result returned by a tool's execute function. */
 export interface ToolResult {
   output: string;
   status: ToolResultStatus;
+  format: ToolResultFormat;
 }
 
-/** Creates a successful tool result. */
+/** Creates a successful tool result with plain text output. */
 export function ok(output: string): ToolResult {
-  return { output, status: "ok" };
+  return { output, status: "ok", format: "plain" };
+}
+
+/** Creates a successful tool result with diff-formatted output. */
+export function okDiff(output: string): ToolResult {
+  return { output, status: "ok", format: "diff" };
 }
 
 /** Creates an error tool result. */
 export function err(output: string): ToolResult {
-  return { output, status: "error" };
+  return { output, status: "error", format: "plain" };
 }
 
 /** Creates a denied tool result (user rejected the action). */
 export function denied(output: string): ToolResult {
-  return { output, status: "denied" };
+  return { output, status: "denied", format: "plain" };
+}
+
+/** Options for the confirmation prompt. */
+export interface ConfirmOptions {
+  /** Diff output to display above the approval prompt. */
+  diff?: string;
 }
 
 /** Context provided to a tool's execute function. */
@@ -30,7 +45,7 @@ export interface ToolContext {
   /** Resolved file access permissions from config. */
   permissions: Permissions;
   /** Prompts the user for confirmation. Returns true if approved, false if denied. */
-  confirm: (message: string) => Promise<boolean>;
+  confirm: (message: string, options?: ConfirmOptions) => Promise<boolean>;
   /** Abort signal from the parent conversation. */
   signal: AbortSignal;
 }
@@ -47,6 +62,8 @@ export interface Tool {
   parameters: Record<string, unknown>;
   /** Zod schema for validating parsed arguments at runtime. */
   argsSchema: z.ZodType;
+  /** Returns a short summary string for display next to the tool name (e.g. a file path). */
+  formatCall: (args: Record<string, unknown>) => string;
   /** Executes the tool with validated arguments. */
   execute: (args: unknown, context: ToolContext) => Promise<ToolResult>;
 }

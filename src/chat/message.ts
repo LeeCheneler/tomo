@@ -39,6 +39,8 @@ export interface ToolCallInfo {
   name: string;
   displayName: string;
   arguments: string;
+  /** Short summary for display next to the tool name (e.g. a file path). */
+  summary: string;
 }
 
 /** An assistant response that includes tool calls. */
@@ -57,6 +59,7 @@ export interface ToolResultMessage {
   toolName: string;
   output: string;
   status: "ok" | "error" | "denied";
+  format: "plain" | "diff";
 }
 
 /** Union of all chat message types. Discriminate on `role`. */

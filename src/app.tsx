@@ -7,6 +7,7 @@ import { sessionCommand } from "./commands/session";
 import { settingsCommand } from "./commands/settings";
 import { readFileTool } from "./tools/read-file";
 import { createToolRegistry } from "./tools/registry";
+import { writeFileTool } from "./tools/write-file";
 
 /** Creates the application command registry with all built-in commands. */
 function buildCommandRegistry() {
@@ -23,6 +24,7 @@ function buildCommandRegistry() {
 function buildToolRegistry() {
   const registry = createToolRegistry();
   registry.register(readFileTool);
+  registry.register(writeFileTool);
   return registry;
 }
 

@@ -1,25 +1,48 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { denied, err, ok, parseToolArgs } from "./types";
+import { denied, err, ok, okDiff, parseToolArgs } from "./types";
 
 describe("ok", () => {
-  it("creates a result with ok status", () => {
+  it("creates a result with ok status and plain format", () => {
     const result = ok("success");
-    expect(result).toEqual({ output: "success", status: "ok" });
+    expect(result).toEqual({
+      output: "success",
+      status: "ok",
+      format: "plain",
+    });
+  });
+});
+
+describe("okDiff", () => {
+  it("creates a result with ok status and diff format", () => {
+    const result = okDiff("+added line");
+    expect(result).toEqual({
+      output: "+added line",
+      status: "ok",
+      format: "diff",
+    });
   });
 });
 
 describe("err", () => {
-  it("creates a result with error status", () => {
+  it("creates a result with error status and plain format", () => {
     const result = err("something broke");
-    expect(result).toEqual({ output: "something broke", status: "error" });
+    expect(result).toEqual({
+      output: "something broke",
+      status: "error",
+      format: "plain",
+    });
   });
 });
 
 describe("denied", () => {
-  it("creates a result with denied status", () => {
+  it("creates a result with denied status and plain format", () => {
     const result = denied("user said no");
-    expect(result).toEqual({ output: "user said no", status: "denied" });
+    expect(result).toEqual({
+      output: "user said no",
+      status: "denied",
+      format: "plain",
+    });
   });
 });
 

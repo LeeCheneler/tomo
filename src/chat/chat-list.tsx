@@ -1,9 +1,10 @@
 import { Box, Static, Text } from "ink";
 import type { ReactNode } from "react";
 import { completePartialMarkdown, renderMarkdown } from "../markdown/render";
-import type { ChatMessage, ToolCallInfo } from "./message";
-import { theme } from "../ui/theme";
+import { DiffView } from "../ui/diff-view";
 import { Indent } from "../ui/layout/indent";
+import { theme } from "../ui/theme";
+import type { ChatMessage, ToolCallInfo } from "./message";
 
 /** A static item — either the header or a chat message. */
 type StaticItem =
@@ -75,38 +76,25 @@ function CommandMessageView(props: { command: string; result: string }) {
   );
 }
 
-/** Formats tool call arguments as a single-line summary (e.g. "path: ./foo.ts"). */
-function formatArgs(argsJson: string): string {
-  try {
-    const parsed = JSON.parse(argsJson);
-    if (typeof parsed !== "object" || parsed === null) return "";
-    return Object.entries(parsed)
-      .map(([key, value]) => `${key}: ${String(value)}`)
-      .join("  ");
-  } catch {
-    return "";
-  }
-}
-
 /** Renders a tool call from the assistant. */
 function ToolCallMessageView(props: { toolCalls: ToolCallInfo[] }) {
   return (
     <Box flexDirection="column" paddingBottom={1}>
-      {props.toolCalls.map((tc) => {
-        const args = formatArgs(tc.arguments);
-        return (
-          <Indent key={tc.id}>
-            <Text color={theme.tool}>{tc.displayName}</Text>
-            {args ? <Text dimColor> ({args})</Text> : null}
-          </Indent>
-        );
-      })}
+      {props.toolCalls.map((tc) => (
+        <Indent key={tc.id}>
+          <Text color={theme.tool}>{tc.displayName}</Text>
+          {tc.summary ? <Text dimColor> {tc.summary}</Text> : null}
+        </Indent>
+      ))}
     </Box>
   );
 }
 
 /** Maximum lines of tool output to display. */
 const MAX_TOOL_OUTPUT_LINES = 5;
+
+/** Maximum lines of diff output to display. */
+const MAX_DIFF_OUTPUT_LINES = 12;
 
 /** Truncates output to a maximum number of lines. */
 function truncateLines(output: string, maxLines: number): string {
@@ -119,8 +107,22 @@ function truncateLines(output: string, maxLines: number): string {
 function ToolResultMessageView(props: {
   output: string;
   status: "ok" | "error" | "denied";
+  format: "plain" | "diff";
 }) {
   const isError = props.status === "error" || props.status === "denied";
+
+  if (props.format === "diff" && !isError) {
+    return (
+      <Box paddingBottom={1}>
+        <Indent>
+          <DiffView
+            output={truncateLines(props.output, MAX_DIFF_OUTPUT_LINES)}
+          />
+        </Indent>
+      </Box>
+    );
+  }
+
   return (
     <Box paddingBottom={1}>
       <Indent>
@@ -196,6 +198,7 @@ export function ChatList(props: ChatListProps) {
               key={message.id}
               output={message.output}
               status={message.status}
+              format={message.format}
             />
           );
         }

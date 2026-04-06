@@ -56,6 +56,7 @@ describe("buildProviderMessages", () => {
             name: "read_file",
             displayName: "Read File",
             arguments: '{"path":"foo.ts"}',
+            summary: "foo.ts",
           },
         ],
       },
@@ -85,6 +86,7 @@ describe("buildProviderMessages", () => {
         toolName: "read_file",
         output: "file contents here",
         status: "ok",
+        format: "plain",
       },
     ];
 

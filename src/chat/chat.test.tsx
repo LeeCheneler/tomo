@@ -884,6 +884,7 @@ describe("Chat", () => {
         description: "A test tool",
         parameters: { type: "object", properties: {}, required: [] },
         argsSchema: z.object({}),
+        formatCall: () => "",
         execute: toolExecute,
       });
 
@@ -1067,6 +1068,7 @@ describe("Chat", () => {
         description: "A broken tool",
         parameters: { type: "object", properties: {}, required: [] },
         argsSchema: z.object({}),
+        formatCall: () => "",
         execute: async () => {
           throw new Error("something exploded");
         },
@@ -1146,6 +1148,7 @@ describe("Chat", () => {
         description: "A tool that needs confirmation",
         parameters: { type: "object", properties: {}, required: [] },
         argsSchema: z.object({}),
+        formatCall: () => "",
         execute: async (_args, context) => {
           const approved = await context.confirm("Allow this action?");
           return ok(approved ? "was approved" : "was denied");
@@ -1234,6 +1237,7 @@ describe("Chat", () => {
         description: "A tool that needs confirmation",
         parameters: { type: "object", properties: {}, required: [] },
         argsSchema: z.object({}),
+        formatCall: () => "",
         execute: async (_args, context) => {
           const approved = await context.confirm("Allow this action?");
           return ok(approved ? "was approved" : "was denied");

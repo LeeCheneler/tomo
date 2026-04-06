@@ -95,7 +95,7 @@ describe("ChatList", () => {
     expect(lastFrame()).toContain("Something went wrong");
   });
 
-  it("renders a tool-call message with display name and args in parens", () => {
+  it("renders a tool-call message with display name and summary", () => {
     const messages: ChatMessage[] = [
       {
         id: "1",
@@ -107,6 +107,7 @@ describe("ChatList", () => {
             name: "read_file",
             displayName: "Read File",
             arguments: '{"path":"./foo.ts"}',
+            summary: "./foo.ts",
           },
         ],
       },
@@ -114,10 +115,10 @@ describe("ChatList", () => {
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Read File");
-    expect(frame).toContain("(path: ./foo.ts)");
+    expect(frame).toContain("./foo.ts");
   });
 
-  it("renders tool-call with no args when arguments are a non-object JSON value", () => {
+  it("renders tool-call with no summary when summary is empty", () => {
     const messages: ChatMessage[] = [
       {
         id: "1",
@@ -128,7 +129,8 @@ describe("ChatList", () => {
             id: "call_1",
             name: "test",
             displayName: "Test",
-            arguments: '"just a string"',
+            arguments: "{}",
+            summary: "",
           },
         ],
       },
@@ -136,29 +138,6 @@ describe("ChatList", () => {
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Test");
-    expect(frame).toContain("Test");
-    expect(frame).not.toContain("just a string");
-  });
-
-  it("renders tool-call with no args when arguments are invalid JSON", () => {
-    const messages: ChatMessage[] = [
-      {
-        id: "1",
-        role: "tool-call",
-        content: "",
-        toolCalls: [
-          {
-            id: "call_1",
-            name: "broken",
-            displayName: "Broken",
-            arguments: "not json",
-          },
-        ],
-      },
-    ];
-    const { lastFrame } = renderInk(<ChatList messages={messages} />);
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("Broken");
   });
 
   it("renders a tool-result message with output", () => {
@@ -170,6 +149,7 @@ describe("ChatList", () => {
         toolName: "read_file",
         output: "file contents here",
         status: "ok",
+        format: "plain",
       },
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
@@ -186,6 +166,7 @@ describe("ChatList", () => {
         toolName: "read_file",
         output: "file not found: nope.txt",
         status: "error",
+        format: "plain",
       },
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
@@ -202,6 +183,7 @@ describe("ChatList", () => {
         toolName: "read_file",
         output: "The user denied this read.",
         status: "denied",
+        format: "plain",
       },
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
@@ -219,6 +201,7 @@ describe("ChatList", () => {
         toolName: "read_file",
         output: lines.join("\n"),
         status: "ok",
+        format: "plain",
       },
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
@@ -227,6 +210,64 @@ describe("ChatList", () => {
     expect(frame).toContain("line 5");
     expect(frame).toContain("…");
     expect(frame).not.toContain("line 6");
+  });
+
+  it("renders diff format with addition and removal lines", () => {
+    const diffOutput = "@@ -1,3 +1,3 @@\n-old line\n+new line\n context";
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-result",
+        toolCallId: "call_1",
+        toolName: "write_file",
+        output: diffOutput,
+        status: "ok",
+        format: "diff",
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("-old line");
+    expect(frame).toContain("+new line");
+    expect(frame).toContain("context");
+  });
+
+  it("truncates diff output to 12 lines", () => {
+    const lines = Array.from({ length: 20 }, (_, i) => `+line ${i + 1}`);
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-result",
+        toolCallId: "call_1",
+        toolName: "write_file",
+        output: lines.join("\n"),
+        status: "ok",
+        format: "diff",
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("+line 1");
+    expect(frame).toContain("+line 12");
+    expect(frame).toContain("…");
+    expect(frame).not.toContain("+line 13");
+  });
+
+  it("falls back to plain rendering for diff format with error status", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "tool-result",
+        toolCallId: "call_1",
+        toolName: "write_file",
+        output: "something went wrong",
+        status: "error",
+        format: "diff",
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("something went wrong");
   });
 
   it("skips unknown message roles", () => {
