@@ -6,6 +6,7 @@ import { createCommandRegistry } from "./commands/registry";
 import { sessionCommand } from "./commands/session";
 import { settingsCommand } from "./commands/settings";
 import { editFileTool } from "./tools/edit-file";
+import { globTool } from "./tools/glob";
 import { readFileTool } from "./tools/read-file";
 import { createToolRegistry } from "./tools/registry";
 import { writeFileTool } from "./tools/write-file";
@@ -27,6 +28,7 @@ function buildToolRegistry() {
   registry.register(readFileTool);
   registry.register(writeFileTool);
   registry.register(editFileTool);
+  registry.register(globTool);
   return registry;
 }
 
