@@ -26,6 +26,16 @@ describe("readFileTool", () => {
     expect(readFileTool.parameters).toHaveProperty("required");
   });
 
+  describe("formatCall", () => {
+    it("returns the path argument", () => {
+      expect(readFileTool.formatCall({ path: "./foo.ts" })).toBe("./foo.ts");
+    });
+
+    it("returns empty string when path is missing", () => {
+      expect(readFileTool.formatCall({})).toBe("");
+    });
+  });
+
   describe("execute", () => {
     let fs: ReturnType<typeof mockFs>;
 

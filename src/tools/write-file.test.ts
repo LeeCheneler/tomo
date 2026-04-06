@@ -26,6 +26,16 @@ describe("writeFileTool", () => {
     expect(writeFileTool.parameters).toHaveProperty("required");
   });
 
+  describe("formatCall", () => {
+    it("returns the path argument", () => {
+      expect(writeFileTool.formatCall({ path: "./bar.ts" })).toBe("./bar.ts");
+    });
+
+    it("returns empty string when path is missing", () => {
+      expect(writeFileTool.formatCall({})).toBe("");
+    });
+  });
+
   describe("execute", () => {
     let fs: ReturnType<typeof mockFs>;
 

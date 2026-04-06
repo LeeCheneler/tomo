@@ -1184,6 +1184,88 @@ describe("Chat", () => {
       expect(lastFrame()).toContain("Approved result");
     });
 
+    it("shows diff in confirm prompt when tool provides one", async () => {
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", async () => {
+          requestCount++;
+          if (requestCount === 1) {
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_1",
+                            function: {
+                              name: "diff_tool",
+                              arguments: "{}",
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          }
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "Done" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "diff_tool",
+        displayName: "Diff Tool",
+        description: "A tool that shows a diff on confirm",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        formatCall: () => "",
+        execute: async (_args, context) => {
+          const approved = await context.confirm("Apply changes?", {
+            diff: "-old line\n+new line",
+          });
+          return ok(approved ? "applied" : "skipped");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("do the thing");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Diff should be visible alongside the confirm prompt
+      expect(lastFrame()).toContain("-old line");
+      expect(lastFrame()).toContain("+new line");
+      expect(lastFrame()).toContain("Awaiting approval");
+
+      // Approve and verify completion
+      await stdin.write("y");
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+    });
+
     it("shows confirm prompt and returns denied on rejection", async () => {
       let requestCount = 0;
       let secondRequestMessages: unknown[] = [];

@@ -5,6 +5,7 @@ import { newCommand } from "./commands/new";
 import { createCommandRegistry } from "./commands/registry";
 import { sessionCommand } from "./commands/session";
 import { settingsCommand } from "./commands/settings";
+import { editFileTool } from "./tools/edit-file";
 import { readFileTool } from "./tools/read-file";
 import { createToolRegistry } from "./tools/registry";
 import { writeFileTool } from "./tools/write-file";
@@ -25,6 +26,7 @@ function buildToolRegistry() {
   const registry = createToolRegistry();
   registry.register(readFileTool);
   registry.register(writeFileTool);
+  registry.register(editFileTool);
   return registry;
 }
 
