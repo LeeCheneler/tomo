@@ -19,9 +19,9 @@ import {
   createSessionPath,
   readSessionMessages,
 } from "../session/session";
+import { executeToolCalls } from "../tools/execute-tool-calls";
 import type { ToolRegistry } from "../tools/registry";
 import type { ToolContext } from "../tools/types";
-import { parseToolArgs } from "../tools/types";
 import { AppHeader } from "../ui/app-header";
 import { ConfirmPrompt } from "../ui/confirm-prompt";
 import { DiffView } from "../ui/diff-view";
@@ -121,84 +121,13 @@ function useChat(props: UseChatProps) {
             signal: new AbortController().signal,
           };
 
-          // Build messages locally since React state updates from appendMessage
-          // won't be reflected in messagesRef until the next render.
-          const newMessages: ChatMessage[] = [];
-
-          const toolCallMsg: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: "tool-call",
-            content: completion.content,
-            toolCalls: completion.toolCalls.map((tc) => {
-              const tool = registry.get(tc.function.name);
-              let summary = "";
-              if (tool) {
-                try {
-                  summary = tool.formatCall(JSON.parse(tc.function.arguments));
-                } catch {
-                  // Invalid JSON — leave summary empty
-                }
-              }
-              return {
-                id: tc.id,
-                name: tc.function.name,
-                displayName: tool?.displayName ?? tc.function.name,
-                arguments: tc.function.arguments,
-                summary,
-              };
-            }),
-          };
-          appendMessage(toolCallMsg);
-          newMessages.push(toolCallMsg);
-
-          for (const tc of completion.toolCalls) {
-            const tool = registry.get(tc.function.name);
-            if (!tool) {
-              const resultMsg: ChatMessage = {
-                id: crypto.randomUUID(),
-                role: "tool-result",
-                toolCallId: tc.id,
-                toolName: tc.function.name,
-                output: `Unknown tool: ${tc.function.name}`,
-                status: "error",
-                format: "plain",
-              };
-              appendMessage(resultMsg);
-              newMessages.push(resultMsg);
-              continue;
-            }
-
-            let output: string;
-            let status: "ok" | "error" | "denied" = "ok";
-            let format: "plain" | "diff" = "plain";
-            try {
-              const parsed = parseToolArgs(
-                tool.argsSchema,
-                tc.function.arguments,
-              );
-              const result = await tool.execute(parsed, toolContext);
-              output = result.output;
-              status = result.status;
-              format = result.format;
-            } catch (e) {
-              /* v8 ignore start -- non-Error throws are unlikely but handled */
-              output = `Tool error: ${e instanceof Error ? e.message : "unknown error"}`;
-              status = "error";
-              /* v8 ignore stop */
-            }
-
-            const resultMsg: ChatMessage = {
-              id: crypto.randomUUID(),
-              role: "tool-result",
-              toolCallId: tc.id,
-              toolName: tc.function.name,
-              output,
-              status,
-              format,
-            };
-            appendMessage(resultMsg);
-            newMessages.push(resultMsg);
-          }
+          const newMessages = await executeToolCalls(
+            completion.toolCalls,
+            completion.content,
+            registry,
+            toolContext,
+            appendMessage,
+          );
 
           const allMessages = [...messagesRef.current, ...newMessages];
           const systemPrompt = buildSystemPrompt();
