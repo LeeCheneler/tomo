@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
@@ -26,31 +26,30 @@ function runGrep(
 ): ToolResult {
   try {
     const useGit = gitignore && isGitRepo(cwd);
+    const execOpts = {
+      cwd,
+      encoding: "utf-8" as const,
+      stdio: ["pipe", "pipe", "pipe"] as ["pipe", "pipe", "pipe"],
+    };
     let output: string;
 
     if (file) {
-      output = execSync(
-        `grep -n -E ${JSON.stringify(pattern)} ${JSON.stringify(file)}`,
-        { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
+      output = execFileSync("grep", ["-n", "-E", pattern, file], execOpts);
     } else if (useGit) {
-      // Auto-prepend **/ so bare globs like *.ts match in subdirectories
-      const globInclude = include?.includes("/") ? include : `**/${include}`;
-      const includeArgs = include
-        ? ` -- ${JSON.stringify(`:(glob)${globInclude}`)}`
-        : "";
-      output = execSync(
-        `git grep -n -I -E --untracked ${JSON.stringify(pattern)}${includeArgs}`,
-        { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
+      const args = ["grep", "-n", "-I", "-E", "--untracked", pattern];
+      if (include) {
+        // Auto-prepend **/ so bare globs like *.ts match in subdirectories
+        const globInclude = include.includes("/") ? include : `**/${include}`;
+        args.push("--", `:(glob)${globInclude}`);
+      }
+      output = execFileSync("git", args, execOpts);
     } else {
-      const includeArgs = include
-        ? ` --include=${JSON.stringify(include)}`
-        : "";
-      output = execSync(
-        `grep -rn -E ${JSON.stringify(pattern)}${includeArgs} .`,
-        { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
+      const args = ["-rn", "-E"];
+      if (include) {
+        args.push("--include", include);
+      }
+      args.push(pattern, ".");
+      output = execFileSync("grep", args, execOpts);
     }
 
     const lines = output.trimEnd();

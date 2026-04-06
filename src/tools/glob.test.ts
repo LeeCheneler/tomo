@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { globSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isGitRepo } from "../prompt/git-context";
@@ -6,7 +6,7 @@ import { mockToolContext } from "../test-utils/stub-context";
 import { globTool } from "./glob";
 
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 vi.mock("node:fs", () => ({
@@ -41,7 +41,7 @@ describe("globTool", () => {
   describe("execute", () => {
     it("uses git ls-files in a git repo with gitignore enabled", async () => {
       vi.mocked(isGitRepo).mockReturnValue(true);
-      vi.mocked(execSync)
+      vi.mocked(execFileSync)
         .mockReturnValueOnce("src/foo.ts\nsrc/bar.ts\n")
         .mockReturnValueOnce("");
 
@@ -52,7 +52,7 @@ describe("globTool", () => {
 
       expect(result.status).toBe("ok");
       expect(result.output).toBe("src/foo.ts\nsrc/bar.ts");
-      expect(execSync).toHaveBeenCalledTimes(2);
+      expect(execFileSync).toHaveBeenCalledTimes(2);
     });
 
     it("falls back to globSync outside a git repo", async () => {
@@ -79,7 +79,7 @@ describe("globTool", () => {
 
       expect(result.status).toBe("ok");
       expect(result.output).toBe("a.ts");
-      expect(execSync).not.toHaveBeenCalled();
+      expect(execFileSync).not.toHaveBeenCalled();
     });
 
     it("returns a message when no files match", async () => {
@@ -134,7 +134,7 @@ describe("globTool", () => {
 
     it("includes untracked files from git ls-files", async () => {
       vi.mocked(isGitRepo).mockReturnValue(true);
-      vi.mocked(execSync)
+      vi.mocked(execFileSync)
         .mockReturnValueOnce("tracked.ts\n")
         .mockReturnValueOnce("untracked.ts\n");
 

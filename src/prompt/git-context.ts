@@ -1,14 +1,14 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 /** Runs a git command in the given directory and returns trimmed stdout. */
-function git(cwd: string, args: string): string {
-  return execSync(`git ${args}`, { cwd, stdio: "pipe" }).toString().trim();
+function git(cwd: string, args: string[]): string {
+  return execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
 }
 
 /** Checks whether a directory is inside a git repository. */
 export function isGitRepo(cwd: string): boolean {
   try {
-    git(cwd, "rev-parse --is-inside-work-tree");
+    git(cwd, ["rev-parse", "--is-inside-work-tree"]);
     return true;
   } catch {
     return false;
@@ -17,13 +17,13 @@ export function isGitRepo(cwd: string): boolean {
 
 /** Returns the current branch name. */
 export function getGitBranch(cwd: string): string {
-  return git(cwd, "rev-parse --abbrev-ref HEAD");
+  return git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
 }
 
 /** Returns the default branch name from the origin remote, falling back to "main". */
 export function getDefaultBranch(cwd: string): string {
   try {
-    const ref = git(cwd, "symbolic-ref refs/remotes/origin/HEAD");
+    const ref = git(cwd, ["symbolic-ref", "refs/remotes/origin/HEAD"]);
     return ref.replace("refs/remotes/origin/", "");
   } catch {
     return "main";
@@ -32,7 +32,7 @@ export function getDefaultBranch(cwd: string): string {
 
 /** Returns a short working-tree status: "clean" or "<n> changed file(s)". */
 export function getGitStatusSummary(cwd: string): string {
-  const output = git(cwd, "status --porcelain");
+  const output = git(cwd, ["status", "--porcelain"]);
   if (!output) return "clean";
   const lines = output.split("\n");
   return `${lines.length} changed file${lines.length === 1 ? "" : "s"}`;
@@ -40,13 +40,13 @@ export function getGitStatusSummary(cwd: string): string {
 
 /** Returns the last N commits in oneline format, or empty string if none. */
 export function getGitLog(cwd: string, count = 10): string {
-  return git(cwd, `log --oneline -${count}`);
+  return git(cwd, ["log", "--oneline", `-${count}`]);
 }
 
 /** Returns the origin remote URL, or null if none is configured. */
 export function getGitRemoteUrl(cwd: string): string | null {
   try {
-    return git(cwd, "remote get-url origin");
+    return git(cwd, ["remote", "get-url", "origin"]);
   } catch {
     return null;
   }
@@ -62,7 +62,7 @@ export function isGitHubRemote(cwd: string): boolean {
 /** Checks whether the GitHub CLI (gh) is installed and on PATH. */
 export function isGhCliAvailable(): boolean {
   try {
-    execSync("which gh", { stdio: "pipe" });
+    execFileSync("which", ["gh"], { stdio: "pipe" });
     return true;
   } catch {
     return false;

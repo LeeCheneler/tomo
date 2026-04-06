@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { globSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
@@ -21,12 +21,13 @@ const argsSchema = z.object({
  */
 function gitGlob(pattern: string, cwd: string): string[] {
   const pathspec = `:(glob)${pattern}`;
-  const tracked = execSync(`git ls-files -- ${JSON.stringify(pathspec)}`, {
+  const tracked = execFileSync("git", ["ls-files", "--", pathspec], {
     cwd,
     encoding: "utf-8",
   });
-  const untracked = execSync(
-    `git ls-files --others --exclude-standard -- ${JSON.stringify(pathspec)}`,
+  const untracked = execFileSync(
+    "git",
+    ["ls-files", "--others", "--exclude-standard", "--", pathspec],
     { cwd, encoding: "utf-8" },
   );
   return `${tracked}${untracked}`.split("\n").filter(Boolean);

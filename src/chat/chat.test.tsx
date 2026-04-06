@@ -22,7 +22,7 @@ vi.mock("node:os", async (importOriginal) => ({
 }));
 
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(() => {
+  execFileSync: vi.fn(() => {
     throw new Error("not a git repo");
   }),
 }));

@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getDefaultBranch,
@@ -13,17 +13,17 @@ import {
 } from "./git-context";
 
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 afterEach(() => {
-  vi.mocked(execSync).mockReset();
+  vi.mocked(execFileSync).mockReset();
 });
 
-/** Configures execSync to return different values based on command substring matching. */
+/** Configures execFileSync to return different values based on command substring matching. */
 function mockCommands(commands: Record<string, string>) {
-  vi.mocked(execSync).mockImplementation((cmd) => {
-    const command = String(cmd);
+  vi.mocked(execFileSync).mockImplementation((file, args) => {
+    const command = `${String(file)} ${(args as string[]).join(" ")}`;
     for (const [pattern, value] of Object.entries(commands)) {
       if (command.includes(pattern)) return Buffer.from(value);
     }
@@ -38,7 +38,7 @@ describe("isGitRepo", () => {
   });
 
   it("returns false when rev-parse throws", () => {
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("not a git repo");
     });
     expect(isGitRepo("/tmp")).toBe(false);
@@ -61,7 +61,7 @@ describe("getDefaultBranch", () => {
   });
 
   it("falls back to main when symbolic-ref throws", () => {
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("no origin HEAD");
     });
     expect(getDefaultBranch("/repo")).toBe("main");
@@ -101,7 +101,7 @@ describe("getGitRemoteUrl", () => {
   });
 
   it("returns null when there is no origin remote", () => {
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("no remote");
     });
     expect(getGitRemoteUrl("/repo")).toBeNull();
@@ -124,7 +124,7 @@ describe("isGitHubRemote", () => {
   });
 
   it("returns false when there is no remote", () => {
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("no remote");
     });
     expect(isGitHubRemote("/repo")).toBe(false);
@@ -138,7 +138,7 @@ describe("isGhCliAvailable", () => {
   });
 
   it("returns false when which gh throws", () => {
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("not found");
     });
     expect(isGhCliAvailable()).toBe(false);
@@ -147,7 +147,7 @@ describe("isGhCliAvailable", () => {
 
 describe("getGitContext", () => {
   it("returns null when not in a git repo", () => {
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("not a git repo");
     });
     expect(getGitContext("/tmp")).toBeNull();
@@ -205,8 +205,8 @@ describe("getGitContext", () => {
   });
 
   it("includes GitHub hint when gh is not installed", () => {
-    vi.mocked(execSync).mockImplementation((cmd) => {
-      const command = String(cmd);
+    vi.mocked(execFileSync).mockImplementation((file, args) => {
+      const command = `${String(file)} ${(args as string[]).join(" ")}`;
       if (command.includes("rev-parse --is-inside-work-tree"))
         return Buffer.from("true");
       if (command.includes("rev-parse --abbrev-ref HEAD"))

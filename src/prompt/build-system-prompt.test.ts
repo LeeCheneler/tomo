@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockFs } from "../test-utils/mock-fs";
 import { buildSystemPrompt } from "./build-system-prompt";
@@ -13,7 +13,7 @@ vi.mock("node:os", async (importOriginal) => ({
 }));
 
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 afterEach(() => {
@@ -24,7 +24,7 @@ describe("buildSystemPrompt", () => {
   it("includes system info when not in a git repo and no instruction files exist", () => {
     vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
     process.env.SHELL = "/bin/bash";
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("not a git repo");
     });
     const fs = mockFs({});
@@ -41,8 +41,8 @@ describe("buildSystemPrompt", () => {
   it("includes git context when in a repo", () => {
     vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
     process.env.SHELL = "/bin/bash";
-    vi.mocked(execSync).mockImplementation((cmd) => {
-      const command = String(cmd);
+    vi.mocked(execFileSync).mockImplementation((file, args) => {
+      const command = `${String(file)} ${(args as string[]).join(" ")}`;
       if (command.includes("rev-parse --is-inside-work-tree"))
         return Buffer.from("true");
       if (command.includes("rev-parse --abbrev-ref HEAD"))
@@ -69,7 +69,7 @@ describe("buildSystemPrompt", () => {
   it("includes instruction files when they exist", () => {
     vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
     process.env.SHELL = "/bin/bash";
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("not a git repo");
     });
     const fs = mockFs({
@@ -89,8 +89,8 @@ describe("buildSystemPrompt", () => {
   it("includes all sections when git context and instructions are present", () => {
     vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
     process.env.SHELL = "/bin/bash";
-    vi.mocked(execSync).mockImplementation((cmd) => {
-      const command = String(cmd);
+    vi.mocked(execFileSync).mockImplementation((file, args) => {
+      const command = `${String(file)} ${(args as string[]).join(" ")}`;
       if (command.includes("rev-parse --is-inside-work-tree"))
         return Buffer.from("true");
       if (command.includes("rev-parse --abbrev-ref HEAD"))
@@ -103,7 +103,7 @@ describe("buildSystemPrompt", () => {
         return Buffer.from("abc1234 feat: add thing\n");
       if (command.includes("remote get-url origin"))
         return Buffer.from("git@github.com:user/repo.git\n");
-      if (command.includes("which gh")) return Buffer.from("/usr/bin/gh\n");
+      if (command.includes("gh")) return Buffer.from("/usr/bin/gh\n");
       throw new Error(`Unmocked: ${command}`);
     });
     const fs = mockFs({
