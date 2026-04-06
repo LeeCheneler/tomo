@@ -54,11 +54,16 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
     .spyOn(fsUtils, "listDir")
     .mockImplementation((dirPath) => {
       const prefix = `${dirPath}/`;
-      return [...files.keys()]
-        .filter(
-          (k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/"),
-        )
-        .map((k) => k.slice(prefix.length));
+      // Extract the first path segment after the prefix for each matching key,
+      // returning both files and subdirectory names like real readdirSync.
+      const entries = new Set<string>();
+      for (const k of files.keys()) {
+        if (!k.startsWith(prefix)) continue;
+        const remainder = k.slice(prefix.length);
+        const segment = remainder.split("/")[0];
+        entries.add(segment);
+      }
+      return [...entries];
     });
 
   const isDirectorySpy = vi
