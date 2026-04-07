@@ -3,6 +3,16 @@ import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { Settings } from "./settings";
 
+vi.mock("../skill-sets/git", () => ({
+  cloneSource: vi.fn(),
+  pullSource: vi.fn(),
+  removeSource: vi.fn(),
+}));
+
+vi.mock("../skill-sets/loader", () => ({
+  discoverSkillSets: vi.fn(() => []),
+}));
+
 const COLUMNS = 40;
 
 /** Override process.stdout.columns for test predictability. */
@@ -198,6 +208,33 @@ describe("Settings", () => {
       const { stdin, lastFrame } = renderSettings();
       await stdin.write(keys.down);
       await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Settings");
+      expect(frame).toContain("Providers");
+    });
+  });
+
+  describe("skill sets screen", () => {
+    it("enters the skill sets screen instead of placeholder", async () => {
+      const { stdin, lastFrame } = renderSettings();
+      // Skill Sets is the 6th menu item (5 downs from top)
+      for (let i = 0; i < 5; i++) {
+        await stdin.write(keys.down);
+      }
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Skill Sets");
+      expect(frame).toContain("Add source...");
+      expect(frame).not.toContain("Coming soon");
+    });
+
+    it("returns to menu from skill sets screen", async () => {
+      const { stdin, lastFrame } = renderSettings();
+      for (let i = 0; i < 5; i++) {
+        await stdin.write(keys.down);
+      }
       await stdin.write(keys.enter);
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";

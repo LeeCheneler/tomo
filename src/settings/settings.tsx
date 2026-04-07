@@ -11,6 +11,7 @@ import { theme } from "../ui/theme";
 import { AllowedCommandsScreen } from "./allowed-commands";
 import { PermissionsScreen } from "./permissions";
 import { ProvidersScreen } from "./providers";
+import { SkillSetsScreen } from "./skill-sets";
 import { ToolsScreen } from "./tools";
 
 /** Settings section identifiers. */
@@ -90,6 +91,10 @@ export function Settings(props: SettingsProps) {
 
   if (step === "allowed-commands") {
     return <AllowedCommandsScreen onBack={handleBack} />;
+  }
+
+  if (step === "skill-sets") {
+    return <SkillSetsScreen onBack={handleBack} />;
   }
 
   if (step !== "menu") {
