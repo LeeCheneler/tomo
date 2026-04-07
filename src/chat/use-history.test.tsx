@@ -7,7 +7,7 @@ import { useHistory } from "./use-history";
 let api: ReturnType<typeof useHistory>;
 function Harness() {
   api = useHistory();
-  return <Text>{api.entries.join(",")}</Text>;
+  return <Text>{api.entries.map((e) => e.text).join(",")}</Text>;
 }
 
 describe("useHistory", () => {
@@ -19,19 +19,28 @@ describe("useHistory", () => {
 
   it("appends an entry on push", async () => {
     const { lastFrame } = renderInk(<Harness />);
-    api.push("hello");
+    api.push({ text: "hello", images: [] });
     await flushInkFrames();
     expect(lastFrame()).toBe("hello");
-    expect(api.entries).toEqual(["hello"]);
+    expect(api.entries).toHaveLength(1);
+    expect(api.entries[0].text).toBe("hello");
   });
 
   it("accumulates multiple entries in order", async () => {
     const { lastFrame } = renderInk(<Harness />);
-    api.push("first");
-    api.push("second");
-    api.push("third");
+    api.push({ text: "first", images: [] });
+    api.push({ text: "second", images: [] });
+    api.push({ text: "third", images: [] });
     await flushInkFrames();
     expect(lastFrame()).toBe("first,second,third");
-    expect(api.entries).toEqual(["first", "second", "third"]);
+    expect(api.entries).toHaveLength(3);
+  });
+
+  it("preserves images in entries", async () => {
+    renderInk(<Harness />);
+    const img = { name: "test.png", dataUri: "data:image/png;base64,abc" };
+    api.push({ text: "with image", images: [img] });
+    await flushInkFrames();
+    expect(api.entries[0].images).toEqual([img]);
   });
 });

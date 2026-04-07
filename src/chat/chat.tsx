@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isCommand } from "../commands/is-command";
+import type { ImageAttachment } from "../images/clipboard";
 import { isSkill, parseSkillInput } from "../skills/utils";
 import type { SkillRegistry } from "../skills/registry";
 import type {
@@ -37,6 +38,7 @@ import { ChatList, LiveAssistantMessage, LiveToolOutput } from "./chat-list";
 import type { ChatMessage } from "./message";
 import { MessageHistory } from "./message-history";
 import { useCompletion } from "./use-completion";
+import type { HistoryEntry } from "./use-history";
 import { useHistory } from "./use-history";
 
 /** Maximum number of nudge retries when the LLM returns an empty response. */
@@ -48,7 +50,7 @@ const EMPTY_NUDGE_CONTENT =
 
 /** Chat mode — typing input, browsing history, or a takeover screen. */
 type ChatMode =
-  | { kind: "input"; initialValue?: string }
+  | { kind: "input"; initialValue?: string; initialImages?: ImageAttachment[] }
   | { kind: "history" }
   | { kind: "takeover"; name: string; render: TakeoverRender };
 
@@ -291,7 +293,7 @@ function useChat(props: UseChatProps) {
   }
 
   /** Handles submitted input — dispatches commands, skills, or creates user messages. */
-  async function handleMessage(message: string) {
+  async function handleMessage(message: string, images: ImageAttachment[]) {
     const commandRegistry = props.commandRegistry ?? createCommandRegistry();
     if (isCommand(message)) {
       const context = buildCommandContext();
@@ -324,9 +326,10 @@ function useChat(props: UseChatProps) {
           id: crypto.randomUUID(),
           role: "user",
           content: parsed.userText,
+          images: images.length > 0 ? images : undefined,
         });
       }
-      history.push(message);
+      history.push({ text: message, images });
       const systemPrompt = buildSystemPrompt();
       const providerMessages = buildProviderMessages(
         messagesRef.current,
@@ -345,9 +348,10 @@ function useChat(props: UseChatProps) {
       id: crypto.randomUUID(),
       role: "user",
       content: message,
+      images: images.length > 0 ? images : undefined,
     };
     appendMessage(userMsg);
-    history.push(message);
+    history.push({ text: message, images });
 
     // Build fresh system prompt each send so git status stays current
     const systemPrompt = buildSystemPrompt();
@@ -385,9 +389,13 @@ function useChat(props: UseChatProps) {
   }
 
   /** Clears the draft and returns to input mode with the selected entry. */
-  function handleSelected(entry: string) {
+  function handleSelected(entry: HistoryEntry) {
     setDraft("");
-    setMode({ kind: "input", initialValue: entry });
+    setMode({
+      kind: "input",
+      initialValue: entry.text,
+      initialImages: entry.images,
+    });
   }
 
   /** Returns to input mode with the saved draft restored. */
@@ -559,6 +567,7 @@ export function Chat(props: ChatProps) {
           onUp={handleUp}
           onAbort={isStreaming ? abort : undefined}
           initialValue={mode.initialValue}
+          initialImages={mode.initialImages}
           hasHistory={history.entries.length > 0}
           commandAutocompleteItems={commandAutocompleteItems}
           skillAutocompleteItems={skillAutocompleteItems}

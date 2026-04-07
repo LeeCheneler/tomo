@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { MessageHistory } from "./message-history";
+import type { HistoryEntry } from "./use-history";
 
 const COLUMNS = 40;
 
@@ -14,6 +15,11 @@ function setColumns(width: number | undefined) {
   });
 }
 
+/** Helper to build a plain text history entry. */
+function entry(text: string): HistoryEntry {
+  return { text, images: [] };
+}
+
 describe("MessageHistory", () => {
   afterEach(() => {
     setColumns(undefined);
@@ -22,8 +28,8 @@ describe("MessageHistory", () => {
   /** Renders MessageHistory with sensible defaults and a fixed terminal width. */
   function renderHistory(
     overrides: Partial<{
-      entries: string[];
-      onSelected: (entry: string) => void;
+      entries: HistoryEntry[];
+      onSelected: (entry: HistoryEntry) => void;
       onExit: () => void;
     }> = {},
   ) {
@@ -31,7 +37,9 @@ describe("MessageHistory", () => {
 
     return renderInk(
       <MessageHistory
-        entries={overrides.entries ?? ["first", "second", "third"]}
+        entries={
+          overrides.entries ?? [entry("first"), entry("second"), entry("third")]
+        }
         onSelected={overrides.onSelected ?? (() => {})}
         onExit={overrides.onExit ?? (() => {})}
       />,
@@ -62,7 +70,7 @@ describe("MessageHistory", () => {
 
       const { lastFrame } = renderInk(
         <MessageHistory
-          entries={["hello"]}
+          entries={[entry("hello")]}
           onSelected={() => {}}
           onExit={() => {}}
         />,
@@ -71,6 +79,19 @@ describe("MessageHistory", () => {
       const frame = lastFrame() ?? "";
       const lines = frame.split("\n");
       expect(lines[1]).toBe("─".repeat(80));
+    });
+
+    it("shows image badges for entries with images", () => {
+      const entries: HistoryEntry[] = [
+        {
+          text: "check this",
+          images: [{ name: "photo.png", dataUri: "data:image/png;base64,abc" }],
+        },
+      ];
+      const { lastFrame } = renderHistory({ entries });
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("check this");
+      expect(frame).toContain("[photo.png]");
     });
   });
 
@@ -139,7 +160,7 @@ describe("MessageHistory", () => {
       const onSelected = vi.fn();
       const { stdin } = renderHistory({ onSelected });
       await stdin.write(keys.enter);
-      expect(onSelected).toHaveBeenCalledWith("third");
+      expect(onSelected).toHaveBeenCalledWith(entry("third"));
     });
 
     it("calls onSelected with navigated entry on enter", async () => {
@@ -147,7 +168,7 @@ describe("MessageHistory", () => {
       const { stdin } = renderHistory({ onSelected });
       await stdin.write(keys.up);
       await stdin.write(keys.enter);
-      expect(onSelected).toHaveBeenCalledWith("second");
+      expect(onSelected).toHaveBeenCalledWith(entry("second"));
     });
   });
 

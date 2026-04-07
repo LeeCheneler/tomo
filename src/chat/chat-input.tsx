@@ -25,6 +25,8 @@ export interface ChatInputProps {
   onAbort?: () => void;
   /** Initial text to populate the input with on mount. */
   initialValue?: string;
+  /** Initial images to restore (e.g. from history recall). */
+  initialImages?: ImageAttachment[];
   /** Whether message history is available for browsing. */
   hasHistory?: boolean;
   /** Items to show in the autocomplete list when typing a command (/). */
@@ -41,7 +43,9 @@ function useChatInput(props: ChatInputProps) {
   const [cursor, setCursorState] = useState(initial.length);
   const valueRef = useRef(initial);
   const cursorRef = useRef(initial.length);
-  const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [images, setImages] = useState<ImageAttachment[]>(
+    () => props.initialImages ?? [],
+  );
   const [imageNavIndex, setImageNavIndex] = useState<number | null>(null);
 
   const skillItems = props.skillAutocompleteItems ?? [];

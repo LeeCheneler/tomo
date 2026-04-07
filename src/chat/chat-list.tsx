@@ -18,12 +18,26 @@ interface ChatListProps {
   header?: ReactNode;
 }
 
-/** Renders a user message with a cyan indicator. */
-function UserMessageView(props: { content: string }) {
+/** Renders a user message with a cyan indicator and optional image badges. */
+function UserMessageView(props: {
+  content: string;
+  images?: { name: string; dataUri: string }[];
+}) {
   return (
-    <Box paddingBottom={1}>
-      <Text color={theme.brand}>{"❯ "}</Text>
-      <Text color={theme.brand}>{props.content}</Text>
+    <Box flexDirection="column" paddingBottom={1}>
+      <Box>
+        <Text color={theme.brand}>{"❯ "}</Text>
+        <Text color={theme.brand}>{props.content}</Text>
+      </Box>
+      {props.images && props.images.length > 0 && (
+        <Box paddingLeft={2} gap={1}>
+          {props.images.map((img) => (
+            <Text key={img.dataUri} dimColor>
+              [{img.name}]
+            </Text>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -185,7 +199,13 @@ export function ChatList(props: ChatListProps) {
         }
         const message = item.message;
         if (message.role === "user") {
-          return <UserMessageView key={message.id} content={message.content} />;
+          return (
+            <UserMessageView
+              key={message.id}
+              content={message.content}
+              images={message.images}
+            />
+          );
         }
         if (message.role === "assistant") {
           return (

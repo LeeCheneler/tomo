@@ -4,13 +4,14 @@ import { Border } from "../ui/border";
 import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { theme } from "../ui/theme";
+import type { HistoryEntry } from "./use-history";
 
 /** Props for the MessageHistory component. */
 export interface MessageHistoryProps {
   /** History entries to navigate through. */
-  entries: readonly string[];
+  entries: readonly HistoryEntry[];
   /** Called when the user selects an entry with Enter. */
-  onSelected: (entry: string) => void;
+  onSelected: (entry: HistoryEntry) => void;
   /** Called when the user exits history (down past last entry or Escape). */
   onExit: () => void;
 }
@@ -61,10 +62,21 @@ export function MessageHistory(props: MessageHistoryProps) {
   return (
     <Box flexDirection="column" paddingTop={1}>
       <Border color={theme.history} />
-      <Text>
-        <Text color={theme.history}>{"❯ "}</Text>
-        {selectedEntry}
-      </Text>
+      <Box flexDirection="column">
+        <Text>
+          <Text color={theme.history}>{"❯ "}</Text>
+          {selectedEntry.text}
+        </Text>
+        {selectedEntry.images.length > 0 && (
+          <Box paddingLeft={2} gap={1}>
+            {selectedEntry.images.map((img) => (
+              <Text key={img.dataUri} dimColor>
+                [{img.name}]
+              </Text>
+            ))}
+          </Box>
+        )}
+      </Box>
       <Border color={theme.history} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
