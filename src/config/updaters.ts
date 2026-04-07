@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { Permissions, Provider, Tools } from "./schema";
-import { providerSchema } from "./schema";
+import type { Permissions, Provider, SkillSetSource, Tools } from "./schema";
+import { providerSchema, skillSetSourceSchema } from "./schema";
 import { updateGlobalConfig, updateLocalConfig } from "./file";
 
 /** Sets the active model in the global config. */
@@ -61,4 +61,53 @@ export function updateAllowedCommands(commands: string[]): void {
 /** Sets tool config in the local config. */
 export function updateTools(tools: Tools): void {
   updateLocalConfig((raw) => ({ ...raw, tools }));
+}
+
+/** Schema for parsing just the skillSets field from raw config. */
+const skillSetsFieldSchema = z.object({
+  skillSets: z
+    .object({ sources: z.array(skillSetSourceSchema).default([]) })
+    .default({ sources: [] }),
+});
+
+/** Adds a skill set source to the global config. */
+export function addSkillSetSource(source: SkillSetSource): void {
+  updateGlobalConfig((raw) => {
+    const { skillSets } = skillSetsFieldSchema.parse(raw);
+    return {
+      ...raw,
+      skillSets: { sources: [...skillSets.sources, source] },
+    };
+  });
+}
+
+/** Removes a skill set source by URL from the global config. */
+export function removeSkillSetSource(url: string): void {
+  updateGlobalConfig((raw) => {
+    const { skillSets } = skillSetsFieldSchema.parse(raw);
+    return {
+      ...raw,
+      skillSets: {
+        sources: skillSets.sources.filter((s) => s.url !== url),
+      },
+    };
+  });
+}
+
+/** Updates the enabled sets for a skill set source in the global config. */
+export function updateSkillSetEnabledSets(
+  url: string,
+  enabledSets: string[],
+): void {
+  updateGlobalConfig((raw) => {
+    const { skillSets } = skillSetsFieldSchema.parse(raw);
+    return {
+      ...raw,
+      skillSets: {
+        sources: skillSets.sources.map((s) =>
+          s.url === url ? { ...s, enabledSets } : s,
+        ),
+      },
+    };
+  });
 }

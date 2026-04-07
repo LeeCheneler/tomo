@@ -4,12 +4,15 @@ import type { MockFsState } from "../test-utils/mock-fs";
 import { loadConfig } from "./file";
 import {
   addProvider,
+  addSkillSetSource,
   removeProvider,
+  removeSkillSetSource,
   updateActiveModel,
   updateActiveProvider,
   updateAllowedCommands,
   updatePermissions,
   updateProvider,
+  updateSkillSetEnabledSets,
   updateTools,
 } from "./updaters";
 
@@ -254,5 +257,118 @@ describe("updateTools", () => {
     const config = loadConfig();
     expect(config.tools.webSearch.enabled).toBe(true);
     expect(config.tools.webSearch.apiKey).toBe("tvly-123");
+  });
+});
+
+describe("addSkillSetSource", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("appends a source to global config", () => {
+    state = mockConfig({ global: {} });
+    addSkillSetSource({
+      url: "git@github.com:org/skills.git",
+      enabledSets: [],
+    });
+    const config = loadConfig();
+    expect(config.skillSets.sources).toHaveLength(1);
+    expect(config.skillSets.sources[0].url).toBe(
+      "git@github.com:org/skills.git",
+    );
+  });
+
+  it("appends to existing sources", () => {
+    state = mockConfig({
+      global: {
+        skillSets: {
+          sources: [{ url: "git@github.com:org/first.git", enabledSets: [] }],
+        },
+      },
+    });
+    addSkillSetSource({
+      url: "git@github.com:org/second.git",
+      enabledSets: [],
+    });
+    const config = loadConfig();
+    expect(config.skillSets.sources).toHaveLength(2);
+  });
+});
+
+describe("removeSkillSetSource", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("removes a source by URL", () => {
+    state = mockConfig({
+      global: {
+        skillSets: {
+          sources: [
+            { url: "git@github.com:org/a.git", enabledSets: ["dev"] },
+            { url: "git@github.com:org/b.git", enabledSets: [] },
+          ],
+        },
+      },
+    });
+    removeSkillSetSource("git@github.com:org/a.git");
+    const config = loadConfig();
+    expect(config.skillSets.sources).toHaveLength(1);
+    expect(config.skillSets.sources[0].url).toBe("git@github.com:org/b.git");
+  });
+
+  it("no-ops when source not found", () => {
+    state = mockConfig({
+      global: {
+        skillSets: {
+          sources: [{ url: "git@github.com:org/a.git", enabledSets: [] }],
+        },
+      },
+    });
+    removeSkillSetSource("git@github.com:org/nope.git");
+    const config = loadConfig();
+    expect(config.skillSets.sources).toHaveLength(1);
+  });
+});
+
+describe("updateSkillSetEnabledSets", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("updates enabled sets for a source", () => {
+    state = mockConfig({
+      global: {
+        skillSets: {
+          sources: [{ url: "git@github.com:org/a.git", enabledSets: [] }],
+        },
+      },
+    });
+    updateSkillSetEnabledSets("git@github.com:org/a.git", ["dev", "ops"]);
+    const config = loadConfig();
+    expect(config.skillSets.sources[0].enabledSets).toEqual(["dev", "ops"]);
+  });
+
+  it("preserves other sources", () => {
+    state = mockConfig({
+      global: {
+        skillSets: {
+          sources: [
+            { url: "git@github.com:org/a.git", enabledSets: [] },
+            { url: "git@github.com:org/b.git", enabledSets: ["design"] },
+          ],
+        },
+      },
+    });
+    updateSkillSetEnabledSets("git@github.com:org/a.git", ["dev"]);
+    const config = loadConfig();
+    expect(config.skillSets.sources[0].enabledSets).toEqual(["dev"]);
+    expect(config.skillSets.sources[1].enabledSets).toEqual(["design"]);
   });
 });
