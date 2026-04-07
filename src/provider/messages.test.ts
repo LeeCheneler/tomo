@@ -117,6 +117,69 @@ describe("buildProviderMessages", () => {
     });
   });
 
+  it("converts user messages with images to ContentPart array", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "user",
+        content: "What is this?",
+        images: [
+          { name: "photo.png", dataUri: "data:image/png;base64,abc123" },
+        ],
+      },
+    ];
+
+    const result = buildProviderMessages(messages, "sys");
+
+    expect(result[1]).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "What is this?" },
+        {
+          type: "image_url",
+          image_url: { url: "data:image/png;base64,abc123" },
+        },
+      ],
+    });
+  });
+
+  it("converts user messages with multiple images", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "user",
+        content: "Compare these",
+        images: [
+          { name: "a.png", dataUri: "data:image/png;base64,aaa" },
+          { name: "b.jpg", dataUri: "data:image/jpeg;base64,bbb" },
+        ],
+      },
+    ];
+
+    const result = buildProviderMessages(messages, "sys");
+    const content = result[1].content;
+    expect(Array.isArray(content)).toBe(true);
+    expect((content as unknown[]).length).toBe(3);
+  });
+
+  it("sends plain string for user messages without images", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "user", content: "no images" },
+    ];
+
+    const result = buildProviderMessages(messages, "sys");
+    expect(result[1]).toEqual({ role: "user", content: "no images" });
+  });
+
+  it("sends plain string for user messages with empty images array", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "user", content: "empty array", images: [] },
+    ];
+
+    const result = buildProviderMessages(messages, "sys");
+    expect(result[1]).toEqual({ role: "user", content: "empty array" });
+  });
+
   it("strips ANSI codes from assistant messages", () => {
     const messages: ChatMessage[] = [
       {

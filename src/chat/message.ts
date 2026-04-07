@@ -1,8 +1,12 @@
+import type { ImageAttachment } from "../images/clipboard";
+
 /** A message sent by the user. */
 export interface UserMessage {
   id: string;
   role: "user";
   content: string;
+  /** Images attached via clipboard paste or file path detection. */
+  images?: ImageAttachment[];
 }
 
 /** A response from the assistant. */
