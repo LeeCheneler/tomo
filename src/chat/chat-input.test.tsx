@@ -752,6 +752,28 @@ describe("ChatInput", () => {
       expect(frame).not.toContain("remove");
       expect(frame).not.toContain("[screenshot.png]");
     });
+
+    it("clears images on double-escape", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write("hello");
+      expect(lastFrame()).toContain("[screenshot.png]");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("[screenshot.png]");
+      expect(lastFrame()).not.toContain("hello");
+    });
+
+    it("triggers esc pending when only images are attached", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      // First esc triggers pending, second clears.
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("[screenshot.png]");
+    });
   });
 });
 

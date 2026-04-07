@@ -162,9 +162,11 @@ function useChatInput(props: ChatInputProps) {
       if (escPending) {
         applyChange("");
         setCursorPos(0);
+        setImages([]);
+        setImageNavIndex(null);
         return;
       }
-      if (val.length > 0) {
+      if (val.length > 0 || images.length > 0) {
         setEscPending(true);
       }
       return;
@@ -281,9 +283,15 @@ export function ChatInput(props: ChatInputProps) {
           {images.map((img, i) => (
             <Text
               key={img.dataUri}
-              inverse={imageNavIndex === i}
-              color={imageNavIndex === i ? theme.brand : undefined}
-              dimColor={imageNavIndex !== i}
+              inverse={imageNavIndex === i || escPending}
+              color={
+                escPending
+                  ? theme.warning
+                  : imageNavIndex === i
+                    ? theme.brand
+                    : undefined
+              }
+              dimColor={!escPending && imageNavIndex !== i}
             >
               [{img.name}]
             </Text>
