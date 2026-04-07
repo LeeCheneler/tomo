@@ -5,6 +5,8 @@ import { newCommand } from "./commands/new";
 import { createCommandRegistry } from "./commands/registry";
 import { sessionCommand } from "./commands/session";
 import { settingsCommand } from "./commands/settings";
+import { loadConfig } from "./config/file";
+import { discoverSkillSets, loadSkillSetSkills } from "./skill-sets/loader";
 import { loadAllSkills } from "./skills/loader";
 import { createSkillRegistry } from "./skills/registry";
 import { askTool } from "./tools/ask";
@@ -28,12 +30,27 @@ function buildCommandRegistry() {
   return registry;
 }
 
-/** Creates the application skill registry from global and local SKILL.md files. */
+/** Creates the application skill registry from global, local, and skill set skills. */
 function buildSkillRegistry() {
   const registry = createSkillRegistry();
+
+  // Load skills from enabled skill sets first (lowest priority).
+  const config = loadConfig();
+  for (const source of config.skillSets.sources) {
+    const discovered = discoverSkillSets(source.url);
+    for (const set of discovered) {
+      if (!source.enabledSets.includes(set.name)) continue;
+      for (const skill of loadSkillSetSkills(set)) {
+        registry.register(skill);
+      }
+    }
+  }
+
+  // Global and local skills override skill set skills.
   for (const skill of loadAllSkills()) {
     registry.register(skill);
   }
+
   return registry;
 }
 
