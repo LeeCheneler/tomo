@@ -1,5 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { useRef, useState } from "react";
+import type { ImageAttachment } from "../images/clipboard";
+import { detectImagePath, readClipboardImage } from "../images/clipboard";
 import { splitAtCursor } from "../input/cursor";
 import { processTextEdit } from "../input/text-edit";
 import type { AutocompleteItem } from "./autocomplete";
@@ -15,8 +17,8 @@ import { theme } from "../ui/theme";
 
 /** Props for the ChatInput component. */
 export interface ChatInputProps {
-  /** Called when the user submits a message. */
-  onMessage: (message: string) => void;
+  /** Called when the user submits a message with any attached images. */
+  onMessage: (message: string, images: ImageAttachment[]) => void;
   /** Called when up arrow is pressed at the start of the input. Receives the current draft value. */
   onUp?: (draft: string) => void;
   /** Called on escape when set, taking priority over the default clear behaviour. */
@@ -39,6 +41,8 @@ function useChatInput(props: ChatInputProps) {
   const [cursor, setCursorState] = useState(initial.length);
   const valueRef = useRef(initial);
   const cursorRef = useRef(initial.length);
+  const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [imageNavIndex, setImageNavIndex] = useState<number | null>(null);
 
   const skillItems = props.skillAutocompleteItems ?? [];
   const autocompleteMode = getAutocompleteMode(
@@ -60,10 +64,20 @@ function useChatInput(props: ChatInputProps) {
     showAutocomplete,
   );
 
-  /** Updates value in both state and ref. */
+  /** Updates value in both state and ref, detecting image paths in the text. */
   function applyChange(newValue: string) {
-    valueRef.current = newValue;
-    setValue(newValue);
+    const detected = detectImagePath(newValue);
+    if (detected) {
+      const prefix = newValue.slice(0, detected.pathStart).trimEnd();
+      valueRef.current = prefix;
+      setValue(prefix);
+      cursorRef.current = prefix.length;
+      setCursorState(prefix.length);
+      setImages((prev) => [...prev, detected.attachment]);
+    } else {
+      valueRef.current = newValue;
+      setValue(newValue);
+    }
     setEscPending(false);
     autocomplete.reset();
   }
@@ -78,6 +92,44 @@ function useChatInput(props: ChatInputProps) {
     const pos = cursorRef.current;
     const val = valueRef.current;
 
+    // Image nav mode: left/right select, backspace removes, up/escape exits.
+    if (imageNavIndex !== null) {
+      if (key.escape || key.upArrow) {
+        setImageNavIndex(null);
+        return;
+      }
+      if (key.leftArrow) {
+        setImageNavIndex(Math.max(0, imageNavIndex - 1));
+        return;
+      }
+      if (key.rightArrow) {
+        setImageNavIndex(Math.min(images.length - 1, imageNavIndex + 1));
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setImages((prev) => {
+          const next = prev.filter((_, i) => i !== imageNavIndex);
+          if (next.length === 0) {
+            setImageNavIndex(null);
+          } else {
+            setImageNavIndex(Math.min(imageNavIndex, next.length - 1));
+          }
+          return next;
+        });
+        return;
+      }
+      return;
+    }
+
+    // Ctrl+V: paste image from clipboard.
+    if (input === "\x16" || (input === "v" && key.ctrl)) {
+      const img = readClipboardImage();
+      if (img) {
+        setImages((prev) => [...prev, img]);
+      }
+      return;
+    }
+
     if (key.return) {
       if (showAutocomplete) {
         const selected = autocomplete.select();
@@ -89,10 +141,12 @@ function useChatInput(props: ChatInputProps) {
         return;
       }
 
-      if (val.trim() === "") return;
-      props.onMessage(val);
+      if (val.trim() === "" && images.length === 0) return;
+      props.onMessage(val, images);
       applyChange("");
       setCursorPos(0);
+      setImages([]);
+      setImageNavIndex(null);
       return;
     }
 
@@ -133,6 +187,12 @@ function useChatInput(props: ChatInputProps) {
     }
 
     // processTextEdit returns null for up/down at boundaries in multi mode.
+    // Down at end of last line enters image nav when images are present.
+    if (key.downArrow && images.length > 0) {
+      setImageNavIndex(0);
+      return;
+    }
+
     if (key.upArrow) {
       props.onUp?.(val);
     }
@@ -141,19 +201,31 @@ function useChatInput(props: ChatInputProps) {
   // Clamp cursor to valid range on each render.
   const clampedCursor = Math.max(0, Math.min(cursor, value.length));
 
-  const instructions: InstructionItem[] = showAutocomplete
-    ? [
-        { key: "enter", description: "select" },
-        { key: "up/down", description: "navigate" },
-      ]
-    : [
-        { key: "/", description: "command" },
-        { key: "//", description: "skill" },
-        { key: "enter", description: "submit" },
-        { key: "up", description: "history" },
-      ];
+  const instructions: InstructionItem[] =
+    imageNavIndex !== null
+      ? [
+          { key: "left/right", description: "select" },
+          { key: "del", description: "remove" },
+          { key: "up", description: "back to input" },
+        ]
+      : showAutocomplete
+        ? [
+            { key: "enter", description: "select" },
+            { key: "up/down", description: "navigate" },
+          ]
+        : [
+            { key: "/", description: "command" },
+            { key: "//", description: "skill" },
+            { key: "enter", description: "submit" },
+            { key: "up", description: "history" },
+            ...(images.length > 0
+              ? [{ key: "down", description: "images" }]
+              : []),
+          ];
 
-  instructions.push({ key: "esc", description: "interrupt/clear" });
+  if (imageNavIndex === null) {
+    instructions.push({ key: "esc", description: "interrupt/clear" });
+  }
 
   return {
     value,
@@ -162,6 +234,8 @@ function useChatInput(props: ChatInputProps) {
     instructions,
     showAutocomplete,
     autocomplete,
+    images,
+    imageNavIndex,
   };
 }
 
@@ -174,6 +248,8 @@ export function ChatInput(props: ChatInputProps) {
     instructions,
     showAutocomplete,
     autocomplete,
+    images,
+    imageNavIndex,
   } = useChatInput(props);
   const { before, at, after } = splitAtCursor(value, cursor);
 
@@ -196,6 +272,20 @@ export function ChatInput(props: ChatInputProps) {
           </Text>
         )}
       </Box>
+      {images.length > 0 && (
+        <Box paddingLeft={2} gap={1}>
+          {images.map((img, i) => (
+            <Text
+              key={img.dataUri}
+              inverse={imageNavIndex === i}
+              color={imageNavIndex === i ? theme.brand : undefined}
+              dimColor={imageNavIndex !== i}
+            >
+              [{img.name}]
+            </Text>
+          ))}
+        </Box>
+      )}
       <Border color={theme.brand} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />

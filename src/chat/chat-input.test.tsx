@@ -1,9 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ImageAttachment } from "../images/clipboard";
 import type { AutocompleteItem } from "./autocomplete";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { splitAtCursor } from "../input/cursor";
 import { ChatInput } from "./chat-input";
+
+// Mock clipboard operations so tests don't call osascript.
+vi.mock("../images/clipboard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../images/clipboard")>();
+  return {
+    ...actual,
+    readClipboardImage: vi.fn(() => null),
+  };
+});
+
+const { readClipboardImage } = await import("../images/clipboard");
 
 const COLUMNS = 40;
 
@@ -19,6 +31,7 @@ function setColumns(width: number | undefined) {
 describe("ChatInput", () => {
   afterEach(() => {
     setColumns(undefined);
+    vi.mocked(readClipboardImage).mockReset();
   });
 
   /** Test autocomplete items. */
@@ -42,7 +55,7 @@ describe("ChatInput", () => {
   /** Renders ChatInput with sensible defaults and a fixed terminal width. */
   function renderInput(
     overrides: Partial<{
-      onMessage: (message: string) => void;
+      onMessage: (message: string, images: ImageAttachment[]) => void;
       onUp: () => void;
       onAbort: () => void;
       initialValue: string;
@@ -99,7 +112,7 @@ describe("ChatInput", () => {
       const { stdin } = renderInput({ onMessage });
       await stdin.write("hello");
       await stdin.write(keys.enter);
-      expect(onMessage).toHaveBeenCalledWith("hello");
+      expect(onMessage).toHaveBeenCalledWith("hello", []);
     });
 
     it("does not call onMessage when value is empty", async () => {
@@ -452,7 +465,7 @@ describe("ChatInput", () => {
       // Type a command that matches no items — autocomplete won't show.
       await stdin.write("/zzz ");
       await stdin.write(keys.enter);
-      expect(onMessage).toHaveBeenCalledWith("/zzz ");
+      expect(onMessage).toHaveBeenCalledWith("/zzz ", []);
     });
 
     it("resets selection when filter changes", async () => {
@@ -591,6 +604,153 @@ describe("ChatInput", () => {
       await stdin.write(keys.space);
       const frame = lastFrame() ?? "";
       expect(frame).not.toContain("Deploy app");
+    });
+  });
+
+  describe("images", () => {
+    /** Fake image attachment for testing. */
+    const fakeImage: ImageAttachment = {
+      name: "screenshot.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+
+    it("adds image on Ctrl+V when clipboard has an image", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      expect(lastFrame()).toContain("[screenshot.png]");
+    });
+
+    it("does nothing on Ctrl+V when clipboard has no image", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(null);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      expect(lastFrame()).not.toContain("[");
+    });
+
+    it("submits images with the message", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({ onMessage });
+      await stdin.write(keys.ctrlV);
+      await stdin.write("describe this");
+      await stdin.write(keys.enter);
+      expect(onMessage).toHaveBeenCalledWith("describe this", [fakeImage]);
+    });
+
+    it("allows submit with only images and empty text", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({ onMessage });
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.enter);
+      expect(onMessage).toHaveBeenCalledWith("", [fakeImage]);
+    });
+
+    it("clears images after submit", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput({ onMessage: vi.fn() });
+      await stdin.write(keys.ctrlV);
+      expect(lastFrame()).toContain("[screenshot.png]");
+      await stdin.write("msg");
+      await stdin.write(keys.enter);
+      expect(lastFrame()).not.toContain("[screenshot.png]");
+    });
+
+    it("shows down images hint when images are attached", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("down");
+      expect(frame).toContain("images");
+    });
+
+    it("enters image nav on down arrow at end of input", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write("text");
+      // Down at end of input enters image nav.
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("select");
+      expect(frame).toContain("remove");
+    });
+
+    it("does not enter image nav when cursor is mid-text on multi-line", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write("line1");
+      await stdin.write(keys.shiftEnter);
+      await stdin.write("line2");
+      // Move cursor to first line.
+      await stdin.write(keys.up);
+      // Down should move to second line, not enter image nav.
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("remove");
+    });
+
+    it("removes image with backspace in image nav", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      await stdin.write(keys.backspace);
+      expect(lastFrame()).not.toContain("[screenshot.png]");
+    });
+
+    it("exits image nav on up arrow", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      expect(lastFrame()).toContain("remove");
+      await stdin.write(keys.up);
+      expect(lastFrame()).not.toContain("remove");
+    });
+
+    it("exits image nav on escape", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("remove");
+    });
+
+    it("navigates between multiple images", async () => {
+      const img1: ImageAttachment = {
+        name: "first.png",
+        dataUri: "data:image/png;base64,aaa",
+      };
+      const img2: ImageAttachment = {
+        name: "second.png",
+        dataUri: "data:image/png;base64,bbb",
+      };
+      vi.mocked(readClipboardImage)
+        .mockReturnValueOnce(img1)
+        .mockReturnValueOnce(img2);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[first.png]");
+      expect(frame).toContain("[second.png]");
+    });
+
+    it("exits image nav when last image is removed", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      await stdin.write(keys.backspace);
+      const frame = lastFrame() ?? "";
+      // Should be back in text input mode, no image nav instructions.
+      expect(frame).not.toContain("remove");
+      expect(frame).not.toContain("[screenshot.png]");
     });
   });
 });

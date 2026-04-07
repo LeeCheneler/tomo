@@ -21,5 +21,6 @@ export const keys = {
   /** Readline alt+d — delete word forward. */
   readlineWordDelete: "\x1bd",
   ctrlA: "\x01",
+  ctrlV: "\x16",
   space: " ",
 } as const;
