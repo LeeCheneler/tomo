@@ -8,6 +8,7 @@ import { settingsCommand } from "./commands/settings";
 import { loadConfig } from "./config/file";
 import { discoverSkillSets, loadSkillSetSkills } from "./skill-sets/loader";
 import { loadAllSkills } from "./skills/loader";
+import type { SkillRegistry } from "./skills/registry";
 import { createSkillRegistry } from "./skills/registry";
 import { askTool } from "./tools/ask";
 import { editFileTool } from "./tools/edit-file";
@@ -16,6 +17,7 @@ import { grepTool } from "./tools/grep";
 import { readFileTool } from "./tools/read-file";
 import { createToolRegistry } from "./tools/registry";
 import { runCommandTool } from "./tools/run-command";
+import { createSkillTool } from "./tools/skill";
 import { webSearchTool } from "./tools/web-search";
 import { writeFileTool } from "./tools/write-file";
 
@@ -59,7 +61,7 @@ function buildSkillRegistry() {
 }
 
 /** Creates the application tool registry with all built-in tools. */
-function buildToolRegistry() {
+function buildToolRegistry(skillRegistry: SkillRegistry) {
   const registry = createToolRegistry();
   registry.register(askTool);
   registry.register(readFileTool);
@@ -68,6 +70,7 @@ function buildToolRegistry() {
   registry.register(globTool);
   registry.register(grepTool);
   registry.register(runCommandTool);
+  registry.register(createSkillTool(skillRegistry));
   registry.register(webSearchTool);
   return registry;
 }
@@ -76,7 +79,7 @@ function buildToolRegistry() {
 export function App() {
   const commandRegistry = buildCommandRegistry();
   const skillRegistry = buildSkillRegistry();
-  const toolRegistry = buildToolRegistry();
+  const toolRegistry = buildToolRegistry(skillRegistry);
 
   return (
     <Chat
