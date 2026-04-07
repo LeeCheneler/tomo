@@ -94,7 +94,7 @@ describe("SkillSetsScreen", () => {
       expect(cloneSource).toHaveBeenCalledWith("git@github.com:org/new.git");
     });
 
-    it("shows error when clone fails", async () => {
+    it("shows error when clone fails and does not persist to config", async () => {
       vi.mocked(cloneSource).mockImplementation(() => {
         throw new Error("network error");
       });
@@ -102,6 +102,8 @@ describe("SkillSetsScreen", () => {
       await stdin.write("git@github.com:org/bad.git");
       await stdin.write(keys.enter);
       expect(lastFrame()).toContain("Failed to clone");
+      const config = loadConfig();
+      expect(config.skillSets.sources).toHaveLength(0);
     });
   });
 
@@ -171,7 +173,7 @@ describe("SkillSetsScreen", () => {
       expect(second?.enabledSets).toEqual(["dev"]);
     });
 
-    it("shows error when clone fails after edit", async () => {
+    it("shows error when clone fails after edit and preserves original source", async () => {
       vi.mocked(cloneSource).mockImplementation(() => {
         throw new Error("fail");
       });
@@ -187,6 +189,11 @@ describe("SkillSetsScreen", () => {
       await stdin.write("git@github.com:org/new.git");
       await stdin.write(keys.enter);
       expect(lastFrame()).toContain("Failed to clone");
+      const config = loadConfig();
+      expect(config.skillSets.sources).toHaveLength(1);
+      expect(config.skillSets.sources[0].url).toBe(
+        "git@github.com:org/old.git",
+      );
     });
   });
 

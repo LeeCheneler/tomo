@@ -34,15 +34,19 @@ function buildCommandRegistry() {
 function buildSkillRegistry() {
   const registry = createSkillRegistry();
 
-  // Load skills from enabled skill sets first (lowest priority).
+  // Load skills from enabled skill sets (lowest priority — global/local override these).
   const config = loadConfig();
   for (const source of config.skillSets.sources) {
-    const discovered = discoverSkillSets(source.url);
-    for (const set of discovered) {
-      if (!source.enabledSets.includes(set.name)) continue;
-      for (const skill of loadSkillSetSkills(set)) {
-        registry.register(skill);
+    try {
+      const discovered = discoverSkillSets(source.url);
+      for (const set of discovered) {
+        if (!source.enabledSets.includes(set.name)) continue;
+        for (const skill of loadSkillSetSkills(set)) {
+          registry.register(skill);
+        }
       }
+    } catch {
+      // Skip sources that fail to discover (e.g. missing clone, permission error).
     }
   }
 

@@ -77,12 +77,13 @@ function useSkillSetsScreen(props: SkillSetsScreenProps) {
   /** Adds a source URL, clones the repo, and saves to config. */
   function handleAdd(url: string) {
     const source: SkillSetSource = { url, enabledSets: [] };
-    addSkillSetSource(source);
-    reload();
+    // Always update local state to keep the EditableList cursor in sync.
     setSources((prev) => [...prev, source]);
 
     try {
       cloneSource(url);
+      addSkillSetSource(source);
+      reload();
       setCloneStatus({ url, status: "ok" });
     } catch {
       setCloneStatus({ url, status: "error", message: "Failed to clone" });
@@ -101,6 +102,17 @@ function useSkillSetsScreen(props: SkillSetsScreenProps) {
 
   /** Renames a source URL at the given index. */
   function handleUpdate(index: number, newUrl: string) {
+    try {
+      cloneSource(newUrl);
+    } catch {
+      setCloneStatus({
+        url: newUrl,
+        status: "error",
+        message: "Failed to clone",
+      });
+      return;
+    }
+
     const oldUrl = sources[index].url;
     removeSkillSetSource(oldUrl);
     removeSource(oldUrl);
@@ -108,17 +120,7 @@ function useSkillSetsScreen(props: SkillSetsScreenProps) {
     addSkillSetSource(updated);
     reload();
     setSources((prev) => prev.map((s, i) => (i === index ? updated : s)));
-
-    try {
-      cloneSource(newUrl);
-      setCloneStatus({ url: newUrl, status: "ok" });
-    } catch {
-      setCloneStatus({
-        url: newUrl,
-        status: "error",
-        message: "Failed to clone",
-      });
-    }
+    setCloneStatus({ url: newUrl, status: "ok" });
   }
 
   /** Opens the options screen for a source. */

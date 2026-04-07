@@ -58,5 +58,5 @@ export function removeSource(url: string): void {
 export function pullSource(url: string): void {
   const dir = sourceDir(url);
   if (!existsSync(join(dir, ".git"))) return;
-  execFileSync("git", ["pull", "origin", "main"], { cwd: dir, stdio: "pipe" });
+  execFileSync("git", ["pull"], { cwd: dir, stdio: "pipe" });
 }
