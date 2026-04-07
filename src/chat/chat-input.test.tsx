@@ -182,59 +182,35 @@ describe("ChatInput", () => {
   });
 
   describe("instruction bar", () => {
-    it("always shows enter submit, esc clear, / command, and // skill", () => {
+    it("shows no instructions by default", () => {
       const { lastFrame } = renderInput();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("enter");
-      expect(frame).toContain("submit");
-      expect(frame).toContain("esc");
-      expect(frame).toContain("clear");
-      expect(frame).toContain("/");
-      expect(frame).toContain("command");
-      expect(frame).toContain("//");
-      expect(frame).toContain("skill");
+      expect(frame).not.toContain("esc");
+      expect(frame).not.toContain("submit");
     });
 
-    it("shows instructions even when input is empty", () => {
-      const { lastFrame } = renderInput();
+    it("shows esc interrupt when onAbort is provided", () => {
+      const { lastFrame } = renderInput({ onAbort: vi.fn() });
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("enter");
-      expect(frame).toContain("esc");
+      expect(frame).toContain("interrupt");
     });
 
-    it("keeps esc clear static after first escape with empty input", async () => {
-      const { stdin, lastFrame } = renderInput();
-      await stdin.write(keys.escape);
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("esc");
-      expect(frame).toContain("clear");
-    });
-
-    it("keeps esc clear static after first escape with text", async () => {
+    it("shows esc clear after first escape with text", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("esc");
       expect(frame).toContain("clear");
-      expect(frame).not.toContain("confirm");
     });
 
-    it("keeps esc clear static after second escape clears input", async () => {
+    it("hides esc after second escape clears input", async () => {
       const { stdin, lastFrame } = renderInput();
       await stdin.write("hello");
       await stdin.write(keys.escape);
       await stdin.write(keys.escape);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("esc");
-      expect(frame).toContain("clear");
-    });
-
-    it("always shows up history", () => {
-      const { lastFrame } = renderInput();
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("up");
-      expect(frame).toContain("history");
+      expect(frame).not.toContain("esc");
     });
   });
 
@@ -397,16 +373,6 @@ describe("ChatInput", () => {
       expect(frame).toContain("/help");
       // Autocomplete should be dismissed (space appended).
       expect(frame).not.toContain("Show help");
-    });
-
-    it("shows navigate instruction when autocomplete is visible", async () => {
-      const { stdin, lastFrame } = renderInput({
-        commandAutocompleteItems: testItems,
-      });
-      await stdin.write("/");
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("up/down");
-      expect(frame).toContain("navigate");
     });
 
     it("shows select instead of submit when autocomplete is visible", async () => {
@@ -674,8 +640,8 @@ describe("ChatInput", () => {
       // Down at end of input enters image nav.
       await stdin.write(keys.down);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("select");
       expect(frame).toContain("remove");
+      expect(frame).toContain("back to input");
     });
 
     it("does not enter image nav when cursor is mid-text on multi-line", async () => {

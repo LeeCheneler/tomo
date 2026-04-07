@@ -54,7 +54,6 @@ describe("ToolsScreen", () => {
     it("shows key instructions including options", () => {
       const { lastFrame } = renderTools();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("navigate");
       expect(frame).toContain("toggle");
       expect(frame).toContain("options");
       expect(frame).toContain("back");

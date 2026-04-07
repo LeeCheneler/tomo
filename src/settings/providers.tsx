@@ -27,18 +27,8 @@ const PROVIDER_TYPES: readonly ProviderType[] = [
   "openrouter",
 ];
 
-/** Key instructions for the providers list. */
-const LIST_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
-  { key: "enter", description: "save/add/remove" },
-  { key: "tab", description: "options" },
-  { key: "esc", description: "back" },
-];
-
 /** Key instructions for the provider options form. */
 const OPTIONS_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
-  { key: "left/right", description: "select" },
   { key: "enter", description: "save" },
   { key: "esc", description: "cancel" },
 ];
@@ -189,11 +179,15 @@ function useProvidersScreen(props: ProvidersScreenProps) {
     setActiveOptions(null);
   }
 
+  const [enterAction, setEnterAction] = useState<"save" | "remove">("save");
+
   return {
     providers,
     items: buildItems(providers),
     activeOptions,
     connectionStatus,
+    enterAction,
+    setEnterAction,
     handleAdd,
     handleRemove,
     handleUpdate,
@@ -211,6 +205,8 @@ export function ProvidersScreen(props: ProvidersScreenProps) {
     items,
     activeOptions,
     connectionStatus,
+    enterAction,
+    setEnterAction,
     handleAdd,
     handleRemove,
     handleUpdate,
@@ -255,6 +251,9 @@ export function ProvidersScreen(props: ProvidersScreenProps) {
       <Indent>
         <Text bold>Providers</Text>
       </Indent>
+      <Indent>
+        <Text dimColor>Clear text and press enter to remove</Text>
+      </Indent>
       <EditableList
         items={items}
         onAdd={handleAdd}
@@ -262,6 +261,7 @@ export function ProvidersScreen(props: ProvidersScreenProps) {
         onUpdate={handleUpdate}
         onOptions={handleOptions}
         onExit={handleBack}
+        onEnterActionChange={setEnterAction}
         color={theme.settings}
         placeholder="Add provider..."
       />
@@ -272,7 +272,13 @@ export function ProvidersScreen(props: ProvidersScreenProps) {
       )}
       <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1} paddingBottom={1}>
-        <KeyInstructions items={LIST_INSTRUCTIONS} />
+        <KeyInstructions
+          items={[
+            { key: "enter", description: enterAction },
+            { key: "tab", description: "options" },
+            { key: "esc", description: "back" },
+          ]}
+        />
       </Box>
     </Box>
   );

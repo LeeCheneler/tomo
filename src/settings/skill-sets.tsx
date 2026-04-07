@@ -20,17 +20,8 @@ import { theme } from "../ui/theme";
 import type { ToggleListItem } from "../ui/toggle-list";
 import { ToggleList } from "../ui/toggle-list";
 
-/** Key instructions for the source list. */
-const LIST_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
-  { key: "enter", description: "save/add/remove" },
-  { key: "tab", description: "options" },
-  { key: "esc", description: "back" },
-];
-
 /** Key instructions for the source options screen. */
 const OPTIONS_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
   { key: "space", description: "toggle" },
   { key: "u", description: "update" },
   { key: "esc", description: "back" },
@@ -162,11 +153,15 @@ function useSkillSetsScreen(props: SkillSetsScreenProps) {
     setCloneStatus(null);
   }
 
+  const [enterAction, setEnterAction] = useState<"save" | "remove">("save");
+
   return {
     sources,
     items: buildItems(sources),
     activeOptions,
     cloneStatus,
+    enterAction,
+    setEnterAction,
     handleAdd,
     handleRemove,
     handleUpdate,
@@ -253,6 +248,8 @@ export function SkillSetsScreen(props: SkillSetsScreenProps) {
     items,
     activeOptions,
     cloneStatus,
+    enterAction,
+    setEnterAction,
     handleAdd,
     handleRemove,
     handleUpdate,
@@ -286,6 +283,9 @@ export function SkillSetsScreen(props: SkillSetsScreenProps) {
           Add git repo URLs, e.g. git@github.com:org/skills.git
         </Text>
       </Indent>
+      <Indent>
+        <Text dimColor>Clear text and press enter to remove</Text>
+      </Indent>
       <EditableList
         items={items}
         onAdd={handleAdd}
@@ -293,6 +293,7 @@ export function SkillSetsScreen(props: SkillSetsScreenProps) {
         onUpdate={handleUpdate}
         onOptions={handleOptions}
         onExit={handleBack}
+        onEnterActionChange={setEnterAction}
         color={theme.settings}
         placeholder="Add source..."
       />
@@ -309,7 +310,13 @@ export function SkillSetsScreen(props: SkillSetsScreenProps) {
       )}
       <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1}>
-        <KeyInstructions items={LIST_INSTRUCTIONS} />
+        <KeyInstructions
+          items={[
+            { key: "enter", description: enterAction },
+            { key: "tab", description: "options" },
+            { key: "esc", description: "back" },
+          ]}
+        />
       </Box>
     </Box>
   );

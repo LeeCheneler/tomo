@@ -11,7 +11,6 @@ import { theme } from "./theme";
 const INSTRUCTIONS: InstructionItem[] = [
   { key: "y", description: "approve" },
   { key: "n", description: "deny" },
-  { key: "up/down", description: "navigate" },
   { key: "enter", description: "select" },
 ];
 

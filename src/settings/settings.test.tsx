@@ -53,7 +53,6 @@ describe("Settings", () => {
     it("shows key instructions", () => {
       const { lastFrame } = renderSettings();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("navigate");
       expect(frame).toContain("select");
       expect(frame).toContain("exit");
     });

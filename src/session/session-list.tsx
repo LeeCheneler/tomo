@@ -15,7 +15,6 @@ const MAX_PREVIEW_LENGTH = 50;
 
 /** Key instructions for the session list. */
 const INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
   { key: "enter", description: "select" },
   { key: "esc", description: "back" },
 ];

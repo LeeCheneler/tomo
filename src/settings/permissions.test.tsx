@@ -51,7 +51,6 @@ describe("PermissionsScreen", () => {
     it("shows key instructions", () => {
       const { lastFrame } = renderPermissions();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("navigate");
       expect(frame).toContain("toggle");
       expect(frame).toContain("back");
     });

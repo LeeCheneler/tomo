@@ -36,7 +36,6 @@ const TOOL_ITEMS: readonly {
 
 /** Key instructions for the tools list screen. */
 const LIST_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
   { key: "space", description: "toggle" },
   { key: "tab", description: "options" },
   { key: "esc", description: "back" },
@@ -44,8 +43,6 @@ const LIST_INSTRUCTIONS: InstructionItem[] = [
 
 /** Key instructions for the tool options form. */
 const OPTIONS_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
-  { key: "space", description: "toggle" },
   { key: "enter", description: "save" },
   { key: "esc", description: "cancel" },
 ];

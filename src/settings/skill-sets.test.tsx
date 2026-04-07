@@ -74,8 +74,7 @@ describe("SkillSetsScreen", () => {
     it("shows key instructions", () => {
       const { lastFrame } = renderSkillSets();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("navigate");
-      expect(frame).toContain("save/add/remove");
+      expect(frame).toContain("save");
       expect(frame).toContain("options");
       expect(frame).toContain("back");
     });

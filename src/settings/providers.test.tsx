@@ -96,8 +96,7 @@ describe("ProvidersScreen", () => {
     it("shows key instructions", () => {
       const { lastFrame } = renderProviders();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("navigate");
-      expect(frame).toContain("save/add/remove");
+      expect(frame).toContain("save");
       expect(frame).toContain("options");
       expect(frame).toContain("back");
     });
@@ -236,8 +235,6 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.up);
       await stdin.write(keys.tab);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("left/right");
-      expect(frame).toContain("select");
       expect(frame).toContain("save");
       expect(frame).toContain("cancel");
     });

@@ -4,17 +4,9 @@ import { useConfig } from "../config/hook";
 import { updateAllowedCommands } from "../config/updaters";
 import { Border } from "../ui/border";
 import { EditableList } from "../ui/editable-list";
-import type { InstructionItem } from "../ui/key-instructions";
 import { KeyInstructions } from "../ui/key-instructions";
 import { Indent } from "../ui/layout/indent";
 import { theme } from "../ui/theme";
-
-/** Key instructions for the allowed commands screen. */
-const INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
-  { key: "enter", description: "save/add/remove" },
-  { key: "esc", description: "back" },
-];
 
 /** Props for AllowedCommandsScreen. */
 export interface AllowedCommandsScreenProps {
@@ -27,6 +19,7 @@ function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
   const [commands, setCommands] = useState<string[]>(
     () => config.allowedCommands,
   );
+  const [enterAction, setEnterAction] = useState<"save" | "remove">("save");
 
   /** Adds a command and saves to local config. */
   function handleAdd(value: string) {
@@ -54,6 +47,8 @@ function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
 
   return {
     commands,
+    enterAction,
+    setEnterAction,
     handleAdd,
     handleRemove,
     handleUpdate,
@@ -63,8 +58,15 @@ function useAllowedCommandsScreen(props: AllowedCommandsScreenProps) {
 
 /** Settings sub-screen for editing allowed commands. */
 export function AllowedCommandsScreen(props: AllowedCommandsScreenProps) {
-  const { commands, handleAdd, handleRemove, handleUpdate, handleBack } =
-    useAllowedCommandsScreen(props);
+  const {
+    commands,
+    enterAction,
+    setEnterAction,
+    handleAdd,
+    handleRemove,
+    handleUpdate,
+    handleBack,
+  } = useAllowedCommandsScreen(props);
 
   return (
     <Box flexDirection="column" paddingTop={1}>
@@ -75,18 +77,27 @@ export function AllowedCommandsScreen(props: AllowedCommandsScreenProps) {
       <Indent>
         <Text dimColor>Exact match (npm test) or prefix with :* (git:*)</Text>
       </Indent>
+      <Indent>
+        <Text dimColor>Clear text and press enter to remove</Text>
+      </Indent>
       <EditableList
         items={commands.map((c) => ({ value: c }))}
         onAdd={handleAdd}
         onRemove={handleRemove}
         onUpdate={handleUpdate}
         onExit={handleBack}
+        onEnterActionChange={setEnterAction}
         color={theme.settings}
         placeholder="Add command..."
       />
       <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1}>
-        <KeyInstructions items={INSTRUCTIONS} />
+        <KeyInstructions
+          items={[
+            { key: "enter", description: enterAction },
+            { key: "esc", description: "back" },
+          ]}
+        />
       </Box>
     </Box>
   );

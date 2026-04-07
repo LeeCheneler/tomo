@@ -210,27 +210,23 @@ function useChatInput(props: ChatInputProps) {
   const instructions: InstructionItem[] =
     imageNavIndex !== null
       ? [
-          { key: "left/right", description: "select" },
           { key: "del", description: "remove" },
           { key: "up", description: "back to input" },
         ]
       : showAutocomplete
-        ? [
-            { key: "enter", description: "select" },
-            { key: "up/down", description: "navigate" },
-          ]
+        ? [{ key: "enter", description: "select" }]
         : [
-            { key: "/", description: "command" },
-            { key: "//", description: "skill" },
-            { key: "enter", description: "submit" },
-            { key: "up", description: "history" },
             ...(images.length > 0
               ? [{ key: "down", description: "images" }]
               : []),
           ];
 
   if (imageNavIndex === null) {
-    instructions.push({ key: "esc", description: "interrupt/clear" });
+    if (props.onAbort) {
+      instructions.push({ key: "esc", description: "interrupt" });
+    } else if (escPending) {
+      instructions.push({ key: "esc", description: "clear" });
+    }
   }
 
   return {

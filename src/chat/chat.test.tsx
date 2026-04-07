@@ -93,15 +93,6 @@ describe("Chat", () => {
       // Input is cleared — only the prompt marker remains in the input area.
       expect(frame).toContain("❯");
     });
-
-    it("shows up history instruction after first message", async () => {
-      const { stdin, lastFrame } = renderChat();
-      await stdin.write("hello");
-      await stdin.write(keys.enter);
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("up");
-      expect(frame).toContain("history");
-    });
   });
 
   describe("command execution", () => {
@@ -143,8 +134,8 @@ describe("Chat", () => {
       // The input area should still show an empty prompt (not a history entry).
       await stdin.write(keys.up);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("submit");
-      expect(frame).toContain("command");
+      // Should still be in input mode (not history mode).
+      expect(frame).not.toContain("replace draft");
     });
   });
 
@@ -177,8 +168,6 @@ describe("Chat", () => {
       });
       const { stdin, lastFrame } = renderChat(commandRegistry);
       await stdin.write("/");
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("navigate");
       // Down should move selection.
       await stdin.write(keys.down);
       expect(lastFrame()).toContain("bbb");

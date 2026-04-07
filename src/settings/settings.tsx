@@ -63,7 +63,6 @@ function useSettings(props: SettingsProps) {
   const instructions: InstructionItem[] =
     step === "menu"
       ? [
-          { key: "up/down", description: "navigate" },
           { key: "enter", description: "select" },
           { key: "esc", description: "exit" },
         ]

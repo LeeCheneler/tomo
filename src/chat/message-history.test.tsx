@@ -176,8 +176,6 @@ describe("MessageHistory", () => {
     it("shows static instructions", () => {
       const { lastFrame } = renderHistory();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("up/down");
-      expect(frame).toContain("scroll");
       expect(frame).toContain("esc");
       expect(frame).toContain("return to draft");
       expect(frame).toContain("enter");
@@ -190,8 +188,8 @@ describe("MessageHistory", () => {
       await stdin.write(keys.up);
       const after = lastFrame();
       // Instructions should be identical regardless of position.
-      expect(before).toContain("up/down");
-      expect(after).toContain("up/down");
+      expect(before).toContain("enter");
+      expect(after).toContain("enter");
     });
   });
 });

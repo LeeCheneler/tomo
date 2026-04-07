@@ -1,5 +1,5 @@
 import { Text, useInput } from "ink";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { splitAtCursor } from "../input/cursor";
 import { processTextEdit } from "../input/text-edit";
 import { Indent } from "./layout/indent";
@@ -30,6 +30,8 @@ export interface EditableListProps {
   color?: string;
   /** Placeholder text for the add row. Defaults to "Add item...". */
   placeholder?: string;
+  /** Called when the contextual enter action changes (e.g. "save" vs "remove"). */
+  onEnterActionChange?: (action: "save" | "remove") => void;
 }
 
 /**
@@ -167,6 +169,11 @@ function useEditableList(props: EditableListProps) {
       moveTextCursor(edit.cursor);
     }
   });
+
+  // Notify parent when the contextual enter action changes.
+  useEffect(() => {
+    props.onEnterActionChange?.(showRemoveHint ? "remove" : "save");
+  }, [showRemoveHint, props.onEnterActionChange]);
 
   return {
     cursor,

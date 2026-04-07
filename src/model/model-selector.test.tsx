@@ -79,7 +79,6 @@ describe("ModelSelector", () => {
         global: { providers: [OLLAMA_PROVIDER] },
       });
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("navigate");
       expect(frame).toContain("select");
       expect(frame).toContain("back");
     });

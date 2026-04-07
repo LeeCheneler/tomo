@@ -17,7 +17,6 @@ import { theme } from "../ui/theme";
 
 /** Key instructions for the provider list. */
 const PROVIDER_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
   { key: "enter", description: "select" },
   { key: "esc", description: "back" },
 ];
@@ -157,7 +156,6 @@ type ModelFetchState =
 
 /** Key instructions for the model list. */
 const MODEL_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
   { key: "enter", description: "select" },
   { key: "esc", description: "back" },
 ];

@@ -47,9 +47,8 @@ function useMessageHistory(props: MessageHistoryProps) {
   });
 
   const instructions: InstructionItem[] = [
-    { key: "up/down", description: "scroll" },
-    { key: "esc", description: "return to draft" },
     { key: "enter", description: "replace draft" },
+    { key: "esc", description: "return to draft" },
   ];
 
   return { selectedEntry: props.entries[index], instructions };

@@ -50,8 +50,7 @@ describe("AllowedCommandsScreen", () => {
     it("shows key instructions", () => {
       const { lastFrame } = renderAllowedCommands();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("navigate");
-      expect(frame).toContain("save/add/remove");
+      expect(frame).toContain("save");
       expect(frame).toContain("back");
     });
 

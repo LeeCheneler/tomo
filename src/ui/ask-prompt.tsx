@@ -12,7 +12,6 @@ import { theme } from "./theme";
 
 /** Key instructions for the ask panel with options. */
 const OPTIONS_INSTRUCTIONS: InstructionItem[] = [
-  { key: "up/down", description: "navigate" },
   { key: "enter", description: "select" },
   { key: "tab", description: "type response" },
   { key: "esc", description: "dismiss" },
