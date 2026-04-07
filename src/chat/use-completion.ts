@@ -64,11 +64,12 @@ export function useCompletion(
     (options: SendOptions) => {
       if (!provider || !model) return;
 
-      // Reset state for new request
+      // Reset state for new request. Usage is preserved so /context still
+      // reports the last known value when a stream is aborted before the
+      // final chunk (which carries usage data).
       setState("streaming");
       setContent("");
       setError(null);
-      setUsage(null);
       setToolCalls([]);
 
       const messages = truncateMessages(
@@ -98,7 +99,8 @@ export function useCompletion(
           }
 
           if (controller.signal.aborted) return;
-          setUsage(stream.getUsage());
+          const newUsage = stream.getUsage();
+          if (newUsage) setUsage(newUsage);
           setToolCalls(stream.getToolCalls());
           setState("complete");
         })

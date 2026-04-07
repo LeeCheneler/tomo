@@ -131,6 +131,72 @@ describe("useCompletion", () => {
     expect(ref.current?.state).toBe("aborted");
   });
 
+  it("preserves usage from previous completion after abort", async () => {
+    // First request completes with usage data.
+    server.use(
+      http.post(
+        "http://localhost:11434/v1/chat/completions",
+        () =>
+          new HttpResponse(
+            sseBody([
+              { choices: [{ delta: { content: "Hi" } }] },
+              { usage: { prompt_tokens: 10, completion_tokens: 3 } },
+            ]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          ),
+      ),
+    );
+
+    const { Harness, ref } = createHarness(PROVIDER, MODEL);
+    renderInk(createElement(Harness));
+
+    ref.current?.send({ messages: [{ role: "user", content: "hello" }] });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(ref.current?.usage).toEqual({
+      promptTokens: 10,
+      completionTokens: 3,
+    });
+
+    // Second request is aborted before the final usage chunk arrives.
+    const cleanup: { resolve: (() => void) | null } = { resolve: null };
+    server.use(
+      http.post("http://localhost:11434/v1/chat/completions", () => {
+        const body = new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(
+              encoder.encode(
+                'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+              ),
+            );
+            cleanup.resolve = () => {
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+              controller.close();
+            };
+          },
+        });
+        return new HttpResponse(body, {
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }),
+    );
+
+    ref.current?.send({ messages: [{ role: "user", content: "again" }] });
+    await new Promise((r) => setTimeout(r, 50));
+
+    ref.current?.abort();
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Usage from the first completion is still available.
+    expect(ref.current?.state).toBe("aborted");
+    expect(ref.current?.usage).toEqual({
+      promptTokens: 10,
+      completionTokens: 3,
+    });
+
+    cleanup.resolve?.();
+  });
+
   it("keeps partial content on abort", async () => {
     const cleanup: { resolve: (() => void) | null } = { resolve: null };
 
