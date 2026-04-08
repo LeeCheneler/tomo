@@ -307,4 +307,130 @@ describe("runCompletionLoop", () => {
     expect(result.content).toBe("finally");
     expect(client.streamCompletion).toHaveBeenCalledTimes(4);
   });
+
+  it("reports tool invocations via onContent", async () => {
+    const registry = createToolRegistry();
+    registry.register({
+      name: "read_file",
+      displayName: "Read File",
+      description: "reads",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({ path: z.string() }),
+      formatCall: (args) => String(args.path ?? ""),
+      execute: async () => ok("content"),
+    });
+
+    let callCount = 0;
+    const client = mockClient(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return mockStream(
+          [""],
+          [stubToolCall("read_file", '{"path":"src/foo.ts"}')],
+        );
+      }
+      return mockStream(["done"]);
+    });
+
+    const onContent = vi.fn();
+    await runCompletionLoop({
+      ...baseOptions(),
+      client,
+      toolRegistry: registry,
+      tools: registry.getDefinitions(),
+      onContent,
+    });
+
+    // Should have been called with the tool invocation line.
+    expect(onContent).toHaveBeenCalledWith("[tool] Read File src/foo.ts");
+  });
+
+  it("accumulates tool invocations across multiple loop iterations", async () => {
+    const registry = createToolRegistry();
+    registry.register({
+      name: "glob",
+      displayName: "Glob",
+      description: "globs",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({ pattern: z.string() }),
+      formatCall: (args) => String(args.pattern ?? ""),
+      execute: async () => ok("files"),
+    });
+    registry.register({
+      name: "read_file",
+      displayName: "Read File",
+      description: "reads",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({ path: z.string() }),
+      formatCall: (args) => String(args.path ?? ""),
+      execute: async () => ok("content"),
+    });
+
+    let callCount = 0;
+    const client = mockClient(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return mockStream(
+          [""],
+          [stubToolCall("glob", '{"pattern":"**/*.ts"}')],
+        );
+      }
+      if (callCount === 2) {
+        return mockStream(
+          [""],
+          [stubToolCall("read_file", '{"path":"src/a.ts"}')],
+        );
+      }
+      return mockStream(["summary"]);
+    });
+
+    const onContent = vi.fn();
+    await runCompletionLoop({
+      ...baseOptions(),
+      client,
+      toolRegistry: registry,
+      tools: registry.getDefinitions(),
+      onContent,
+    });
+
+    // After second tool call, log should have both entries.
+    expect(onContent).toHaveBeenCalledWith(
+      "[tool] Glob **/*.ts\n[tool] Read File src/a.ts",
+    );
+  });
+
+  it("appends streaming text after accumulated tool call log", async () => {
+    const registry = createToolRegistry();
+    registry.register({
+      name: "grep",
+      displayName: "Grep",
+      description: "searches",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({ pattern: z.string() }),
+      formatCall: (args) => String(args.pattern ?? ""),
+      execute: async () => ok("matches"),
+    });
+
+    let callCount = 0;
+    const client = mockClient(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return mockStream([""], [stubToolCall("grep", '{"pattern":"TODO"}')]);
+      }
+      return mockStream(["Found", " results"]);
+    });
+
+    const onContent = vi.fn();
+    await runCompletionLoop({
+      ...baseOptions(),
+      client,
+      toolRegistry: registry,
+      tools: registry.getDefinitions(),
+      onContent,
+    });
+
+    // Final streaming content should include the tool log prefix.
+    expect(onContent).toHaveBeenCalledWith("[tool] Grep TODO\nFound");
+    expect(onContent).toHaveBeenCalledWith("[tool] Grep TODO\nFound results");
+  });
 });

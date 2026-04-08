@@ -554,22 +554,14 @@ export function Chat(props: ChatProps) {
       {isStreaming && <LoadingIndicator text="Thinking" />}
       {liveToolCalls.map((tc) => (
         <Box key={tc.id} flexDirection="column">
-          {liveToolOutputs.has(tc.id) ? (
-            <>
-              <Indent>
-                <Text color={theme.tool}>
-                  {[tc.displayName, tc.summary].filter(Boolean).join(" ")}
-                </Text>
-              </Indent>
-              <LiveToolOutput output={liveToolOutputs.get(tc.id)!} />
-            </>
-          ) : (
-            <Indent>
-              <LoadingIndicator
-                text={[tc.displayName, tc.summary].filter(Boolean).join(" ")}
-                color={theme.tool}
-              />
-            </Indent>
+          <Indent>
+            <LoadingIndicator
+              text={[tc.displayName, tc.summary].filter(Boolean).join(" ")}
+              color={theme.tool}
+            />
+          </Indent>
+          {liveToolOutputs.has(tc.id) && (
+            <LiveToolOutput output={liveToolOutputs.get(tc.id)!} />
           )}
         </Box>
       ))}

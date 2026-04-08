@@ -5,7 +5,10 @@ import type {
   ToolDefinition,
 } from "../provider/client";
 import { truncateMessages } from "../context/truncate";
-import { executeToolCalls } from "../tools/execute-tool-calls";
+import {
+  buildToolCallInfos,
+  executeToolCalls,
+} from "../tools/execute-tool-calls";
 import type { ToolRegistry } from "../tools/registry";
 import type { ToolContext } from "../tools/types";
 
@@ -76,6 +79,8 @@ export async function runCompletionLoop(
   };
   const currentMessages: ProviderMessage[] = [...initialMessages];
   let emptyRetries = 0;
+  // Accumulated activity log shown via onContent while the agent works.
+  let activityLog = "";
 
   while (true) {
     signal.throwIfAborted();
@@ -101,7 +106,7 @@ export async function runCompletionLoop(
       for await (const token of stream.content) {
         signal.throwIfAborted();
         content += token;
-        onContent?.(content);
+        onContent?.(activityLog + content);
       }
     } catch (e) {
       throwIfAbort(e);
@@ -122,6 +127,14 @@ export async function runCompletionLoop(
 
     // Tool calls present — execute and loop.
     emptyRetries = 0;
+
+    // Accumulate tool invocations into the activity log.
+    const infos = buildToolCallInfos(toolCalls, toolRegistry);
+    for (const tc of infos) {
+      const label = [tc.displayName, tc.summary].filter(Boolean).join(" ");
+      activityLog += `[tool] ${label}\n`;
+    }
+    onContent?.(activityLog.trimEnd());
 
     // Execute tool calls. The sub-agent doesn't need dynamic UI output,
     // so no createOnProgress is passed.
