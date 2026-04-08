@@ -107,6 +107,12 @@ function useChat(props: UseChatProps) {
   allowedCommandsRef.current = config.allowedCommands;
   const webSearchApiKeyRef = useRef(config.tools.webSearch.apiKey);
   webSearchApiKeyRef.current = config.tools.webSearch.apiKey;
+  const providerRef = useRef(provider);
+  providerRef.current = provider;
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const contextWindowRef = useRef(contextWindow);
+  contextWindowRef.current = contextWindow;
   const [liveToolCalls, setLiveToolCalls] = useState<ToolCallInfo[]>([]);
   const [liveToolOutputs, setLiveToolOutputs] = useState<Map<string, string>>(
     () => new Map(),
@@ -177,6 +183,10 @@ function useChat(props: UseChatProps) {
               queue.enqueueConfirm(message, options),
             ask: (question, options) => queue.enqueueAsk(question, options),
             signal: new AbortController().signal,
+            provider: providerRef.current!,
+            model: modelRef.current!,
+            contextWindow: contextWindowRef.current,
+            depth: 0,
           };
 
           // Show tool calls in the dynamic area while executing.
@@ -544,13 +554,22 @@ export function Chat(props: ChatProps) {
       {isStreaming && <LoadingIndicator text="Thinking" />}
       {liveToolCalls.map((tc) => (
         <Box key={tc.id} flexDirection="column">
-          <Indent>
-            <Text color={theme.tool}>
-              {[tc.displayName, tc.summary].filter(Boolean).join(" ")}
-            </Text>
-          </Indent>
-          {liveToolOutputs.has(tc.id) && (
-            <LiveToolOutput output={liveToolOutputs.get(tc.id)!} />
+          {liveToolOutputs.has(tc.id) ? (
+            <>
+              <Indent>
+                <Text color={theme.tool}>
+                  {[tc.displayName, tc.summary].filter(Boolean).join(" ")}
+                </Text>
+              </Indent>
+              <LiveToolOutput output={liveToolOutputs.get(tc.id)!} />
+            </>
+          ) : (
+            <Indent>
+              <LoadingIndicator
+                text={[tc.displayName, tc.summary].filter(Boolean).join(" ")}
+                color={theme.tool}
+              />
+            </Indent>
           )}
         </Box>
       ))}

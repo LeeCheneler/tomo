@@ -55,7 +55,14 @@ export const agentsSchema = z.object({
   // Open string array rather than enum so users can allow-list third-party MCP tools too
   tools: z
     .array(z.string())
-    .default(["readFile", "glob", "grep", "webSearch", "skill"]),
+    .default([
+      "read_file",
+      "glob",
+      "grep",
+      "web_search",
+      "skill",
+      "run_command",
+    ]),
 });
 
 /** Schema for a key-value entry with optional sensitivity marker. */
@@ -114,7 +121,7 @@ export const configSchema = z.object({
     maxDepth: 1,
     maxConcurrent: 3,
     maxTimeoutSeconds: 300,
-    tools: ["readFile", "glob", "grep", "webSearch", "skill"],
+    tools: ["read_file", "glob", "grep", "web_search", "skill", "run_command"],
   }),
   mcp: mcpSchema.default({ connections: {} }),
   skillSets: skillSetsSchema.default({ sources: [] }),

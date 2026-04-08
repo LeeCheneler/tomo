@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockFs } from "../test-utils/mock-fs";
-import { buildSystemPrompt } from "./build-system-prompt";
+import {
+  buildSubAgentSystemPrompt,
+  buildSystemPrompt,
+} from "./build-system-prompt";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof import("node:os")>()),
@@ -123,5 +126,129 @@ describe("buildSystemPrompt", () => {
     expect(result).toContain("1 changed file");
     expect(result).toContain("gh CLI is available");
     fs.restore();
+  });
+
+  it("includes identity preamble", () => {
+    vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
+    process.env.SHELL = "/bin/bash";
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+    const fs = mockFs({});
+
+    const result = buildSystemPrompt();
+
+    expect(result).toContain("Tomo");
+    expect(result).toContain("markdown");
+    fs.restore();
+  });
+
+  it("includes parallel tool call enforcement", () => {
+    vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
+    process.env.SHELL = "/bin/bash";
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+    const fs = mockFs({});
+
+    const result = buildSystemPrompt();
+
+    expect(result).toContain("CRITICAL: Parallel Tool Calls");
+    expect(result).toContain("WRONG");
+    expect(result).toContain("CORRECT");
+    fs.restore();
+  });
+});
+
+describe("buildSubAgentSystemPrompt", () => {
+  it("includes system info and research preamble", () => {
+    vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
+    process.env.SHELL = "/bin/bash";
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+
+    const result = buildSubAgentSystemPrompt(["read_file", "glob", "grep"]);
+
+    expect(result).toContain("System:");
+    expect(result).toContain("research sub-agent");
+    expect(result).toContain("read_file, glob, grep");
+  });
+
+  it("includes git context when in a repo", () => {
+    vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
+    process.env.SHELL = "/bin/bash";
+    vi.mocked(execFileSync).mockImplementation((file, args) => {
+      const command = `${String(file)} ${(args as string[]).join(" ")}`;
+      if (command.includes("rev-parse --is-inside-work-tree"))
+        return Buffer.from("true");
+      if (command.includes("rev-parse --abbrev-ref HEAD"))
+        return Buffer.from("main\n");
+      if (command.includes("symbolic-ref"))
+        return Buffer.from("refs/remotes/origin/main\n");
+      if (command.includes("status --porcelain")) return Buffer.from("");
+      if (command.includes("log --oneline"))
+        return Buffer.from("abc1234 initial\n");
+      if (command.includes("remote get-url origin"))
+        return Buffer.from("git@gitlab.com:user/repo.git\n");
+      throw new Error(`Unmocked: ${command}`);
+    });
+
+    const result = buildSubAgentSystemPrompt(["read_file"]);
+
+    expect(result).toContain("Git:");
+    expect(result).toContain("Branch: main");
+  });
+
+  it("does not include user instructions", () => {
+    vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
+    process.env.SHELL = "/bin/bash";
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+    const fs = mockFs({
+      "/mock-home/tomo.md": "global instructions",
+    });
+
+    const result = buildSubAgentSystemPrompt(["read_file"]);
+
+    expect(result).not.toContain("global instructions");
+    fs.restore();
+  });
+
+  it("includes run_command guidance when in the tool list", () => {
+    vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
+    process.env.SHELL = "/bin/bash";
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+
+    const result = buildSubAgentSystemPrompt(["read_file", "run_command"]);
+
+    expect(result).toContain("Run commands");
+  });
+
+  it("excludes run_command guidance when not in the tool list", () => {
+    vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
+    process.env.SHELL = "/bin/bash";
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+
+    const result = buildSubAgentSystemPrompt(["read_file", "glob"]);
+
+    expect(result).not.toContain("Run commands");
+  });
+
+  it("includes parallel tool call enforcement", () => {
+    vi.spyOn(process, "cwd").mockReturnValue("/mock-project");
+    process.env.SHELL = "/bin/bash";
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+
+    const result = buildSubAgentSystemPrompt(["read_file"]);
+
+    expect(result).toContain("CRITICAL: Parallel Tool Calls");
   });
 });

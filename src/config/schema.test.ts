@@ -286,11 +286,12 @@ describe("configSchema", () => {
     expect(result.agents.maxConcurrent).toBe(3);
     expect(result.agents.maxTimeoutSeconds).toBe(300);
     expect(result.agents.tools).toEqual([
-      "readFile",
+      "read_file",
       "glob",
       "grep",
-      "webSearch",
+      "web_search",
       "skill",
+      "run_command",
     ]);
   });
 

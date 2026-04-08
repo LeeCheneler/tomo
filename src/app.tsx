@@ -10,6 +10,7 @@ import { discoverSkillSets, loadSkillSetSkills } from "./skill-sets/loader";
 import { loadAllSkills } from "./skills/loader";
 import type { SkillRegistry } from "./skills/registry";
 import { createSkillRegistry } from "./skills/registry";
+import { createAgentTool } from "./tools/agent";
 import { askTool } from "./tools/ask";
 import { editFileTool } from "./tools/edit-file";
 import { globTool } from "./tools/glob";
@@ -72,6 +73,7 @@ function buildToolRegistry(skillRegistry: SkillRegistry) {
   registry.register(runCommandTool);
   registry.register(createSkillTool(skillRegistry));
   registry.register(webSearchTool);
+  registry.register(createAgentTool(registry));
   return registry;
 }
 

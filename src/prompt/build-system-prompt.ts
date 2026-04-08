@@ -87,12 +87,63 @@ export function buildSystemPrompt(): string {
 
   parts.push(getToolGuidance());
 
-  // TODO: append tool orchestration / sub-agent guidance after agents are implemented
   // TODO: append skills notice after skills are implemented
 
   return parts.join("\n\n");
 }
 
-// TODO: buildSubAgentSystemPrompt() — stripped-down variant with system info
-// and git context only, plus read-only agent preamble. Needed when the agent
-// tool is implemented.
+/**
+ * Builds a standalone system prompt for sub-agents.
+ *
+ * Sub-agents get system info and git context for awareness, but not user
+ * instruction files or skills — those contain write/workflow guidance that
+ * is irrelevant for a research agent.
+ */
+export function buildSubAgentSystemPrompt(
+  availableTools: readonly string[],
+): string {
+  const systemInfo = getSystemInfo();
+  const gitContext = getGitContext(process.cwd());
+
+  const parts = [systemInfo];
+  if (gitContext) parts.push(gitContext);
+  parts.push(getSubAgentPreamble(availableTools));
+
+  return parts.join("\n\n");
+}
+
+/** Returns the sub-agent preamble with tool guidance. */
+function getSubAgentPreamble(availableTools: readonly string[]): string {
+  const toolList = availableTools.join(", ");
+  const hasRunCommand = availableTools.includes("run_command");
+  const commandNote = hasRunCommand
+    ? "\n5. **Run commands**: Use run_command for git, builds, tests, and other shell operations. Commands that aren't pre-approved will require user confirmation."
+    : "";
+
+  return `You are a research sub-agent. Your job is to explore the codebase, gather information, and return a clear summary of your findings.
+
+# CRITICAL: Parallel Tool Calls
+
+You MUST call multiple tools in a single response when they do not depend on each other. All tool calls in one response run in parallel.
+
+## Available tools
+
+You have access to: ${toolList}.
+
+### Exploration strategy
+
+Match your approach to what you need to find:
+
+1. **Find files by name or pattern**: Use glob with patterns like "**/*.ts" or "src/**/index.ts".
+2. **Find content in files**: Use grep with regex patterns like "functionName", "import.*module".
+3. **Read and understand files**: Use read_file. Files over 500 lines are truncated — use startLine and endLine for large files.
+4. **Look up external information**: Use web_search for documentation, API references, or error messages not found in the codebase.${commandNote}
+
+### Tips for efficient exploration
+
+- Start with glob or grep to locate relevant files, then read_file to understand them.
+- The line number prefix in read_file output (e.g. "  42 | ") is formatting only — not part of the file content.
+- grep returns results as "file:line_number:content" — use the line numbers to read specific ranges with read_file.
+
+When your task is complete, produce a clear, concise summary of your findings.`;
+}

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Permissions } from "../config/schema";
+import type { Permissions, Provider } from "../config/schema";
 
 /** Status of a tool execution result. */
 export type ToolResultStatus = "ok" | "error" | "denied";
@@ -60,6 +60,14 @@ export interface ToolContext {
   onProgress?: (output: string) => void;
   /** Abort signal from the parent conversation. */
   signal: AbortSignal;
+  /** Provider config for the active provider. Used by the agent tool to create sub-agent clients. */
+  provider: Provider;
+  /** Active model ID. */
+  model: string;
+  /** Context window size for the active model. */
+  contextWindow: number;
+  /** Current agent nesting depth. 0 for the top-level agent. */
+  depth: number;
 }
 
 /** A tool that the LLM can invoke. */
