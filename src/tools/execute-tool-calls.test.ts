@@ -29,21 +29,16 @@ describe("executeToolCalls", () => {
       execute: async () => ok("hello!"),
     });
 
-    const onMessage = vi.fn();
     const messages = await executeToolCalls(
       [stubToolCall("greet", "{}")],
       "assistant text",
       registry,
       mockToolContext(),
-      onMessage,
     );
 
     expect(messages).toHaveLength(2);
     expect(messages[0]?.role).toBe("tool-call");
     expect(messages[1]?.role).toBe("tool-result");
-
-    // onMessage called for each message
-    expect(onMessage).toHaveBeenCalledTimes(2);
   });
 
   it("includes assistant content in the tool-call message", async () => {
@@ -63,7 +58,6 @@ describe("executeToolCalls", () => {
       "thinking out loud",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     const callMsg = messages[0] as ChatMessage & { role: "tool-call" };
@@ -87,7 +81,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     const callMsg = messages[0] as ChatMessage & { role: "tool-call" };
@@ -111,7 +104,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     const callMsg = messages[0] as ChatMessage & { role: "tool-call" };
@@ -125,7 +117,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     expect(messages).toHaveLength(2);
@@ -142,7 +133,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     const callMsg = messages[0] as ChatMessage & { role: "tool-call" };
@@ -166,7 +156,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     const result = messages[1] as ChatMessage & { role: "tool-result" };
@@ -192,7 +181,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     const result = messages[1] as ChatMessage & { role: "tool-result" };
@@ -216,7 +204,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     const result = messages[1] as ChatMessage & { role: "tool-result" };
@@ -243,7 +230,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
     const result = messages[1] as ChatMessage & { role: "tool-result" };
@@ -251,7 +237,7 @@ describe("executeToolCalls", () => {
     expect(result.output).toContain("kaboom");
   });
 
-  it("executes multiple tool calls sequentially", async () => {
+  it("returns interleaved call-result pairs for multiple tools", async () => {
     const order: string[] = [];
     const registry = createToolRegistry();
     registry.register({
@@ -284,12 +270,16 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext(),
-      vi.fn(),
     );
 
-    // 1 tool-call + 2 tool-results
-    expect(messages).toHaveLength(3);
-    expect(order).toEqual(["first", "second"]);
+    // Interleaved: [call1, result1, call2, result2]
+    expect(messages).toHaveLength(4);
+    expect(messages[0]?.role).toBe("tool-call");
+    expect(messages[1]?.role).toBe("tool-result");
+    expect(messages[2]?.role).toBe("tool-call");
+    expect(messages[3]?.role).toBe("tool-result");
+    expect(order).toContain("first");
+    expect(order).toContain("second");
   });
 
   it("passes tool context through to execute", async () => {
@@ -313,7 +303,6 @@ describe("executeToolCalls", () => {
       "",
       registry,
       mockToolContext({ confirm }),
-      vi.fn(),
     );
 
     expect(confirm).toHaveBeenCalledOnce();

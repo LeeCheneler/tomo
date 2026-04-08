@@ -2,6 +2,7 @@ import type { ConfirmOptions } from "../tools/types";
 
 /** A queued confirmation prompt. */
 export interface ConfirmEntry {
+  id: string;
   kind: "confirm";
   message: string;
   diff?: string;
@@ -12,6 +13,7 @@ export interface ConfirmEntry {
 
 /** A queued question prompt. */
 export interface AskEntry {
+  id: string;
   kind: "ask";
   question: string;
   options?: string[];
@@ -67,6 +69,7 @@ export function createPromptQueue(): PromptQueue {
     enqueueConfirm(message, options) {
       return new Promise<boolean>((resolve) => {
         entries.push({
+          id: crypto.randomUUID(),
           kind: "confirm",
           message,
           diff: options?.diff,
@@ -80,7 +83,13 @@ export function createPromptQueue(): PromptQueue {
 
     enqueueAsk(question, options) {
       return new Promise<string | null>((resolve) => {
-        entries.push({ kind: "ask", question, options, resolve });
+        entries.push({
+          id: crypto.randomUUID(),
+          kind: "ask",
+          question,
+          options,
+          resolve,
+        });
         notify();
       });
     },

@@ -17,7 +17,14 @@ export function buildProviderMessages(
   systemPrompt: string,
 ): ProviderMessage[] {
   const result: ProviderMessage[] = [{ role: "system", content: systemPrompt }];
+  // Tracks the current assistant message accumulating tool calls from
+  // interleaved [call, result, call, result] display message pairs.
+  let pendingAssistantToolCall: ProviderMessage | null = null;
   for (const msg of messages) {
+    // Reset accumulator when we see a non-tool-call/tool-result message.
+    if (msg.role !== "tool-call" && msg.role !== "tool-result") {
+      pendingAssistantToolCall = null;
+    }
     if (msg.role === "user" && msg.images && msg.images.length > 0) {
       result.push({
         role: "user",
@@ -36,15 +43,25 @@ export function buildProviderMessages(
       result.push({ role: "assistant", content: stripAnsi(msg.content) });
     }
     if (msg.role === "tool-call") {
-      result.push({
-        role: "assistant",
-        content: msg.content,
-        tool_calls: msg.toolCalls.map((tc) => ({
-          id: tc.id,
-          type: "function" as const,
-          function: { name: tc.name, arguments: tc.arguments },
-        })),
-      });
+      const newToolCalls = msg.toolCalls.map((tc) => ({
+        id: tc.id,
+        type: "function" as const,
+        function: { name: tc.name, arguments: tc.arguments },
+      }));
+      // Merge tool-call messages from the same batch into a single assistant
+      // message. Display messages interleave [call, result, call, result] for
+      // paired rendering, but the provider API needs one assistant turn with
+      // all tool_calls followed by all tool results.
+      if (pendingAssistantToolCall) {
+        pendingAssistantToolCall.tool_calls!.push(...newToolCalls);
+      } else {
+        pendingAssistantToolCall = {
+          role: "assistant",
+          content: msg.content,
+          tool_calls: newToolCalls,
+        };
+        result.push(pendingAssistantToolCall);
+      }
     }
     if (msg.role === "tool-result") {
       result.push({

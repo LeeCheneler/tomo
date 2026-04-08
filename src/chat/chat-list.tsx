@@ -128,14 +128,6 @@ function ToolCallMessageView(props: { toolCalls: ToolCallInfo[] }) {
 /** Maximum lines of plain tool output to display. */
 const MAX_TOOL_OUTPUT_LINES = 5;
 
-/** Truncates output to a maximum number of lines, showing a hidden count. */
-function truncateLines(output: string, maxLines: number): string {
-  const lines = output.split("\n");
-  if (lines.length <= maxLines) return output;
-  const hidden = lines.length - maxLines;
-  return `${lines.slice(0, maxLines).join("\n")}\n…[${hidden} more lines]`;
-}
-
 /** Keeps only the last N lines of output, showing a hidden count for the rest. */
 function tailLines(output: string, maxLines: number): string {
   const lines = output.split("\n");
@@ -166,7 +158,7 @@ function ToolResultMessageView(props: {
     <Box paddingBottom={1}>
       <Indent>
         <Text dimColor={!isError} color={isError ? theme.error : undefined}>
-          {truncateLines(props.output, MAX_TOOL_OUTPUT_LINES)}
+          {tailLines(props.output, MAX_TOOL_OUTPUT_LINES)}
         </Text>
       </Indent>
     </Box>

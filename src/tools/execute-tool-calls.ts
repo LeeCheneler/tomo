@@ -1,81 +1,97 @@
-import type { ChatMessage } from "../chat/message";
+import type { ChatMessage, ToolCallInfo } from "../chat/message";
 import type { ToolCall } from "../provider/client";
 import { getErrorMessage } from "../utils/error";
 import type { ToolRegistry } from "./registry";
 import type { ToolContext } from "./types";
 import { parseToolArgs } from "./types";
 
-/** Callback to emit a message as it's produced (for incremental UI updates). */
-export type OnMessage = (message: ChatMessage) => void;
+/** Factory that creates a scoped onProgress callback for a specific tool call. */
+export type CreateOnProgress = (toolCallId: string) => (output: string) => void;
+
+/** Builds display info for a batch of tool calls from the LLM. */
+export function buildToolCallInfos(
+  toolCalls: ToolCall[],
+  registry: ToolRegistry,
+): ToolCallInfo[] {
+  return toolCalls.map((tc) => {
+    const tool = registry.get(tc.function.name);
+    let summary = "";
+    if (tool) {
+      try {
+        summary = tool.formatCall(JSON.parse(tc.function.arguments));
+      } catch {
+        // Invalid JSON — leave summary empty
+      }
+    }
+    return {
+      id: tc.id,
+      name: tc.function.name,
+      displayName: tool?.displayName ?? tc.function.name,
+      arguments: tc.function.arguments,
+      summary,
+    };
+  });
+}
 
 /**
- * Executes a batch of tool calls from the LLM and returns the resulting display messages.
+ * Executes a batch of tool calls from the LLM in parallel.
  *
- * Produces a ToolCallMessage followed by a ToolResultMessage for each call.
- * Each message is emitted via `onMessage` as it's created so the UI can
- * update incrementally rather than waiting for the entire batch.
+ * Returns interleaved pairs: [toolCall1, result1, toolCall2, result2, ...].
+ * Each ToolCallMessage contains a single tool call so it renders paired
+ * with its result in the chat list.
+ *
+ * Each tool gets a scoped `onProgress` callback via `createOnProgress` so
+ * multiple tools can stream live output to separate UI slots simultaneously.
  */
 export async function executeToolCalls(
   toolCalls: ToolCall[],
   assistantContent: string,
   registry: ToolRegistry,
   context: ToolContext,
-  onMessage: OnMessage,
+  createOnProgress?: CreateOnProgress,
 ): Promise<ChatMessage[]> {
-  const messages: ChatMessage[] = [];
+  const toolCallInfos = buildToolCallInfos(toolCalls, registry);
 
-  /** Appends a message to the local list and emits it. */
-  function emit(msg: ChatMessage) {
-    messages.push(msg);
-    onMessage(msg);
-  }
+  /** Executes a single tool call and returns its [call, result] pair. */
+  async function executeOne(
+    tc: ToolCall,
+    index: number,
+  ): Promise<[ChatMessage, ChatMessage]> {
+    const callMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "tool-call",
+      // Only the first call carries the assistant's text content.
+      content: index === 0 ? assistantContent : "",
+      toolCalls: [toolCallInfos[index]],
+    };
 
-  const toolCallMsg: ChatMessage = {
-    id: crypto.randomUUID(),
-    role: "tool-call",
-    content: assistantContent,
-    toolCalls: toolCalls.map((tc) => {
-      const tool = registry.get(tc.function.name);
-      let summary = "";
-      if (tool) {
-        try {
-          summary = tool.formatCall(JSON.parse(tc.function.arguments));
-        } catch {
-          // Invalid JSON — leave summary empty
-        }
-      }
-      return {
-        id: tc.id,
-        name: tc.function.name,
-        displayName: tool?.displayName ?? tc.function.name,
-        arguments: tc.function.arguments,
-        summary,
-      };
-    }),
-  };
-  emit(toolCallMsg);
-
-  for (const tc of toolCalls) {
     const tool = registry.get(tc.function.name);
     if (!tool) {
-      emit({
-        id: crypto.randomUUID(),
-        role: "tool-result",
-        toolCallId: tc.id,
-        toolName: tc.function.name,
-        output: `Unknown tool: ${tc.function.name}`,
-        status: "error",
-        format: "plain",
-      });
-      continue;
+      return [
+        callMsg,
+        {
+          id: crypto.randomUUID(),
+          role: "tool-result",
+          toolCallId: tc.id,
+          toolName: tc.function.name,
+          output: `Unknown tool: ${tc.function.name}`,
+          status: "error",
+          format: "plain",
+        },
+      ];
     }
+
+    const scopedContext: ToolContext = {
+      ...context,
+      onProgress: createOnProgress?.(tc.id),
+    };
 
     let output: string;
     let status: "ok" | "error" | "denied" = "ok";
     let format: "plain" | "diff" = "plain";
     try {
       const parsed = parseToolArgs(tool.argsSchema, tc.function.arguments);
-      const result = await tool.execute(parsed, context);
+      const result = await tool.execute(parsed, scopedContext);
       output = result.output;
       status = result.status;
       format = result.format;
@@ -84,16 +100,23 @@ export async function executeToolCalls(
       status = "error";
     }
 
-    emit({
-      id: crypto.randomUUID(),
-      role: "tool-result",
-      toolCallId: tc.id,
-      toolName: tc.function.name,
-      output,
-      status,
-      format,
-    });
+    return [
+      callMsg,
+      {
+        id: crypto.randomUUID(),
+        role: "tool-result",
+        toolCallId: tc.id,
+        toolName: tc.function.name,
+        output,
+        status,
+        format,
+      },
+    ];
   }
 
-  return messages;
+  // Execute all tools in parallel, collecting [call, result] pairs.
+  const pairs = await Promise.all(toolCalls.map((tc, i) => executeOne(tc, i)));
+
+  // Flatten pairs into interleaved sequence: [call1, result1, call2, result2, ...]
+  return pairs.flat();
 }

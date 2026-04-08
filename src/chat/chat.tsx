@@ -1,4 +1,4 @@
-import { Box } from "ink";
+import { Box, Text } from "ink";
 import {
   useCallback,
   useEffect,
@@ -29,7 +29,10 @@ import {
   createSessionPath,
   readSessionMessages,
 } from "../session/session";
-import { executeToolCalls } from "../tools/execute-tool-calls";
+import {
+  buildToolCallInfos,
+  executeToolCalls,
+} from "../tools/execute-tool-calls";
 import type { ToolRegistry } from "../tools/registry";
 import type { ToolContext } from "../tools/types";
 import { AskPrompt } from "../ui/ask-prompt";
@@ -38,11 +41,12 @@ import { ConfirmPrompt } from "../ui/confirm-prompt";
 import { DiffView } from "../ui/diff-view";
 import { Indent } from "../ui/layout/indent";
 import { LoadingIndicator } from "../ui/loading-indicator";
+import { theme } from "../ui/theme";
 import { version } from "../utils/version";
 import type { AutocompleteItem } from "./autocomplete";
 import { ChatInput } from "./chat-input";
 import { ChatList, LiveAssistantMessage, LiveToolOutput } from "./chat-list";
-import type { ChatMessage } from "./message";
+import type { ChatMessage, ToolCallInfo } from "./message";
 import { MessageHistory } from "./message-history";
 import { createPromptQueue } from "./prompt-queue";
 import { useCompletion } from "./use-completion";
@@ -103,7 +107,10 @@ function useChat(props: UseChatProps) {
   allowedCommandsRef.current = config.allowedCommands;
   const webSearchApiKeyRef = useRef(config.tools.webSearch.apiKey);
   webSearchApiKeyRef.current = config.tools.webSearch.apiKey;
-  const [liveToolOutput, setLiveToolOutput] = useState<string | null>(null);
+  const [liveToolCalls, setLiveToolCalls] = useState<ToolCallInfo[]>([]);
+  const [liveToolOutputs, setLiveToolOutputs] = useState<Map<string, string>>(
+    () => new Map(),
+  );
   const handledStateRef = useRef<string | null>(null);
   const emptyRetryRef = useRef(0);
 
@@ -169,8 +176,15 @@ function useChat(props: UseChatProps) {
             confirm: (message, options) =>
               queue.enqueueConfirm(message, options),
             ask: (question, options) => queue.enqueueAsk(question, options),
-            onProgress: (output) => setLiveToolOutput(output),
             signal: new AbortController().signal,
+          };
+
+          // Show tool calls in the dynamic area while executing.
+          setLiveToolCalls(buildToolCallInfos(completion.toolCalls, registry));
+
+          /** Creates a scoped onProgress callback for each tool call. */
+          const createOnProgress = (toolCallId: string) => (output: string) => {
+            setLiveToolOutputs((prev) => new Map(prev).set(toolCallId, output));
           };
 
           const newMessages = await executeToolCalls(
@@ -178,10 +192,18 @@ function useChat(props: UseChatProps) {
             completion.content,
             registry,
             toolContext,
-            appendMessage,
+            createOnProgress,
           );
-          setLiveToolOutput(null);
+          setLiveToolCalls([]);
+          setLiveToolOutputs(new Map());
 
+          // Batch-append all messages (tool call + results) to Static.
+          for (const msg of newMessages) {
+            appendMessage(msg);
+          }
+
+          // messagesRef isn't updated until the next render, so manually
+          // compose the full history for the provider.
           const allMessages = [...messagesRef.current, ...newMessages];
           const systemPrompt = buildSystemPrompt();
           const providerMessages = buildProviderMessages(
@@ -452,7 +474,8 @@ function useChat(props: UseChatProps) {
     currentPrompt,
     isStreaming,
     streamingContent: completion.content,
-    liveToolOutput,
+    liveToolCalls,
+    liveToolOutputs,
     abort: completion.abort,
     commandAutocompleteItems,
     skillAutocompleteItems,
@@ -485,7 +508,8 @@ export function Chat(props: ChatProps) {
     currentPrompt,
     isStreaming,
     streamingContent,
-    liveToolOutput,
+    liveToolCalls,
+    liveToolOutputs,
     abort,
     commandAutocompleteItems,
     skillAutocompleteItems,
@@ -518,7 +542,18 @@ export function Chat(props: ChatProps) {
       />
       {isStreaming && <LiveAssistantMessage content={streamingContent} />}
       {isStreaming && <LoadingIndicator text="Thinking" />}
-      {liveToolOutput && <LiveToolOutput output={liveToolOutput} />}
+      {liveToolCalls.map((tc) => (
+        <Box key={tc.id} flexDirection="column">
+          <Indent>
+            <Text color={theme.tool}>
+              {[tc.displayName, tc.summary].filter(Boolean).join(" ")}
+            </Text>
+          </Indent>
+          {liveToolOutputs.has(tc.id) && (
+            <LiveToolOutput output={liveToolOutputs.get(tc.id)!} />
+          )}
+        </Box>
+      ))}
       {mode.kind === "takeover" &&
         mode.render(handleTakeoverDone, buildCommandContext())}
       {mode.kind === "history" && (
@@ -538,6 +573,7 @@ export function Chat(props: ChatProps) {
             </Box>
           )}
           <ConfirmPrompt
+            key={currentPrompt.id}
             onResult={handleConfirmResult}
             label={currentPrompt.label ?? currentPrompt.message}
             detail={currentPrompt.detail}
@@ -546,6 +582,7 @@ export function Chat(props: ChatProps) {
       )}
       {mode.kind === "input" && currentPrompt?.kind === "ask" && (
         <AskPrompt
+          key={currentPrompt.id}
           question={currentPrompt.question}
           options={currentPrompt.options}
           onResult={handleAskResult}

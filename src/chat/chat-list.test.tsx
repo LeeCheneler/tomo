@@ -232,7 +232,7 @@ describe("ChatList", () => {
     expect(frame).toContain("The user denied this read.");
   });
 
-  it("truncates plain tool-result output to 5 lines with hidden count", () => {
+  it("tails plain tool-result output to last 5 lines with hidden count", () => {
     const lines = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);
     const messages: ChatMessage[] = [
       {
@@ -247,10 +247,10 @@ describe("ChatList", () => {
     ];
     const { lastFrame } = renderInk(<ChatList messages={messages} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("line 1");
-    expect(frame).toContain("line 5");
+    expect(frame).toContain("line 6");
+    expect(frame).toContain("line 10");
     expect(frame).toContain("…[5 more lines]");
-    expect(frame).not.toContain("line 6");
+    expect(frame).not.toContain("line 5");
   });
 
   it("renders diff format with addition and removal lines", () => {
