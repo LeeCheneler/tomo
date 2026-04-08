@@ -197,20 +197,41 @@ function useChat(props: UseChatProps) {
             setLiveToolOutputs((prev) => new Map(prev).set(toolCallId, output));
           };
 
+          /** Removes a tool call ID from the dynamic area state. */
+          function removeLiveTool(toolCallId: string) {
+            setLiveToolCalls((prev) =>
+              prev.filter((tc) => tc.id !== toolCallId),
+            );
+            setLiveToolOutputs((prev) => {
+              const next = new Map(prev);
+              next.delete(toolCallId);
+              return next;
+            });
+          }
+
+          /** Hoists a completed tool from the dynamic area to Static. */
+          const onToolComplete = (
+            toolCallId: string,
+            callMsg: ChatMessage,
+            resultMsg: ChatMessage,
+          ) => {
+            appendMessage(callMsg);
+            appendMessage(resultMsg);
+            removeLiveTool(toolCallId);
+          };
+
           const newMessages = await executeToolCalls(
             completion.toolCalls,
             completion.content,
             registry,
             toolContext,
             createOnProgress,
+            onToolComplete,
           );
+
+          // All tools are done — clear any remaining dynamic state.
           setLiveToolCalls([]);
           setLiveToolOutputs(new Map());
-
-          // Batch-append all messages (tool call + results) to Static.
-          for (const msg of newMessages) {
-            appendMessage(msg);
-          }
 
           // messagesRef isn't updated until the next render, so manually
           // compose the full history for the provider.

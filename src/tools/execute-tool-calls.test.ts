@@ -309,4 +309,52 @@ describe("executeToolCalls", () => {
     const result = messages[1] as ChatMessage & { role: "tool-result" };
     expect(result.output).toBe("yes");
   });
+
+  it("calls onToolComplete for each tool as it finishes", async () => {
+    const registry = createToolRegistry();
+    registry.register({
+      name: "fast",
+      displayName: "Fast",
+      description: "fast",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => ok("quick"),
+    });
+    registry.register({
+      name: "slow",
+      displayName: "Slow",
+      description: "slow",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => {
+        await new Promise((r) => setTimeout(r, 50));
+        return ok("done");
+      },
+    });
+
+    const completions: Array<[string, string, string]> = [];
+    const onToolComplete = (
+      toolCallId: string,
+      callMsg: ChatMessage,
+      resultMsg: ChatMessage,
+    ) => {
+      completions.push([toolCallId, callMsg.role, resultMsg.role]);
+    };
+
+    await executeToolCalls(
+      [stubToolCall("fast", "{}"), stubToolCall("slow", "{}")],
+      "",
+      registry,
+      mockToolContext(),
+      undefined,
+      onToolComplete,
+    );
+
+    // Both tools should have completed individually with their IDs.
+    expect(completions).toHaveLength(2);
+    expect(completions[0]).toEqual(["call_fast", "tool-call", "tool-result"]);
+    expect(completions[1]).toEqual(["call_slow", "tool-call", "tool-result"]);
+  });
 });
