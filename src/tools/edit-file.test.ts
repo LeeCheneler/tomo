@@ -169,10 +169,11 @@ describe("editFileTool", () => {
         );
 
         expect(confirm).toHaveBeenCalledOnce();
-        expect(confirm).toHaveBeenCalledWith(
-          expect.stringContaining("restricted.txt"),
-          expect.objectContaining({ diff: expect.any(String) }),
-        );
+        expect(confirm).toHaveBeenCalledWith("Edit file?", {
+          label: "Edit file?",
+          detail: expect.stringContaining("restricted.txt"),
+          diff: expect.any(String),
+        });
         expect(result.status).toBe("ok");
       });
 

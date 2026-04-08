@@ -6,16 +6,19 @@ import { keys } from "../test-utils/keys";
 import { splitAtCursor } from "../input/cursor";
 import { ChatInput } from "./chat-input";
 
-// Mock clipboard operations so tests don't call osascript.
+// Mock clipboard operations so tests don't call osascript or read the filesystem.
 vi.mock("../images/clipboard", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../images/clipboard")>();
   return {
     ...actual,
     readClipboardImage: vi.fn(() => null),
+    detectImagePath: vi.fn(actual.detectImagePath),
   };
 });
 
-const { readClipboardImage } = await import("../images/clipboard");
+const { readClipboardImage, detectImagePath } = await import(
+  "../images/clipboard"
+);
 
 const COLUMNS = 40;
 
@@ -32,6 +35,7 @@ describe("ChatInput", () => {
   afterEach(() => {
     setColumns(undefined);
     vi.mocked(readClipboardImage).mockReset();
+    vi.mocked(detectImagePath).mockRestore();
   });
 
   /** Test autocomplete items. */
@@ -739,6 +743,117 @@ describe("ChatInput", () => {
       await stdin.write(keys.escape);
       await stdin.write(keys.escape);
       expect(lastFrame()).not.toContain("[screenshot.png]");
+    });
+
+    it("navigates left in image nav and clamps at first image", async () => {
+      const img1: ImageAttachment = {
+        name: "first.png",
+        dataUri: "data:image/png;base64,aaa",
+      };
+      const img2: ImageAttachment = {
+        name: "second.png",
+        dataUri: "data:image/png;base64,bbb",
+      };
+      vi.mocked(readClipboardImage)
+        .mockReturnValueOnce(img1)
+        .mockReturnValueOnce(img2);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      // Move right to second, then back left, then left again (clamps at 0).
+      await stdin.write(keys.right);
+      await stdin.write(keys.left);
+      await stdin.write(keys.left);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[first.png]");
+      expect(frame).toContain("[second.png]");
+      expect(frame).toContain("remove");
+    });
+
+    it("clamps right arrow to last image in image nav", async () => {
+      const img1: ImageAttachment = {
+        name: "first.png",
+        dataUri: "data:image/png;base64,aaa",
+      };
+      const img2: ImageAttachment = {
+        name: "second.png",
+        dataUri: "data:image/png;base64,bbb",
+      };
+      vi.mocked(readClipboardImage)
+        .mockReturnValueOnce(img1)
+        .mockReturnValueOnce(img2);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      // Move right past the last image — should clamp.
+      await stdin.write(keys.right);
+      await stdin.write(keys.right);
+      await stdin.write(keys.right);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[first.png]");
+      expect(frame).toContain("[second.png]");
+    });
+
+    it("clamps image nav index when deleting a non-last image", async () => {
+      const img1: ImageAttachment = {
+        name: "first.png",
+        dataUri: "data:image/png;base64,aaa",
+      };
+      const img2: ImageAttachment = {
+        name: "second.png",
+        dataUri: "data:image/png;base64,bbb",
+      };
+      const img3: ImageAttachment = {
+        name: "third.png",
+        dataUri: "data:image/png;base64,ccc",
+      };
+      vi.mocked(readClipboardImage)
+        .mockReturnValueOnce(img1)
+        .mockReturnValueOnce(img2)
+        .mockReturnValueOnce(img3);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      // Navigate to the last image (index 2).
+      await stdin.write(keys.right);
+      await stdin.write(keys.right);
+      // Delete it — index should clamp to 1.
+      await stdin.write(keys.backspace);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[first.png]");
+      expect(frame).toContain("[second.png]");
+      expect(frame).not.toContain("[third.png]");
+      expect(frame).toContain("remove");
+    });
+
+    it("detects image paths in typed text and converts to attachments", async () => {
+      const detected = {
+        pathStart: 5,
+        attachment: {
+          name: "photo.png",
+          dataUri: "data:image/png;base64,xyz",
+        },
+      };
+      vi.mocked(detectImagePath).mockReturnValue(detected);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("look /tmp/photo.png");
+      const frame = lastFrame() ?? "";
+      // Path should be removed and image added as attachment.
+      expect(frame).toContain("[photo.png]");
+    });
+
+    it("ignores unhandled keys in image nav mode", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      // Type a character — should be ignored in image nav.
+      await stdin.write("x");
+      expect(lastFrame()).toContain("remove");
     });
   });
 });

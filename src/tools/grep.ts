@@ -132,9 +132,10 @@ Effective search patterns:
     );
 
     if (permission === "needs-confirmation") {
-      const approved = await context.confirm(
-        `Search file contents for "${parsed.pattern}" in ${searchDir}?`,
-      );
+      const approved = await context.confirm("Search files?", {
+        label: "Search files?",
+        detail: `"${parsed.pattern}" in ${searchDir}`,
+      });
       if (!approved) {
         return denied("The user denied this search.");
       }

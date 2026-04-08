@@ -41,6 +41,25 @@ describe("ChatList", () => {
     expect(lastFrame()).toContain("hello world");
   });
 
+  it("renders user message with image badges", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "user",
+        content: "describe this",
+        images: [
+          { name: "screenshot.png", dataUri: "data:image/png;base64,abc" },
+          { name: "diagram.png", dataUri: "data:image/png;base64,def" },
+        ],
+      },
+    ];
+    const { lastFrame } = renderInk(<ChatList messages={messages} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("describe this");
+    expect(frame).toContain("[screenshot.png]");
+    expect(frame).toContain("[diagram.png]");
+  });
+
   it("renders multiple user messages", () => {
     const messages: ChatMessage[] = [
       { id: "1", role: "user", content: "first" },

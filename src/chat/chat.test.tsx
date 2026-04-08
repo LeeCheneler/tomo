@@ -1492,8 +1492,8 @@ describe("Chat", () => {
       await stdin.write(keys.enter);
       await new Promise((r) => setTimeout(r, 100));
 
-      // Confirm prompt should be visible
-      expect(lastFrame()).toContain("Awaiting approval");
+      // Confirm prompt should be visible with the message
+      expect(lastFrame()).toContain("Allow this action?");
       expect(lastFrame()).toContain("Approve");
       expect(lastFrame()).toContain("Deny");
 
@@ -1503,6 +1503,88 @@ describe("Chat", () => {
 
       expect(requestCount).toBe(2);
       expect(lastFrame()).toContain("Approved result");
+    });
+
+    it("shows label and detail in confirm prompt when provided", async () => {
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", async () => {
+          requestCount++;
+          if (requestCount === 1) {
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_1",
+                            function: {
+                              name: "labeled_tool",
+                              arguments: "{}",
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          }
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "Label result" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "labeled_tool",
+        displayName: "Labeled Tool",
+        description: "A tool with label and detail",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        formatCall: () => "",
+        execute: async (_args, context) => {
+          const approved = await context.confirm("Allow?", {
+            label: "Run command?",
+            detail: "git push origin main",
+          });
+          return ok(approved ? "was approved" : "was denied");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("do the thing");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Label and detail should be visible
+      expect(lastFrame()).toContain("Run command?");
+      expect(lastFrame()).toContain("git push origin main");
+      expect(lastFrame()).toContain("Approve");
+
+      await stdin.write("y");
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
     });
 
     it("shows diff in confirm prompt when tool provides one", async () => {
@@ -1575,10 +1657,10 @@ describe("Chat", () => {
       await stdin.write(keys.enter);
       await new Promise((r) => setTimeout(r, 100));
 
-      // Diff should be visible alongside the confirm prompt
+      // Diff should be visible alongside the confirm prompt message
       expect(lastFrame()).toContain("-old line");
       expect(lastFrame()).toContain("+new line");
-      expect(lastFrame()).toContain("Awaiting approval");
+      expect(lastFrame()).toContain("Apply changes?");
 
       // Approve and verify completion
       await stdin.write("y");

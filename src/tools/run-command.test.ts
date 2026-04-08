@@ -258,7 +258,10 @@ describe("runCommandTool", () => {
           mockToolContext({ allowedCommands: ["git:*"], confirm }),
         );
 
-        expect(confirm).toHaveBeenCalledWith("Run command: rm -rf /");
+        expect(confirm).toHaveBeenCalledWith("Run command?", {
+          label: "Run command?",
+          detail: "rm -rf /",
+        });
       });
 
       it("returns denied when user rejects", async () => {

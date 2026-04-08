@@ -141,7 +141,10 @@ export const runCommandTool: Tool = {
       !isCommandAllowed(command, context.allowedCommands);
 
     if (needsConfirmation) {
-      const approved = await context.confirm(`Run command: ${command}`);
+      const approved = await context.confirm("Run command?", {
+        label: "Run command?",
+        detail: command,
+      });
       if (!approved) {
         return denied("The user denied this command.");
       }

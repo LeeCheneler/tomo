@@ -1,5 +1,12 @@
-import { Box, Text } from "ink";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Box } from "ink";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { isCommand } from "../commands/is-command";
 import type { ImageAttachment } from "../images/clipboard";
 import { isSkill, parseSkillInput } from "../skills/utils";
@@ -37,6 +44,7 @@ import { ChatInput } from "./chat-input";
 import { ChatList, LiveAssistantMessage, LiveToolOutput } from "./chat-list";
 import type { ChatMessage } from "./message";
 import { MessageHistory } from "./message-history";
+import { createPromptQueue } from "./prompt-queue";
 import { useCompletion } from "./use-completion";
 import type { HistoryEntry } from "./use-history";
 import { useHistory } from "./use-history";
@@ -81,16 +89,11 @@ function useChat(props: UseChatProps) {
   const [contextWindow, setContextWindow] = useState(DEFAULT_CONTEXT_WINDOW);
   const completion = useCompletion(provider, model, contextWindow);
   const [sessionKey, setSessionKey] = useState(() => crypto.randomUUID());
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    message: string;
-    diff?: string;
-  } | null>(null);
-  const confirmResolveRef = useRef<((approved: boolean) => void) | null>(null);
-  const [pendingAsk, setPendingAsk] = useState<{
-    question: string;
-    options?: string[];
-  } | null>(null);
-  const askResolveRef = useRef<((answer: string | null) => void) | null>(null);
+  const promptQueueRef = useRef(createPromptQueue());
+  const currentPrompt = useSyncExternalStore(
+    promptQueueRef.current.subscribe,
+    promptQueueRef.current.peek,
+  );
   const sessionPath = useRef(createSessionPath());
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -158,20 +161,14 @@ function useChat(props: UseChatProps) {
         emptyRetryRef.current = 0;
         (async () => {
           const registry = props.toolRegistry;
+          const queue = promptQueueRef.current;
           const toolContext: ToolContext = {
             permissions: permissionsRef.current,
             allowedCommands: allowedCommandsRef.current,
             webSearchApiKey: webSearchApiKeyRef.current,
             confirm: (message, options) =>
-              new Promise<boolean>((resolve) => {
-                confirmResolveRef.current = resolve;
-                setPendingConfirm({ message, diff: options?.diff });
-              }),
-            ask: (question, options) =>
-              new Promise<string | null>((resolve) => {
-                askResolveRef.current = resolve;
-                setPendingAsk({ question, options });
-              }),
+              queue.enqueueConfirm(message, options),
+            ask: (question, options) => queue.enqueueAsk(question, options),
             onProgress: (output) => setLiveToolOutput(output),
             signal: new AbortController().signal,
           };
@@ -326,7 +323,7 @@ function useChat(props: UseChatProps) {
           id: crypto.randomUUID(),
           role: "user",
           content: parsed.userText,
-          images: images.length > 0 ? images : undefined,
+          images,
         });
       }
       history.push({ text: message, images });
@@ -348,7 +345,7 @@ function useChat(props: UseChatProps) {
       id: crypto.randomUUID(),
       role: "user",
       content: message,
-      images: images.length > 0 ? images : undefined,
+      images,
     };
     appendMessage(userMsg);
     history.push({ text: message, images });
@@ -433,18 +430,14 @@ function useChat(props: UseChatProps) {
     });
   }, [props.skillRegistry]);
 
-  /** Resolves the pending confirm prompt and clears it. */
+  /** Resolves the front confirm prompt and advances the queue. */
   function handleConfirmResult(approved: boolean) {
-    confirmResolveRef.current?.(approved);
-    confirmResolveRef.current = null;
-    setPendingConfirm(null);
+    promptQueueRef.current.resolveConfirm(approved);
   }
 
-  /** Resolves the pending ask prompt and clears it. */
+  /** Resolves the front ask prompt and advances the queue. */
   function handleAskResult(answer: string | null) {
-    askResolveRef.current?.(answer);
-    askResolveRef.current = null;
-    setPendingAsk(null);
+    promptQueueRef.current.resolveAsk(answer);
   }
 
   /** Whether the assistant is currently streaming a response. */
@@ -456,7 +449,7 @@ function useChat(props: UseChatProps) {
     history,
     messages,
     sessionKey,
-    pendingConfirm,
+    currentPrompt,
     isStreaming,
     streamingContent: completion.content,
     liveToolOutput,
@@ -470,7 +463,6 @@ function useChat(props: UseChatProps) {
     handleExit,
     handleTakeoverDone,
     handleConfirmResult,
-    pendingAsk,
     handleAskResult,
   };
 }
@@ -490,7 +482,7 @@ export function Chat(props: ChatProps) {
     history,
     messages,
     sessionKey,
-    pendingConfirm,
+    currentPrompt,
     isStreaming,
     streamingContent,
     liveToolOutput,
@@ -504,7 +496,6 @@ export function Chat(props: ChatProps) {
     handleExit,
     handleTakeoverDone,
     handleConfirmResult,
-    pendingAsk,
     handleAskResult,
   } = useChat({
     commandRegistry: props.commandRegistry,
@@ -537,31 +528,30 @@ export function Chat(props: ChatProps) {
           onExit={handleExit}
         />
       )}
-      {mode.kind === "input" && pendingConfirm && (
+      {mode.kind === "input" && currentPrompt?.kind === "confirm" && (
         <>
-          {pendingConfirm.diff && (
+          {currentPrompt.diff && (
             <Box paddingBottom={1}>
               <Indent>
-                <DiffView output={pendingConfirm.diff} />
+                <DiffView output={currentPrompt.diff} />
               </Indent>
             </Box>
           )}
-          <Box paddingBottom={1}>
-            <Indent>
-              <Text dimColor>Awaiting approval</Text>
-            </Indent>
-          </Box>
-          <ConfirmPrompt onResult={handleConfirmResult} />
+          <ConfirmPrompt
+            onResult={handleConfirmResult}
+            label={currentPrompt.label ?? currentPrompt.message}
+            detail={currentPrompt.detail}
+          />
         </>
       )}
-      {mode.kind === "input" && pendingAsk && (
+      {mode.kind === "input" && currentPrompt?.kind === "ask" && (
         <AskPrompt
-          question={pendingAsk.question}
-          options={pendingAsk.options}
+          question={currentPrompt.question}
+          options={currentPrompt.options}
           onResult={handleAskResult}
         />
       )}
-      {mode.kind === "input" && !pendingConfirm && !pendingAsk && (
+      {mode.kind === "input" && !currentPrompt && (
         <ChatInput
           onMessage={handleMessage}
           onUp={handleUp}

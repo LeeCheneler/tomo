@@ -67,7 +67,9 @@ export const writeFileTool: Tool = {
     );
 
     if (permission === "needs-confirmation") {
-      const approved = await context.confirm(`Write file: ${filePath}?`, {
+      const approved = await context.confirm("Write file?", {
+        label: "Write file?",
+        detail: filePath,
         diff,
       });
       if (!approved) {

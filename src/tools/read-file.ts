@@ -103,7 +103,10 @@ export const readFileTool: Tool = {
     );
 
     if (permission === "needs-confirmation") {
-      const approved = await context.confirm(`Read file: ${filePath}?`);
+      const approved = await context.confirm("Read file?", {
+        label: "Read file?",
+        detail: filePath,
+      });
       if (!approved) {
         return denied("The user denied this read.");
       }

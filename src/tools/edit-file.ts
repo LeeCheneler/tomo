@@ -83,7 +83,9 @@ export const editFileTool: Tool = {
     );
 
     if (permission === "needs-confirmation") {
-      const approved = await context.confirm(`Edit file: ${filePath}?`, {
+      const approved = await context.confirm("Edit file?", {
+        label: "Edit file?",
+        detail: filePath,
         diff,
       });
       if (!approved) {

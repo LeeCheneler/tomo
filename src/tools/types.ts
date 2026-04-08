@@ -38,6 +38,10 @@ export function denied(output: string): ToolResult {
 export interface ConfirmOptions {
   /** Diff output to display above the approval prompt. */
   diff?: string;
+  /** Short label identifying the action type (e.g. "Run Command", "Edit File"). */
+  label?: string;
+  /** Detail text for the action (e.g. the command string, file path). */
+  detail?: string;
 }
 
 /** Context provided to a tool's execute function. */

@@ -65,6 +65,27 @@ describe("ConfirmPrompt", () => {
     expect(onResult).toHaveBeenCalledWith(false);
   });
 
+  it("renders label and detail inside the bordered area", () => {
+    const { lastFrame } = renderInk(
+      <ConfirmPrompt
+        onResult={() => {}}
+        label="Run command?"
+        detail="git push origin main"
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Run command?");
+    expect(frame).toContain("git push origin main");
+    expect(frame).toContain("Approve");
+  });
+
+  it("renders without label or detail when not provided", () => {
+    const { lastFrame } = renderInk(<ConfirmPrompt onResult={() => {}} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Approve");
+    expect(frame).toContain("Deny");
+  });
+
   it("does not double-fire on rapid input", async () => {
     const onResult = vi.fn();
     const { stdin } = renderInk(<ConfirmPrompt onResult={onResult} />);
