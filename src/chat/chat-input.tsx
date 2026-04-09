@@ -23,6 +23,8 @@ export interface ChatInputProps {
   onUp?: (draft: string) => void;
   /** Called on escape when set, taking priority over the default clear behaviour. */
   onAbort?: () => void;
+  /** Called when the user presses Tab. Used to open the conversation in a pager. */
+  onPager?: () => void;
   /** Initial text to populate the input with on mount. */
   initialValue?: string;
   /** Initial images to restore (e.g. from history recall). */
@@ -172,6 +174,13 @@ function useChatInput(props: ChatInputProps) {
       return;
     }
 
+    if (key.tab) {
+      if (!showAutocomplete) {
+        props.onPager?.();
+      }
+      return;
+    }
+
     if (key.upArrow && showAutocomplete) {
       autocomplete.moveUp();
       return;
@@ -220,6 +229,10 @@ function useChatInput(props: ChatInputProps) {
               ? [{ key: "down", description: "images" }]
               : []),
           ];
+
+  if (imageNavIndex === null && !showAutocomplete && props.onPager) {
+    instructions.push({ key: "tab", description: "pager" });
+  }
 
   if (imageNavIndex === null) {
     if (props.onAbort) {

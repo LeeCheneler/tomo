@@ -33,6 +33,12 @@ vi.mock("node:child_process", () => ({
   }),
 }));
 
+vi.mock("./open-pager", () => ({
+  openPager: vi.fn(),
+}));
+
+const { openPager } = await import("./open-pager");
+
 const COLUMNS = 40;
 
 /** Override process.stdout.columns for test predictability. */
@@ -82,6 +88,26 @@ describe("Chat", () => {
       const { stdin, lastFrame } = renderChat();
       await stdin.write(keys.up);
       expect(lastFrame()).toContain("❯");
+    });
+  });
+
+  describe("pager", () => {
+    it("opens the pager with rendered messages on tab", async () => {
+      vi.mocked(openPager).mockClear();
+      const { stdin } = renderChat();
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
+      await stdin.write(keys.tab);
+      expect(openPager).toHaveBeenCalledTimes(1);
+      const content = vi.mocked(openPager).mock.calls[0][0];
+      expect(content).toContain("hello");
+    });
+
+    it("does not open the pager when no messages have been sent", async () => {
+      vi.mocked(openPager).mockClear();
+      const { stdin } = renderChat();
+      await stdin.write(keys.tab);
+      expect(openPager).not.toHaveBeenCalled();
     });
   });
 

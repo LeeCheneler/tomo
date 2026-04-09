@@ -49,7 +49,9 @@ import { ChatInput } from "./chat-input";
 import { ChatList, LiveAssistantMessage, LiveToolOutput } from "./chat-list";
 import type { ChatMessage, ToolCallInfo } from "./message";
 import { MessageHistory } from "./message-history";
+import { openPager } from "./open-pager";
 import { createPromptQueue } from "./prompt-queue";
+import { renderMessagesForPager } from "./render-pager";
 import { useCompletion } from "./use-completion";
 import type { HistoryEntry } from "./use-history";
 import { useHistory } from "./use-history";
@@ -512,6 +514,11 @@ function useChat(props: UseChatProps) {
     });
   }, [props.skillRegistry]);
 
+  /** Renders the current conversation and pipes it to the system pager. */
+  function handlePager() {
+    openPager(renderMessagesForPager(messagesRef.current));
+  }
+
   /** Resolves the front confirm prompt and advances the queue. */
   function handleConfirmResult(approved: boolean) {
     promptQueueRef.current.resolveConfirm(approved);
@@ -547,6 +554,7 @@ function useChat(props: UseChatProps) {
     handleTakeoverDone,
     handleConfirmResult,
     handleAskResult,
+    handlePager,
   };
 }
 
@@ -581,6 +589,7 @@ export function Chat(props: ChatProps) {
     handleTakeoverDone,
     handleConfirmResult,
     handleAskResult,
+    handlePager,
   } = useChat({
     commandRegistry: props.commandRegistry,
     skillRegistry: props.skillRegistry,
@@ -655,6 +664,7 @@ export function Chat(props: ChatProps) {
           onMessage={handleMessage}
           onUp={handleUp}
           onAbort={isStreaming ? abort : undefined}
+          onPager={messages.length > 0 ? handlePager : undefined}
           initialValue={mode.initialValue}
           initialImages={mode.initialImages}
           hasHistory={history.entries.length > 0}

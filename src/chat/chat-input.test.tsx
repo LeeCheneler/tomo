@@ -62,6 +62,7 @@ describe("ChatInput", () => {
       onMessage: (message: string, images: ImageAttachment[]) => void;
       onUp: () => void;
       onAbort: () => void;
+      onPager: () => void;
       initialValue: string;
       hasHistory: boolean;
       commandAutocompleteItems: readonly AutocompleteItem[];
@@ -75,6 +76,7 @@ describe("ChatInput", () => {
         onMessage={overrides.onMessage ?? (() => {})}
         onUp={overrides.onUp}
         onAbort={overrides.onAbort}
+        onPager={overrides.onPager}
         initialValue={overrides.initialValue}
         hasHistory={overrides.hasHistory}
         commandAutocompleteItems={overrides.commandAutocompleteItems ?? []}
@@ -281,6 +283,47 @@ describe("ChatInput", () => {
       await stdin.write(keys.escape);
       await stdin.write(keys.escape);
       expect(lastFrame()).not.toContain("hello");
+    });
+  });
+
+  describe("pager", () => {
+    it("calls onPager when tab is pressed", async () => {
+      const onPager = vi.fn();
+      const { stdin } = renderInput({ onPager });
+      await stdin.write(keys.tab);
+      expect(onPager).toHaveBeenCalledOnce();
+    });
+
+    it("does not call onPager when autocomplete is showing", async () => {
+      const onPager = vi.fn();
+      const { stdin } = renderInput({
+        onPager,
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.tab);
+      expect(onPager).not.toHaveBeenCalled();
+    });
+
+    it("does not insert a tab character into the input", async () => {
+      const onPager = vi.fn();
+      const { stdin, lastFrame } = renderInput({ onPager });
+      await stdin.write("hello");
+      await stdin.write(keys.tab);
+      expect(lastFrame()).toContain("hello");
+      expect(lastFrame()).not.toContain("\t");
+    });
+
+    it("shows a tab pager hint in the instruction bar when onPager is set", () => {
+      const { lastFrame } = renderInput({ onPager: () => {} });
+      expect(lastFrame()).toContain("tab");
+      expect(lastFrame()).toContain("pager");
+    });
+
+    it("does not show the tab hint when onPager is not provided", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("pager");
     });
   });
 
