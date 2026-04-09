@@ -1,5 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport";
 import { z } from "zod";
 import type { McpConnection } from "../config/schema";
 
@@ -60,20 +62,12 @@ export function flattenContent(content: readonly unknown[]): string {
     .join("\n");
 }
 
-/** Creates a stdio MCP client for the given connection config. */
-export function createStdioMcpClient(connection: {
-  command: string;
-  args: readonly string[];
-  env?: Record<string, string>;
-}): McpClient {
-  const transport = new StdioClientTransport({
-    command: connection.command,
-    args: [...connection.args],
-    env: connection.env,
-    // Capture stderr instead of letting it print over the Ink UI / test output.
-    // We don't currently surface it anywhere — phase 3+ can pipe it to the chat log.
-    stderr: "pipe",
-  });
+/**
+ * Wraps an SDK transport in an `McpClient`, handling the protocol-layer
+ * calls (`listTools`, `callTool`, `disconnect`). Shared between the stdio
+ * and http factories so the protocol handling lives in one place.
+ */
+function wrapTransport(transport: Transport): McpClient {
   const client = new Client(
     { name: "tomo", version: "0.0.0" },
     { capabilities: {} },
@@ -114,16 +108,45 @@ export function createStdioMcpClient(connection: {
   };
 }
 
-/** Builds a stdio client from an MCP connection config. */
-export function createMcpClient(connection: McpConnection): McpClient {
-  if (connection.transport !== "stdio") {
-    throw new Error(
-      `createMcpClient: only stdio transport is supported (got ${connection.transport})`,
-    );
-  }
-  return createStdioMcpClient({
+/** Creates a stdio MCP client for the given connection config. */
+export function createStdioMcpClient(connection: {
+  command: string;
+  args: readonly string[];
+  env?: Record<string, string>;
+}): McpClient {
+  const transport = new StdioClientTransport({
     command: connection.command,
-    args: connection.args,
+    args: [...connection.args],
     env: connection.env,
+    // Capture stderr instead of letting it print over the Ink UI / test output.
+    // We don't currently surface it anywhere — phase 3+ can pipe it to the chat log.
+    stderr: "pipe",
+  });
+  return wrapTransport(transport);
+}
+
+/** Creates a streamable-HTTP MCP client for the given connection config. */
+export function createHttpMcpClient(connection: {
+  url: string;
+  headers?: Record<string, string>;
+}): McpClient {
+  const transport = new StreamableHTTPClientTransport(new URL(connection.url), {
+    requestInit: connection.headers ? { headers: connection.headers } : {},
+  });
+  return wrapTransport(transport);
+}
+
+/** Builds an MCP client from a connection config, dispatching on transport type. */
+export function createMcpClient(connection: McpConnection): McpClient {
+  if (connection.transport === "stdio") {
+    return createStdioMcpClient({
+      command: connection.command,
+      args: connection.args,
+      env: connection.env,
+    });
+  }
+  return createHttpMcpClient({
+    url: connection.url,
+    headers: connection.headers,
   });
 }

@@ -1,13 +1,19 @@
+import { type ChildProcess, spawn } from "node:child_process";
 import { resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { McpClient } from "./client";
 import {
+  createHttpMcpClient,
   createMcpClient,
   createStdioMcpClient,
   flattenContent,
 } from "./client";
 
 const STDIO_MOCK = resolve(__dirname, "../../mock-mcps/stdio.mjs");
+const HTTP_MOCK = resolve(__dirname, "../../mock-mcps/http.mjs");
+/** Non-default port to avoid colliding with a dev mock instance. */
+const HTTP_PORT = 9878;
+const HTTP_URL = `http://localhost:${HTTP_PORT}`;
 
 describe("createStdioMcpClient", () => {
   let client: McpClient | null = null;
@@ -119,6 +125,109 @@ describe("flattenContent", () => {
   });
 });
 
+describe("createHttpMcpClient", () => {
+  let server: ChildProcess | null = null;
+  let client: McpClient | null = null;
+
+  beforeAll(async () => {
+    server = spawn("node", [HTTP_MOCK], {
+      env: { ...process.env, PORT: String(HTTP_PORT) },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    // Wait for the "listening" line on stdout before running tests.
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("mock http server did not start in time")),
+        5000,
+      );
+      server?.stdout?.on("data", (chunk: Buffer) => {
+        if (chunk.toString().includes("listening")) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+      server?.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
+  });
+
+  afterAll(async () => {
+    if (server && !server.killed) {
+      server.kill("SIGTERM");
+      await new Promise<void>((resolve) => {
+        server?.on("exit", () => resolve());
+      });
+    }
+  });
+
+  afterEach(async () => {
+    if (client) {
+      await client.disconnect();
+      client = null;
+    }
+  });
+
+  /** Connects an http client to the mock server. */
+  async function connectMock(
+    headers?: Record<string, string>,
+  ): Promise<McpClient> {
+    const c = createHttpMcpClient({ url: HTTP_URL, headers });
+    await c.connect();
+    return c;
+  }
+
+  it("connects to the mock http server and lists tools", async () => {
+    client = await connectMock();
+    const tools = await client.listTools();
+    const names = tools.map((t) => t.name).sort();
+    expect(names).toEqual(["get_weather", "random_number"]);
+  });
+
+  it("returns descriptions and inputSchemas for each tool", async () => {
+    client = await connectMock();
+    const tools = await client.listTools();
+    const getWeather = tools.find((t) => t.name === "get_weather");
+    expect(getWeather).toBeDefined();
+    expect(getWeather?.description).toContain("weather");
+    expect(getWeather?.inputSchema).toMatchObject({
+      type: "object",
+      required: ["city"],
+    });
+  });
+
+  it("calls a tool and returns the text content", async () => {
+    client = await connectMock();
+    const result = await client.callTool("get_weather", { city: "London" });
+    expect(result.isError).toBe(false);
+    expect(result.text).toContain("London");
+    expect(result.text).toContain("14°C");
+  });
+
+  it("passes arguments through to the tool", async () => {
+    client = await connectMock();
+    const result = await client.callTool("random_number", {
+      min: 100,
+      max: 100,
+    });
+    expect(result.isError).toBe(false);
+    expect(result.text).toBe("100");
+  });
+
+  it("accepts custom headers without crashing", async () => {
+    client = await connectMock({ Authorization: "Bearer test-token" });
+    const tools = await client.listTools();
+    expect(tools.length).toBeGreaterThan(0);
+  });
+
+  it("disconnects cleanly", async () => {
+    const c = await connectMock();
+    await c.disconnect();
+    await expect(c.disconnect()).resolves.not.toThrow();
+  });
+});
+
 describe("createMcpClient", () => {
   it("builds a stdio client from a stdio connection", () => {
     const client = createMcpClient({
@@ -130,13 +239,12 @@ describe("createMcpClient", () => {
     expect(client).toBeDefined();
   });
 
-  it("throws for non-stdio transports", () => {
-    expect(() =>
-      createMcpClient({
-        transport: "http",
-        url: "https://example.com/mcp",
-        enabled: true,
-      }),
-    ).toThrow(/only stdio/);
+  it("builds an http client from an http connection", () => {
+    const client = createMcpClient({
+      transport: "http",
+      url: "https://example.com/mcp",
+      enabled: true,
+    });
+    expect(client).toBeDefined();
   });
 });
