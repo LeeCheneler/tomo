@@ -3,13 +3,16 @@ import { mockConfig } from "../test-utils/mock-config";
 import type { MockFsState } from "../test-utils/mock-fs";
 import { loadConfig } from "./file";
 import {
+  addMcpConnection,
   addProvider,
   addSkillSetSource,
+  removeMcpConnection,
   removeProvider,
   removeSkillSetSource,
   updateActiveModel,
   updateActiveProvider,
   updateAllowedCommands,
+  updateMcpConnection,
   updatePermissions,
   updateProvider,
   updateSkillSetEnabledSets,
@@ -370,5 +373,224 @@ describe("updateSkillSetEnabledSets", () => {
     const config = loadConfig();
     expect(config.skillSets.sources[0].enabledSets).toEqual(["dev"]);
     expect(config.skillSets.sources[1].enabledSets).toEqual(["design"]);
+  });
+});
+
+describe("addMcpConnection", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("adds a new stdio connection", () => {
+    state = mockConfig({ global: { mcp: { connections: {} } } });
+    addMcpConnection("my-server", {
+      transport: "stdio",
+      command: "node",
+      args: ["server.mjs"],
+      enabled: true,
+    });
+    const config = loadConfig();
+    expect(Object.keys(config.mcp.connections)).toEqual(["my-server"]);
+    const conn = config.mcp.connections["my-server"];
+    expect(conn.transport).toBe("stdio");
+    if (conn.transport === "stdio") {
+      expect(conn.command).toBe("node");
+      expect(conn.args).toEqual(["server.mjs"]);
+    }
+  });
+
+  it("adds a new http connection with headers", () => {
+    state = mockConfig({ global: {} });
+    addMcpConnection("api", {
+      transport: "http",
+      url: "https://example.com/mcp",
+      headers: { Authorization: "Bearer xxx" },
+      enabled: true,
+    });
+    const config = loadConfig();
+    const conn = config.mcp.connections.api;
+    expect(conn.transport).toBe("http");
+    if (conn.transport === "http") {
+      expect(conn.url).toBe("https://example.com/mcp");
+      expect(conn.headers).toEqual({ Authorization: "Bearer xxx" });
+    }
+  });
+
+  it("appends without disturbing existing connections", () => {
+    state = mockConfig({
+      global: {
+        mcp: {
+          connections: {
+            existing: {
+              transport: "stdio",
+              command: "old",
+              args: [],
+              enabled: true,
+            },
+          },
+        },
+      },
+    });
+    addMcpConnection("new-one", {
+      transport: "stdio",
+      command: "new",
+      args: [],
+      enabled: true,
+    });
+    const config = loadConfig();
+    expect(Object.keys(config.mcp.connections)).toEqual([
+      "existing",
+      "new-one",
+    ]);
+  });
+});
+
+describe("removeMcpConnection", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("removes a connection by name", () => {
+    state = mockConfig({
+      global: {
+        mcp: {
+          connections: {
+            a: { transport: "stdio", command: "a", args: [], enabled: true },
+            b: { transport: "stdio", command: "b", args: [], enabled: true },
+          },
+        },
+      },
+    });
+    removeMcpConnection("a");
+    const config = loadConfig();
+    expect(Object.keys(config.mcp.connections)).toEqual(["b"]);
+  });
+
+  it("no-ops when connection not found", () => {
+    state = mockConfig({
+      global: {
+        mcp: {
+          connections: {
+            a: { transport: "stdio", command: "a", args: [], enabled: true },
+          },
+        },
+      },
+    });
+    removeMcpConnection("nonexistent");
+    const config = loadConfig();
+    expect(Object.keys(config.mcp.connections)).toEqual(["a"]);
+  });
+
+  it("handles missing mcp section", () => {
+    state = mockConfig({ global: {} });
+    removeMcpConnection("anything");
+    const config = loadConfig();
+    expect(config.mcp.connections).toEqual({});
+  });
+});
+
+describe("updateMcpConnection", () => {
+  let state: MockFsState;
+
+  afterEach(() => {
+    state?.restore();
+  });
+
+  it("updates a connection in place when name is unchanged", () => {
+    state = mockConfig({
+      global: {
+        mcp: {
+          connections: {
+            srv: {
+              transport: "stdio",
+              command: "old",
+              args: [],
+              enabled: true,
+            },
+          },
+        },
+      },
+    });
+    updateMcpConnection("srv", "srv", {
+      transport: "stdio",
+      command: "new",
+      args: ["--flag"],
+      enabled: true,
+    });
+    const config = loadConfig();
+    const conn = config.mcp.connections.srv;
+    if (conn.transport === "stdio") {
+      expect(conn.command).toBe("new");
+      expect(conn.args).toEqual(["--flag"]);
+    }
+  });
+
+  it("renames a connection while preserving its position", () => {
+    state = mockConfig({
+      global: {
+        mcp: {
+          connections: {
+            first: {
+              transport: "stdio",
+              command: "a",
+              args: [],
+              enabled: true,
+            },
+            middle: {
+              transport: "stdio",
+              command: "b",
+              args: [],
+              enabled: true,
+            },
+            last: {
+              transport: "stdio",
+              command: "c",
+              args: [],
+              enabled: true,
+            },
+          },
+        },
+      },
+    });
+    updateMcpConnection("middle", "renamed", {
+      transport: "stdio",
+      command: "b",
+      args: [],
+      enabled: true,
+    });
+    const config = loadConfig();
+    expect(Object.keys(config.mcp.connections)).toEqual([
+      "first",
+      "renamed",
+      "last",
+    ]);
+  });
+
+  it("supports rename across transport types", () => {
+    state = mockConfig({
+      global: {
+        mcp: {
+          connections: {
+            srv: {
+              transport: "stdio",
+              command: "old",
+              args: [],
+              enabled: true,
+            },
+          },
+        },
+      },
+    });
+    updateMcpConnection("srv", "srv", {
+      transport: "http",
+      url: "https://example.com/mcp",
+      enabled: true,
+    });
+    const config = loadConfig();
+    expect(config.mcp.connections.srv.transport).toBe("http");
   });
 });

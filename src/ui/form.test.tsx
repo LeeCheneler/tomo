@@ -338,4 +338,110 @@ describe("Form", () => {
       expect(onSubmit).not.toHaveBeenCalled();
     });
   });
+
+  describe("kv fields", () => {
+    /** Renders Form with a kv field and spied callbacks. */
+    function renderWithKv(initialValue: Record<string, string> = {}) {
+      const fields: FormField[] = [
+        {
+          type: "text",
+          key: "command",
+          label: "Command",
+          initialValue: "node",
+        },
+        { type: "kv", key: "env", label: "Env", initialValue },
+      ];
+      const onSubmit = vi.fn();
+      const onCancel = vi.fn();
+      const onOpenField = vi.fn();
+      const result = renderInk(
+        <Form
+          fields={fields}
+          onSubmit={onSubmit}
+          onCancel={onCancel}
+          onOpenField={onOpenField}
+        />,
+      );
+      return { ...result, onSubmit, onCancel, onOpenField };
+    }
+
+    it("renders the kv field as a count summary", () => {
+      const { lastFrame } = renderWithKv({ FOO: "bar", BAZ: "qux" });
+      expect(lastFrame()).toContain("Env: 2 entries");
+    });
+
+    it("uses the singular form for one entry", () => {
+      const { lastFrame } = renderWithKv({ FOO: "bar" });
+      expect(lastFrame()).toContain("Env: 1 entry");
+    });
+
+    it("renders zero entries", () => {
+      const { lastFrame } = renderWithKv({});
+      expect(lastFrame()).toContain("Env: 0 entries");
+    });
+
+    it("renders the chevron affordance on the kv field", () => {
+      const { lastFrame } = renderWithKv({ FOO: "bar" });
+      // Find the line containing the kv summary and assert it carries the chevron.
+      const envLine = (lastFrame() ?? "")
+        .split("\n")
+        .find((l) => l.includes("Env: 1 entry"));
+      expect(envLine).toContain("›");
+    });
+
+    it("fires onOpenField with the field key and current values when tab is pressed", async () => {
+      const { stdin, onOpenField } = renderWithKv({ FOO: "bar" });
+      await stdin.write(keys.down);
+      await stdin.write(keys.tab);
+      expect(onOpenField).toHaveBeenCalledWith("env", {
+        command: "node",
+        env: { FOO: "bar" },
+      });
+    });
+
+    it("does not fire onOpenField for tab on a non-kv field", async () => {
+      const { stdin, onOpenField } = renderWithKv();
+      // Cursor starts on the text field; tab should be ignored.
+      await stdin.write(keys.tab);
+      expect(onOpenField).not.toHaveBeenCalled();
+    });
+
+    it("includes the kv value in onSubmit", async () => {
+      const { stdin, onSubmit } = renderWithKv({ FOO: "bar" });
+      await stdin.write(keys.enter);
+      expect(onSubmit).toHaveBeenCalledWith({
+        command: "node",
+        env: { FOO: "bar" },
+      });
+    });
+
+    it("ignores typed input when focused on a kv field", async () => {
+      const { stdin, lastFrame } = renderWithKv({ FOO: "bar" });
+      await stdin.write(keys.down);
+      await stdin.write("hello");
+      // Summary unchanged
+      expect(lastFrame()).toContain("Env: 1 entry");
+    });
+
+    it("can navigate past a kv field with up/down", async () => {
+      const fields: FormField[] = [
+        { type: "text", key: "a", label: "A", initialValue: "alpha" },
+        { type: "kv", key: "kv", label: "KV", initialValue: {} },
+        { type: "text", key: "b", label: "B", initialValue: "beta" },
+      ];
+      const onSubmit = vi.fn();
+      const { stdin } = renderInk(
+        <Form fields={fields} onSubmit={onSubmit} onCancel={vi.fn()} />,
+      );
+      // Move from A → KV → B, then submit
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.enter);
+      expect(onSubmit).toHaveBeenCalledWith({
+        a: "alpha",
+        kv: {},
+        b: "beta",
+      });
+    });
+  });
 });

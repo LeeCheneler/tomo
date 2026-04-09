@@ -96,7 +96,7 @@ describe("Settings", () => {
       expect(onDone).not.toHaveBeenCalled();
     });
 
-    it("enters the correct sub-screen based on selection", async () => {
+    it("enters the MCP servers screen on selection", async () => {
       const { stdin, lastFrame } = renderSettings();
       // Navigate to MCP Servers (5th item, index 4)
       await stdin.write(keys.down);
@@ -106,7 +106,7 @@ describe("Settings", () => {
       await stdin.write(keys.enter);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("MCP Servers");
-      expect(frame).toContain("Coming soon");
+      expect(frame).toContain("Add server...");
     });
 
     it("shows back instruction in sub-screen", async () => {
@@ -115,23 +115,9 @@ describe("Settings", () => {
       expect(lastFrame()).toContain("back");
     });
 
-    it("ignores non-escape keys in placeholder sub-screen", async () => {
+    it("returns to menu on escape from a sub-screen", async () => {
       const { stdin, lastFrame } = renderSettings();
-      // Navigate to MCP Servers (placeholder)
-      await stdin.write(keys.down);
-      await stdin.write(keys.down);
-      await stdin.write(keys.down);
-      await stdin.write(keys.down);
-      await stdin.write(keys.enter);
-      await stdin.write("x");
-      await stdin.write(keys.up);
-      await stdin.write(keys.down);
-      expect(lastFrame()).toContain("Coming soon");
-    });
-
-    it("returns to menu on escape from placeholder sub-screen", async () => {
-      const { stdin, lastFrame } = renderSettings();
-      // Navigate to MCP Servers (placeholder)
+      // Navigate into MCP Servers
       await stdin.write(keys.down);
       await stdin.write(keys.down);
       await stdin.write(keys.down);

@@ -30,11 +30,26 @@ export interface SelectFormField {
   initialValue: string;
 }
 
+/** A key-value record field. Edited via a sub-screen, opened with Tab. */
+export interface KvFormField {
+  type: "kv";
+  key: string;
+  label: string;
+  initialValue: Record<string, string>;
+}
+
 /** A field in a form. Discriminate on `type`. */
-export type FormField = ToggleFormField | TextFormField | SelectFormField;
+export type FormField =
+  | ToggleFormField
+  | TextFormField
+  | SelectFormField
+  | KvFormField;
 
 /** Values collected from form fields, keyed by field key. */
-export type FormValues = Record<string, boolean | string>;
+export type FormValues = Record<
+  string,
+  boolean | string | Record<string, string>
+>;
 
 /** Props for Form. */
 export interface FormProps {
@@ -44,6 +59,8 @@ export interface FormProps {
   onSubmit: (values: FormValues) => void;
   /** Called when the user presses Escape. */
   onCancel: () => void;
+  /** Called when the user presses Tab on a kv field, with the field key and the current values. */
+  onOpenField?: (key: string, values: FormValues) => void;
   /** Color for the cursor indicator. Defaults to theme.brand. */
   color?: string;
 }
@@ -149,6 +166,13 @@ function useForm(props: FormProps) {
       return;
     }
 
+    if (field.type === "kv") {
+      if (key.tab) {
+        props.onOpenField?.(field.key, valuesRef.current);
+      }
+      return;
+    }
+
     const value = valuesRef.current[field.key] as string;
     const edit = processTextEdit(input, key, value, textCursorRef.current);
     if (edit) {
@@ -220,6 +244,23 @@ export function Form(props: FormProps) {
                   </Text>
                 );
               })}
+            </Indent>
+          );
+        }
+
+        if (field.type === "kv") {
+          const entries = values[field.key] as Record<string, string>;
+          const count = Object.keys(entries).length;
+          const summary = count === 1 ? "1 entry" : `${count} entries`;
+          return (
+            <Indent key={field.key}>
+              <Text color={isSelected ? color : undefined}>
+                {isSelected ? "❯" : " "}{" "}
+              </Text>
+              <Text color={isSelected ? color : undefined}>
+                {field.label}: {summary}
+              </Text>
+              <Text color={theme.key}> ›</Text>
             </Indent>
           );
         }

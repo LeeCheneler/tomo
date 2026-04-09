@@ -1,6 +1,16 @@
 import { z } from "zod";
-import type { Permissions, Provider, SkillSetSource, Tools } from "./schema";
-import { providerSchema, skillSetSourceSchema } from "./schema";
+import type {
+  McpConnection,
+  Permissions,
+  Provider,
+  SkillSetSource,
+  Tools,
+} from "./schema";
+import {
+  mcpConnectionSchema,
+  providerSchema,
+  skillSetSourceSchema,
+} from "./schema";
 import { updateGlobalConfig, updateLocalConfig } from "./file";
 
 /** Sets the active model in the global config. */
@@ -109,5 +119,68 @@ export function updateSkillSetEnabledSets(
         ),
       },
     };
+  });
+}
+
+/** Schema for parsing just the mcp field from raw config. */
+const mcpFieldSchema = z.object({
+  mcp: z
+    .object({
+      connections: z.record(z.string(), mcpConnectionSchema).default({}),
+    })
+    .default({ connections: {} }),
+});
+
+/** Adds a new MCP connection to the global config under the given name. */
+export function addMcpConnection(
+  name: string,
+  connection: McpConnection,
+): void {
+  updateGlobalConfig((raw) => {
+    const { mcp } = mcpFieldSchema.parse(raw);
+    return {
+      ...raw,
+      mcp: {
+        connections: { ...mcp.connections, [name]: connection },
+      },
+    };
+  });
+}
+
+/** Removes an MCP connection by name from the global config. */
+export function removeMcpConnection(name: string): void {
+  updateGlobalConfig((raw) => {
+    const { mcp } = mcpFieldSchema.parse(raw);
+    const next = { ...mcp.connections };
+    delete next[name];
+    return { ...raw, mcp: { connections: next } };
+  });
+}
+
+/**
+ * Updates an MCP connection in the global config. Supports rename: if `name`
+ * differs from `originalName`, the entry is moved while preserving its
+ * insertion position so the UI list stays stable.
+ */
+export function updateMcpConnection(
+  originalName: string,
+  name: string,
+  connection: McpConnection,
+): void {
+  updateGlobalConfig((raw) => {
+    const { mcp } = mcpFieldSchema.parse(raw);
+    const next: Record<string, McpConnection> = {};
+    for (const [key, value] of Object.entries(mcp.connections)) {
+      if (key === originalName) {
+        next[name] = connection;
+      } else {
+        next[key] = value;
+      }
+    }
+    // Handle the case where the original key wasn't present (defensive).
+    if (!(originalName in mcp.connections)) {
+      next[name] = connection;
+    }
+    return { ...raw, mcp: { connections: next } };
   });
 }

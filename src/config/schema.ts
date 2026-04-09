@@ -65,18 +65,12 @@ export const agentsSchema = z.object({
     ]),
 });
 
-/** Schema for a key-value entry with optional sensitivity marker. */
-export const kvEntrySchema = z.object({
-  value: z.string(),
-  sensitive: z.boolean().optional(),
-});
-
 /** Schema for an MCP stdio connection. */
 export const mcpStdioConnectionSchema = z.object({
   transport: z.literal("stdio"),
   command: z.string().min(1, "command is required"),
   args: z.array(z.string()).default([]),
-  env: z.record(z.string(), kvEntrySchema).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().default(true),
 });
 
@@ -84,7 +78,7 @@ export const mcpStdioConnectionSchema = z.object({
 export const mcpHttpConnectionSchema = z.object({
   transport: z.literal("http"),
   url: z.url("url must be a valid URL"),
-  headers: z.record(z.string(), kvEntrySchema).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().default(true),
 });
 
@@ -159,9 +153,6 @@ export type Tools = z.infer<typeof toolsSchema>;
 
 /** Agent spawning configuration. */
 export type Agents = z.infer<typeof agentsSchema>;
-
-/** A key-value entry with optional sensitivity marker. */
-export type KvEntry = z.infer<typeof kvEntrySchema>;
 
 /** An MCP connection (stdio or HTTP). */
 export type McpConnection = z.infer<typeof mcpConnectionSchema>;

@@ -149,11 +149,12 @@ describe("mcpConnectionSchema", () => {
     const result = mcpConnectionSchema.parse({
       transport: "http",
       url: "https://mcp.example.com/mcp",
-      headers: { Authorization: { value: "Bearer xxx", sensitive: true } },
+      headers: { Authorization: "Bearer xxx" },
     });
     expect(result.transport).toBe("http");
     if (result.transport === "http") {
       expect(result.url).toBe("https://mcp.example.com/mcp");
+      expect(result.headers).toEqual({ Authorization: "Bearer xxx" });
     }
     expect(result.enabled).toBe(true);
   });

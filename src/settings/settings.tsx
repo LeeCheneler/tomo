@@ -1,4 +1,4 @@
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import { useState } from "react";
 import type { TakeoverDone } from "../commands/registry";
 import { Border } from "../ui/border";
@@ -9,6 +9,7 @@ import type { SelectListItem } from "../ui/select-list";
 import { SelectList } from "../ui/select-list";
 import { theme } from "../ui/theme";
 import { AllowedCommandsScreen } from "./allowed-commands";
+import { McpServersScreen } from "./mcp-servers";
 import { PermissionsScreen } from "./permissions";
 import { ProvidersScreen } from "./providers";
 import { SkillSetsScreen } from "./skill-sets";
@@ -96,8 +97,8 @@ export function Settings(props: SettingsProps) {
     return <SkillSetsScreen onBack={handleBack} />;
   }
 
-  if (step !== "menu") {
-    return <SettingsPlaceholder section={step} onBack={handleBack} />;
+  if (step === "mcp") {
+    return <McpServersScreen onBack={handleBack} />;
   }
 
   return (
@@ -115,41 +116,6 @@ export function Settings(props: SettingsProps) {
       <Border color={theme.settings} />
       <Box justifyContent="flex-end" height={1}>
         <KeyInstructions items={instructions} />
-      </Box>
-    </Box>
-  );
-}
-
-/** Props for the placeholder sub-screen. */
-interface SettingsPlaceholderProps {
-  section: SettingsSection;
-  onBack: () => void;
-}
-
-/** Temporary placeholder for section sub-screens. */
-function SettingsPlaceholder(props: SettingsPlaceholderProps) {
-  useInput((_input, key) => {
-    if (key.escape) {
-      props.onBack();
-    }
-  });
-
-  /* v8 ignore next -- section always matches a menu item */
-  const label =
-    MENU_ITEMS.find((m) => m.key === props.section)?.label ?? props.section;
-
-  return (
-    <Box flexDirection="column" paddingTop={1}>
-      <Border color={theme.settings} />
-      <Indent>
-        <Text bold>{label}</Text>
-      </Indent>
-      <Indent>
-        <Text dimColor>Coming soon</Text>
-      </Indent>
-      <Border color={theme.settings} />
-      <Box justifyContent="flex-end" height={1}>
-        <KeyInstructions items={[{ key: "esc", description: "back" }]} />
       </Box>
     </Box>
   );
