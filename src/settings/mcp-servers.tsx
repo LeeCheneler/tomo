@@ -34,22 +34,31 @@ const stringValueSchema = z.string();
 /** Schema for narrowing FormValues entries to a string→string record. */
 const recordValueSchema = z.record(z.string(), z.string());
 
-/** Joins args with single spaces for the form text input. */
-function argsToString(args: readonly string[]): string {
-  return args.join(" ");
+/** Joins a command and its args into a single whitespace-separated string. */
+export function joinCommand(command: string, args: readonly string[]): string {
+  return [command, ...args].join(" ").trim();
 }
 
-/** Splits a space-separated args string into an array, dropping empty entries. */
-function stringToArgs(input: string): string[] {
-  return input.trim().split(/\s+/).filter(Boolean);
+/**
+ * Splits a command line on whitespace. The first token becomes the command,
+ * the rest become args. Empty input yields an empty command and no args.
+ */
+export function splitCommand(input: string): {
+  command: string;
+  args: string[];
+} {
+  const parts = input.trim().split(/\s+/).filter(Boolean);
+  return {
+    command: parts[0] ?? "",
+    args: parts.slice(1),
+  };
 }
 
 /** Converts an MCP connection into form values for the options form. */
 function connectionToFormValues(connection: McpConnection): FormValues {
   if (connection.transport === "stdio") {
     return {
-      command: connection.command,
-      args: argsToString(connection.args),
+      command: joinCommand(connection.command, connection.args),
       env: connection.env ?? {},
     };
   }
@@ -65,10 +74,13 @@ function formValuesToConnection(
   values: FormValues,
 ): McpConnection {
   if (transport === "stdio") {
+    const { command, args } = splitCommand(
+      stringValueSchema.parse(values.command),
+    );
     return {
       transport: "stdio",
-      command: stringValueSchema.parse(values.command),
-      args: stringToArgs(stringValueSchema.parse(values.args)),
+      command,
+      args,
       env: recordValueSchema.parse(values.env),
       enabled: true,
     };
@@ -93,12 +105,6 @@ function buildFormFields(
         key: "command",
         label: "Command",
         initialValue: stringValueSchema.parse(values.command),
-      },
-      {
-        type: "text",
-        key: "args",
-        label: "Args",
-        initialValue: stringValueSchema.parse(values.args),
       },
       {
         type: "kv",

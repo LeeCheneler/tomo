@@ -3,7 +3,7 @@ import { loadConfig } from "../config/file";
 import type { Config } from "../config/schema";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
-import { McpServersScreen } from "./mcp-servers";
+import { joinCommand, McpServersScreen, splitCommand } from "./mcp-servers";
 
 const COLUMNS = 80;
 
@@ -91,7 +91,6 @@ describe("McpServersScreen", () => {
       frame = lastFrame() ?? "";
       expect(frame).toContain("my-stdio (stdio)");
       expect(frame).toContain("Command:");
-      expect(frame).toContain("Args:");
       expect(frame).toContain("Env: 0 entries");
     });
 
@@ -121,12 +120,9 @@ describe("McpServersScreen", () => {
       await stdin.write("srv");
       await stdin.write(keys.enter);
       await stdin.write(keys.enter); // pick stdio
-      // On Command field — type the command
-      await stdin.write("node");
-      // Down to Args
-      await stdin.write(keys.down);
-      await stdin.write("server.mjs --port 9000");
-      // Submit
+      // Single Command field holds the whole command line; first token
+      // becomes the command, the rest become args on save.
+      await stdin.write("node server.mjs --port 9000");
       await stdin.write(keys.enter);
       const config = loadConfig();
       const conn = config.mcp.connections.srv;
@@ -134,6 +130,21 @@ describe("McpServersScreen", () => {
       if (conn.transport === "stdio") {
         expect(conn.command).toBe("node");
         expect(conn.args).toEqual(["server.mjs", "--port", "9000"]);
+      }
+    });
+
+    it("saves a bare command with no args", async () => {
+      const { stdin } = renderScreen();
+      await stdin.write("srv");
+      await stdin.write(keys.enter);
+      await stdin.write(keys.enter); // pick stdio
+      await stdin.write("mcp-server");
+      await stdin.write(keys.enter);
+      const config = loadConfig();
+      const conn = config.mcp.connections.srv;
+      if (conn.transport === "stdio") {
+        expect(conn.command).toBe("mcp-server");
+        expect(conn.args).toEqual([]);
       }
     });
   });
@@ -185,28 +196,29 @@ describe("McpServersScreen", () => {
       });
     }
 
-    it("opens the options form on tab", async () => {
+    it("opens the options form on tab with command and args joined", async () => {
       const { stdin, lastFrame } = withExisting();
       // Move up to the existing item
       await stdin.write(keys.up);
       await stdin.write(keys.tab);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("existing (stdio)");
-      expect(frame).toContain("Command: node");
-      expect(frame).toContain("Args: server.mjs");
+      // Command + args are joined into a single command line for editing.
+      expect(frame).toContain("Command: node server.mjs");
     });
 
     it("saves edits back to the same connection key", async () => {
       const { stdin } = withExisting();
       await stdin.write(keys.up);
       await stdin.write(keys.tab);
-      // Cursor on Command, append a suffix
-      await stdin.write("-x");
+      // Cursor on Command. Append a flag — the whole line re-splits on save.
+      await stdin.write(" --verbose");
       await stdin.write(keys.enter);
       const config = loadConfig();
       const conn = config.mcp.connections.existing;
       if (conn.transport === "stdio") {
-        expect(conn.command).toBe("node-x");
+        expect(conn.command).toBe("node");
+        expect(conn.args).toEqual(["server.mjs", "--verbose"]);
       }
     });
   });
@@ -219,8 +231,7 @@ describe("McpServersScreen", () => {
       await stdin.write(keys.enter); // pick stdio
       // Type a command so we can check it's preserved across the round trip
       await stdin.write("node");
-      // Move down to Args, then down to Env (the kv field)
-      await stdin.write(keys.down);
+      // Move down to Env (the kv field)
       await stdin.write(keys.down);
       // Tab into the kv editor
       await stdin.write(keys.tab);
@@ -247,7 +258,7 @@ describe("McpServersScreen", () => {
       await stdin.write(keys.enter);
       await stdin.write(keys.enter); // pick stdio
       await stdin.write("node");
-      await stdin.write(keys.down);
+      // Command → Env
       await stdin.write(keys.down);
       await stdin.write(keys.tab);
       await stdin.write("API_KEY=secret");
@@ -397,5 +408,59 @@ describe("McpServersScreen", () => {
       expect(frame).toContain("MCP Servers");
       expect(frame).toContain("Add server...");
     });
+  });
+});
+
+describe("splitCommand", () => {
+  it("splits a single-word command with no args", () => {
+    expect(splitCommand("mcp-server")).toEqual({
+      command: "mcp-server",
+      args: [],
+    });
+  });
+
+  it("splits a command with arguments on whitespace", () => {
+    expect(splitCommand("node server.mjs --port 9000")).toEqual({
+      command: "node",
+      args: ["server.mjs", "--port", "9000"],
+    });
+  });
+
+  it("collapses runs of whitespace", () => {
+    expect(splitCommand("node   server.mjs \t --foo")).toEqual({
+      command: "node",
+      args: ["server.mjs", "--foo"],
+    });
+  });
+
+  it("trims leading and trailing whitespace", () => {
+    expect(splitCommand("  node server.mjs  ")).toEqual({
+      command: "node",
+      args: ["server.mjs"],
+    });
+  });
+
+  it("returns an empty command for an empty string", () => {
+    expect(splitCommand("")).toEqual({ command: "", args: [] });
+  });
+
+  it("returns an empty command for whitespace-only input", () => {
+    expect(splitCommand("   \t  ")).toEqual({ command: "", args: [] });
+  });
+});
+
+describe("joinCommand", () => {
+  it("joins a command with no args", () => {
+    expect(joinCommand("mcp-server", [])).toBe("mcp-server");
+  });
+
+  it("joins a command with arguments on single spaces", () => {
+    expect(joinCommand("node", ["server.mjs", "--port", "9000"])).toBe(
+      "node server.mjs --port 9000",
+    );
+  });
+
+  it("returns an empty string for an empty command with no args", () => {
+    expect(joinCommand("", [])).toBe("");
   });
 });
