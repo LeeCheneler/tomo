@@ -22,11 +22,11 @@ If you make independent tool calls across separate responses, you are doing it w
 You MUST read a file with read_file before editing or overwriting it. Do not guess file contents from memory. Do not assume you know what a file contains. Read it first, then modify it.
 
 WRONG — editing without reading:
-[tool call: edit_file path="src/foo.ts" oldString="..." newString="..."]
+[tool call: edit_file path="src/foo.ts" edits=[{oldString: "...", newString: "..."}]]
 
 CORRECT — read first, then edit:
 Response 1: [tool call: read_file path="src/foo.ts"]
-Response 2: [tool call: edit_file path="src/foo.ts" oldString="..." newString="..."]
+Response 2: [tool call: edit_file path="src/foo.ts" edits=[{oldString: "...", newString: "..."}]]
 
 # CRITICAL: Use Dedicated Tools, Not Shell Commands
 
