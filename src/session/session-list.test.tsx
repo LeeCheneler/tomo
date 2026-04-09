@@ -201,4 +201,59 @@ describe("SessionList", () => {
       expect(onDone).toHaveBeenCalledOnce();
     });
   });
+
+  describe("with more than five sessions", () => {
+    /** Builds a session file path for an hour offset from a base date. */
+    function buildFiles(count: number): Record<string, string> {
+      const files: Record<string, string> = {};
+      for (let i = 0; i < count; i++) {
+        const hour = String(i).padStart(2, "0");
+        const uniqueSuffix = String(i).padStart(12, "e");
+        const path = sessionPath(
+          `2026-04-01T${hour}-00-00-000Z-aaaa-bbbb-cccc-dddd-${uniqueSuffix}.jsonl`,
+        );
+        files[path] = `${userLine(`session ${i}`)}\n`;
+      }
+      return files;
+    }
+
+    let fs: ReturnType<typeof mockFs>;
+
+    afterEach(() => {
+      fs.restore();
+    });
+
+    it("shows only five sessions at a time with an overflow indicator", () => {
+      fs = mockFs(buildFiles(8));
+      const onDone = vi.fn();
+      const { lastFrame } = render(
+        <SessionList onDone={onDone} context={stubContext()} />,
+      );
+      const frame = lastFrame() ?? "";
+      // Newest (session 7) is first, so sessions 7..3 are visible, 2..0 hidden.
+      expect(frame).toContain("session 7");
+      expect(frame).toContain("session 3");
+      expect(frame).not.toContain("session 2");
+      expect(frame).not.toContain("session 0");
+      expect(frame).toContain("↓ 3 more");
+    });
+
+    it("scrolls the window as the cursor moves past the visible edge", async () => {
+      fs = mockFs(buildFiles(8));
+      const onDone = vi.fn();
+      const { stdin, lastFrame } = render(
+        <SessionList onDone={onDone} context={stubContext()} />,
+      );
+      // Move cursor down 5 times: newest (7) → 6 → 5 → 4 → 3 → 2 (scrolls).
+      for (let i = 0; i < 5; i++) {
+        stdin.write(keys.down);
+        await flushInkFrames();
+      }
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("❯");
+      expect(frame).toContain("session 2");
+      expect(frame).not.toContain("session 7");
+      expect(frame).toContain("↑ 1 more");
+    });
+  });
 });

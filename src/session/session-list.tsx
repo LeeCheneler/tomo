@@ -13,6 +13,9 @@ import { listSessions } from "./session";
 /** Max length for the first message preview. */
 const MAX_PREVIEW_LENGTH = 50;
 
+/** Maximum number of sessions visible in the list at once before scrolling. */
+const MAX_VISIBLE_SESSIONS = 5;
+
 /** Key instructions for the session list. */
 const INSTRUCTIONS: InstructionItem[] = [
   { key: "enter", description: "select" },
@@ -87,6 +90,7 @@ export function SessionList(props: SessionListProps) {
         onSelect={handleSelect}
         onExit={props.onDone}
         color={theme.brand}
+        maxVisible={MAX_VISIBLE_SESSIONS}
       />
       <Border color={theme.brand} />
       <Box justifyContent="flex-end" height={1}>
