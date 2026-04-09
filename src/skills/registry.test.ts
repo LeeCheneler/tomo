@@ -1,61 +1,116 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Skill } from "./types";
+import { describe, expect, it } from "vitest";
+import { createSkillRegistry } from "./registry";
+import type { SkillDefinition } from "./types";
 
-const testSkills: Skill[] = [
-  {
-    name: "commit",
-    description: "Commit changes",
-    body: "Commit instructions.",
-    local: false,
-  },
-  {
-    name: "review",
-    description: "(local) Review code",
-    body: "Review instructions.",
-    local: true,
-  },
-];
+/** Creates a minimal skill definition for testing. */
+function skill(
+  name: string,
+  source: "local" | "global",
+  content = "prompt",
+): SkillDefinition {
+  return { name, description: `${name} description`, content, source };
+}
 
-vi.mock("./loader", () => ({
-  loadSkills: () => [...testSkills],
-}));
+describe("createSkillRegistry", () => {
+  it("registers and retrieves a skill by name", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global"));
 
-// Import after mocking so the registry uses the mocked loader.
-const { getAllSkills, getSkill, reloadSkills } = await import("./registry");
-
-describe("skills registry", () => {
-  beforeEach(() => {
-    reloadSkills();
+    expect(registry.get("review")).toEqual(skill("review", "global"));
   });
 
-  it("getAllSkills returns all loaded skills", () => {
-    const skills = getAllSkills();
-    expect(skills).toHaveLength(2);
-    expect(skills.map((s) => s.name)).toEqual(["commit", "review"]);
+  it("returns undefined for unknown skill names", () => {
+    const registry = createSkillRegistry();
+    expect(registry.get("nonexistent")).toBeUndefined();
   });
 
-  it("getSkill returns a skill by name", () => {
-    const skill = getSkill("commit");
-    expect(skill?.name).toBe("commit");
-    expect(skill?.description).toBe("Commit changes");
+  it("lists all registered skills", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global"));
+    registry.register(skill("deploy", "local"));
+
+    const list = registry.list();
+    expect(list).toHaveLength(2);
+    expect(list.map((s) => s.name)).toContain("review");
+    expect(list.map((s) => s.name)).toContain("deploy");
   });
 
-  it("getSkill returns undefined for unknown name", () => {
-    expect(getSkill("nonexistent")).toBeUndefined();
+  it("returns empty list when no skills are registered", () => {
+    const registry = createSkillRegistry();
+    expect(registry.list()).toEqual([]);
   });
 
-  it("caches skills after first load", () => {
-    const first = getAllSkills();
-    const second = getAllSkills();
-    expect(first).toBe(second);
+  it("overwrites a skill with the same name and source", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global", "old"));
+    registry.register(skill("review", "global", "new"));
+
+    expect(registry.get("review")?.content).toBe("new");
+    expect(registry.list()).toHaveLength(1);
   });
 
-  it("reloadSkills clears cache", () => {
-    const first = getAllSkills();
-    reloadSkills();
-    const second = getAllSkills();
-    // Same content but different reference since it was reloaded.
-    expect(first).not.toBe(second);
-    expect(second).toHaveLength(2);
+  it("stores both local and global skills with the same name", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global"));
+    registry.register(skill("review", "local"));
+
+    expect(registry.list()).toHaveLength(2);
+  });
+
+  it("returns local skill when both sources exist for the same name", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global", "global prompt"));
+    registry.register(skill("review", "local", "local prompt"));
+
+    const result = registry.get("review");
+    expect(result?.source).toBe("local");
+    expect(result?.content).toBe("local prompt");
+  });
+
+  it("returns global skill when no local exists", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global"));
+
+    expect(registry.get("review")?.source).toBe("global");
+  });
+
+  it("retrieves a specific source with getBySource", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global", "global prompt"));
+    registry.register(skill("review", "local", "local prompt"));
+
+    expect(registry.getBySource("review", "global")?.content).toBe(
+      "global prompt",
+    );
+    expect(registry.getBySource("review", "local")?.content).toBe(
+      "local prompt",
+    );
+  });
+
+  it("returns undefined from getBySource for missing source", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global"));
+
+    expect(registry.getBySource("review", "local")).toBeUndefined();
+  });
+
+  it("detects name clashes between local and global", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global"));
+    registry.register(skill("review", "local"));
+
+    expect(registry.hasClash("review")).toBe(true);
+  });
+
+  it("returns false for hasClash when only one source exists", () => {
+    const registry = createSkillRegistry();
+    registry.register(skill("review", "global"));
+
+    expect(registry.hasClash("review")).toBe(false);
+  });
+
+  it("returns false for hasClash on unknown names", () => {
+    const registry = createSkillRegistry();
+    expect(registry.hasClash("nonexistent")).toBe(false);
   });
 });

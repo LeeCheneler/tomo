@@ -1,101 +1,48 @@
 import { describe, expect, it } from "vitest";
-import "./context";
-import { getCommand } from "./registry";
-import type { CommandCallbacks } from "./types";
+import type { CommandContext } from "./registry";
+import { createCommandRegistry } from "./registry";
+import { contextCommand } from "./context";
 
-function makeCallbacks(
-  overrides: Partial<CommandCallbacks> = {},
-): CommandCallbacks {
-  return {
-    onComplete: () => {},
-    onCancel: () => {},
-    clearMessages: () => {},
-    switchSession: () => null,
-    setActiveModel: () => {},
-    setActiveProvider: () => null,
-    reloadProviders: () => {},
-    providerBaseUrl: "http://localhost:11434",
-    activeModel: "test-model",
-    activeProvider: "test",
-    providers: [
-      { name: "test", baseUrl: "http://localhost:11434", type: "ollama" },
-    ],
-    contextWindow: 32768,
-    maxTokens: 8192,
-    tokenUsage: null,
-    messageCount: 0,
-    mcpFailedServers: [],
-    ...overrides,
-  };
-}
-
-describe("/context", () => {
-  const cmd = getCommand("context");
-  if (!cmd) throw new Error("context command not registered");
-
-  it("shows 0% usage when no token data yet", () => {
-    const result = cmd.execute("", makeCallbacks());
-    const output = (result as { output: string; status: string }).output;
-
-    expect(output).toContain("0% used");
-    expect(output).toContain("░".repeat(30));
-    expect(output).toContain("0 / 32.8k tokens");
-    expect(output).toContain("Context window     32.8k tokens");
-    expect(output).toContain("Response reserve   8.2k tokens");
-    expect(output).toContain("Input budget       24.6k tokens");
+describe("contextCommand", () => {
+  it("is named context", () => {
+    expect(contextCommand.name).toBe("context");
   });
 
-  it("shows progress bar and config with token usage", () => {
-    const result = cmd.execute(
-      "",
-      makeCallbacks({
-        tokenUsage: { promptTokens: 1500, completionTokens: 500 },
-        contextWindow: 32768,
-        maxTokens: 8192,
-      }),
-    );
-
-    const output = (result as { output: string; status: string }).output;
-    expect(output).toContain("6% used");
-    expect(output).toContain("2.0k / 32.8k tokens");
-    expect(output).toContain("Context window     32.8k tokens");
-    expect(output).toContain("Response reserve   8.2k tokens");
-    expect(output).toContain("Input budget       24.6k tokens");
-    expect(output).toContain(
-      "input budget = context window - response reserve",
-    );
+  it("has a description", () => {
+    expect(contextCommand.description).toBeTruthy();
   });
 
-  it("shows filled progress bar at high usage", () => {
-    const result = cmd.execute(
-      "",
-      makeCallbacks({
-        tokenUsage: { promptTokens: 30000, completionTokens: 1000 },
-        contextWindow: 32768,
-        maxTokens: 8192,
-      }),
-    );
-
-    const output = (result as { output: string; status: string }).output;
-    expect(output).toContain("95% used");
-    const bar = output.split("\n")[0] ?? "";
-    const filledCount = (bar.match(/█/g) || []).length;
-    expect(filledCount).toBeGreaterThanOrEqual(28);
+  it("shows no usage message when usage is null", async () => {
+    const registry = createCommandRegistry();
+    registry.register(contextCommand);
+    const context: CommandContext = {
+      usage: null,
+      contextWindow: 8192,
+      resetSession: () => {},
+      loadSession: () => {},
+    };
+    const result = await registry.invoke("/context", context);
+    expect(result.type).toBe("inline");
+    if (result.type !== "inline") return;
+    expect(result.output).toContain("No usage data yet");
   });
 
-  it("formats small token counts without k suffix", () => {
-    const result = cmd.execute(
-      "",
-      makeCallbacks({
-        tokenUsage: { promptTokens: 50, completionTokens: 20 },
-        contextWindow: 4096,
-        maxTokens: 512,
-      }),
-    );
-
-    const output = (result as { output: string; status: string }).output;
-    expect(output).toContain("2% used");
-    expect(output).toContain("70 / 4.1k tokens");
-    expect(output).toContain("Input budget       3.6k tokens");
+  it("formats token usage with progress bar and percentage", async () => {
+    const registry = createCommandRegistry();
+    registry.register(contextCommand);
+    const context: CommandContext = {
+      usage: { promptTokens: 1000, completionTokens: 500 },
+      contextWindow: 8192,
+      resetSession: () => {},
+      loadSession: () => {},
+    };
+    const result = await registry.invoke("/context", context);
+    expect(result.type).toBe("inline");
+    if (result.type !== "inline") return;
+    expect(result.output).toContain("█");
+    expect(result.output).toContain("░");
+    expect(result.output).toContain("1,500");
+    expect(result.output).toContain("8,192");
+    expect(result.output).toContain("18%");
   });
 });

@@ -1,148 +1,80 @@
 import { describe, expect, it } from "vitest";
-import {
-  getAllTools,
-  getTool,
-  getToolDefinitions,
-  registerTool,
-  resolveToolAvailability,
-} from "./registry";
+import { z } from "zod";
+import { createToolRegistry } from "./registry";
 import type { Tool } from "./types";
+import { ok } from "./types";
 
-function makeTool(name: string): Tool {
+/** Creates a minimal stub tool for testing. */
+function stubTool(name: string): Tool {
   return {
     name,
-    description: `${name} description`,
+    displayName: name,
+    description: `Description for ${name}`,
     parameters: { type: "object", properties: {} },
-    execute: async (_args, _context) => ({
-      output: "result",
-      status: "ok" as const,
-    }),
+    argsSchema: z.object({}),
+    formatCall: () => "",
+    execute: async () => ok("done"),
   };
 }
 
-// The registry is module-level state, so we need to re-import to reset.
-// Instead, we register unique names per test to avoid collisions.
-
-describe("tool registry", () => {
-  it("registers and retrieves a tool by name", () => {
-    const tool = makeTool("test-get");
-    registerTool(tool);
-
-    expect(getTool("test-get")).toBe(tool);
+describe("createToolRegistry", () => {
+  it("registers and retrieves a tool", () => {
+    const registry = createToolRegistry();
+    const tool = stubTool("read_file");
+    registry.register(tool);
+    expect(registry.get("read_file")).toBe(tool);
   });
 
   it("returns undefined for unregistered tool", () => {
-    expect(getTool("nonexistent")).toBeUndefined();
+    const registry = createToolRegistry();
+    expect(registry.get("nope")).toBeUndefined();
   });
 
   it("lists all registered tools", () => {
-    const tool = makeTool("test-list");
-    registerTool(tool);
-
-    const all = getAllTools();
-    expect(all.find((t) => t.name === "test-list")).toBe(tool);
+    const registry = createToolRegistry();
+    registry.register(stubTool("a"));
+    registry.register(stubTool("b"));
+    expect(registry.list().map((t) => t.name)).toEqual(["a", "b"]);
   });
 
-  it("exports tool definitions in OpenAI format", () => {
-    const tool = makeTool("test-export");
-    registerTool(tool);
+  it("overwrites a tool when registering the same name", () => {
+    const registry = createToolRegistry();
+    registry.register(stubTool("a"));
+    const replacement = stubTool("a");
+    replacement.description = "replaced";
+    registry.register(replacement);
+    expect(registry.list()).toHaveLength(1);
+    expect(registry.get("a")?.description).toBe("replaced");
+  });
 
-    const defs = getToolDefinitions();
-    const def = defs.find((d) => d.function.name === "test-export");
-    expect(def).toEqual({
+  it("removes a tool with unregister", () => {
+    const registry = createToolRegistry();
+    registry.register(stubTool("a"));
+    registry.register(stubTool("b"));
+    registry.unregister("a");
+    expect(registry.get("a")).toBeUndefined();
+    expect(registry.list().map((t) => t.name)).toEqual(["b"]);
+  });
+
+  it("unregister is a no-op for unknown names", () => {
+    const registry = createToolRegistry();
+    registry.register(stubTool("a"));
+    registry.unregister("nonexistent");
+    expect(registry.list()).toHaveLength(1);
+  });
+
+  it("returns OpenAI-compatible tool definitions", () => {
+    const registry = createToolRegistry();
+    registry.register(stubTool("read_file"));
+    const defs = registry.getDefinitions();
+    expect(defs).toHaveLength(1);
+    expect(defs[0]).toEqual({
       type: "function",
       function: {
-        name: "test-export",
-        description: "test-export description",
+        name: "read_file",
+        description: "Description for read_file",
         parameters: { type: "object", properties: {} },
       },
     });
-  });
-
-  it("overwrites a tool with the same name", () => {
-    const tool1 = makeTool("test-overwrite");
-    const tool2 = makeTool("test-overwrite");
-    tool2.description = "updated";
-    registerTool(tool1);
-    registerTool(tool2);
-
-    expect(getTool("test-overwrite")?.description).toBe("updated");
-  });
-
-  it("resolves tool availability defaulting all to enabled", () => {
-    registerTool(makeTool("test-avail-a"));
-    registerTool(makeTool("test-avail-b"));
-
-    const result = resolveToolAvailability();
-    expect(result["test-avail-a"]).toBe(true);
-    expect(result["test-avail-b"]).toBe(true);
-  });
-
-  it("resolves tool availability with overrides from config", () => {
-    registerTool(makeTool("test-avail-c"));
-    registerTool(makeTool("test-avail-d"));
-
-    const result = resolveToolAvailability({ "test-avail-c": false });
-    expect(result["test-avail-c"]).toBe(false);
-    expect(result["test-avail-d"]).toBe(true);
-  });
-
-  it("filters tool definitions by availability", () => {
-    registerTool(makeTool("test-filter-on"));
-    registerTool(makeTool("test-filter-off"));
-
-    const defs = getToolDefinitions({
-      "test-filter-on": true,
-      "test-filter-off": false,
-    });
-
-    expect(
-      defs.find((d) => d.function.name === "test-filter-on"),
-    ).toBeDefined();
-    expect(
-      defs.find((d) => d.function.name === "test-filter-off"),
-    ).toBeUndefined();
-  });
-
-  it("returns all tools when no availability passed", () => {
-    registerTool(makeTool("test-nofilter"));
-    const defs = getToolDefinitions();
-    expect(defs.find((d) => d.function.name === "test-nofilter")).toBeDefined();
-  });
-
-  it("respects tool enabled default when no config override", () => {
-    const disabledTool = makeTool("test-disabled-default");
-    disabledTool.enabled = false;
-    registerTool(disabledTool);
-
-    const enabledTool = makeTool("test-enabled-default");
-    registerTool(enabledTool);
-
-    const result = resolveToolAvailability();
-    expect(result["test-disabled-default"]).toBe(false);
-    expect(result["test-enabled-default"]).toBe(true);
-  });
-
-  it("config override takes priority over tool enabled default", () => {
-    const disabledTool = makeTool("test-override-default");
-    disabledTool.enabled = false;
-    registerTool(disabledTool);
-
-    const result = resolveToolAvailability({
-      "test-override-default": true,
-    });
-    expect(result["test-override-default"]).toBe(true);
-  });
-
-  it("ignores non-registry config entries", () => {
-    registerTool(makeTool("test-builtin"));
-
-    const result = resolveToolAvailability({
-      "test-builtin": true,
-      mcp__server__read_file: false,
-    });
-
-    expect(result["test-builtin"]).toBe(true);
-    expect(result.mcp__server__read_file).toBeUndefined();
   });
 });

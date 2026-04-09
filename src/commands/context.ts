@@ -1,48 +1,34 @@
 import chalk from "chalk";
-import { ok } from "../tools/types";
-import { register } from "./registry";
-import type { Command } from "./types";
+import type { CommandContext, CommandDefinition } from "./registry";
 
-function formatTokens(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
+/** Width of the progress bar in characters. */
+const BAR_WIDTH = 20;
+
+/** Renders a progress bar string like [████████░░░░░░░░░░░░]. */
+function renderBar(fraction: number): string {
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const filled = Math.round(clamped * BAR_WIDTH);
+  const empty = BAR_WIDTH - filled;
+  return `[${chalk.cyan("█".repeat(filled))}${chalk.gray("░".repeat(empty))}]`;
 }
 
-const BAR_WIDTH = 30;
-const FILLED = "█";
-const EMPTY = "░";
+/** Formats token usage as a context stats string with a progress bar. */
+function formatContext(context: CommandContext): string {
+  if (!context.usage) {
+    return "No usage data yet. Send a message first.";
+  }
 
-function progressBar(percent: number): string {
-  const clamped = Math.max(0, Math.min(100, percent));
-  const filled = Math.round((clamped / 100) * BAR_WIDTH);
-  return FILLED.repeat(filled) + EMPTY.repeat(BAR_WIDTH - filled);
+  const used = context.usage.promptTokens + context.usage.completionTokens;
+  const window = context.contextWindow;
+  const percent = Math.round((used / window) * 100);
+  const bar = renderBar(used / window);
+
+  return `${bar} ${used.toLocaleString()} / ${window.toLocaleString()} tokens (${percent}%)`;
 }
 
-const context: Command = {
+/** Shows context window usage stats. */
+export const contextCommand: CommandDefinition = {
   name: "context",
-  description: "Show context window usage stats",
-  execute: (_args, callbacks) => {
-    const { tokenUsage, contextWindow, maxTokens } = callbacks;
-
-    const total = tokenUsage
-      ? tokenUsage.promptTokens + tokenUsage.completionTokens
-      : 0;
-    const percent = Math.round((total / contextWindow) * 100);
-    const inputBudget = contextWindow - maxTokens;
-
-    const lines = [
-      `  ${progressBar(percent)}  ${percent}% used`,
-      `  ${formatTokens(total)} / ${formatTokens(contextWindow)} tokens`,
-      ``,
-      `  Context window     ${formatTokens(contextWindow)} tokens`,
-      `  Response reserve   ${formatTokens(maxTokens)} tokens`,
-      `  Input budget       ${formatTokens(inputBudget)} tokens`,
-      ``,
-      chalk.dim(`  (input budget = context window - response reserve)`),
-    ];
-
-    return ok(lines.join("\n"));
-  },
+  description: "Show context usage",
+  handler: (context) => formatContext(context),
 };
-
-register(context);

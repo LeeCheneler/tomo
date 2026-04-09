@@ -1,22 +1,14 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { createElement } from "react";
 import { z } from "zod";
-import { FileAccessConfirm } from "../components/file-access-confirm";
-import { getErrorMessage } from "../errors";
-import { isGitRepo } from "../git";
-import { withFilePermission } from "../permissions";
-import { registerTool } from "./registry";
-import {
-  denied,
-  err,
-  ok,
-  parseToolArgs,
-  type ToolContext,
-  type ToolResult,
-} from "./types";
+import { isGitRepo } from "../prompt/git-context";
+import { getErrorMessage } from "../utils/error";
+import { checkFilePermission } from "./permissions";
+import type { Tool, ToolContext, ToolResult } from "./types";
+import { denied, err, ok } from "./types";
 
+/** Zod schema for grep arguments. */
 const argsSchema = z.object({
   pattern: z.string().min(1, "no search pattern provided"),
   path: z.string().optional(),
@@ -24,7 +16,62 @@ const argsSchema = z.object({
   gitignore: z.boolean().default(true),
 });
 
-registerTool({
+/** Runs grep and returns the result. */
+function runGrep(
+  pattern: string,
+  cwd: string,
+  include: string | undefined,
+  gitignore: boolean,
+  file?: string,
+): ToolResult {
+  try {
+    const useGit = gitignore && isGitRepo(cwd);
+    const execOpts = {
+      cwd,
+      encoding: "utf-8" as const,
+      stdio: ["pipe", "pipe", "pipe"] as ["pipe", "pipe", "pipe"],
+    };
+    let output: string;
+
+    if (file) {
+      output = execFileSync("grep", ["-n", "-E", pattern, file], execOpts);
+    } else if (useGit) {
+      const args = ["grep", "-n", "-I", "-E", "--untracked", pattern];
+      if (include) {
+        // Auto-prepend **/ so bare globs like *.ts match in subdirectories
+        const globInclude = include.includes("/") ? include : `**/${include}`;
+        args.push("--", `:(glob)${globInclude}`);
+      }
+      output = execFileSync("git", args, execOpts);
+    } else {
+      const args = ["-rn", "-E"];
+      if (include) {
+        args.push("--include", include);
+      }
+      args.push(pattern, ".");
+      output = execFileSync("grep", args, execOpts);
+    }
+
+    const lines = output.trimEnd();
+    if (!lines) {
+      return ok("No matches found.");
+    }
+    return ok(lines);
+  } catch (e) {
+    // grep/git grep exit with code 1 when no matches found
+    if (
+      e instanceof Error &&
+      "status" in e &&
+      (e as NodeJS.ErrnoException & { status: number }).status === 1
+    ) {
+      return ok("No matches found.");
+    }
+    return err(getErrorMessage(e));
+  }
+}
+
+/** The grep tool definition. */
+export const grepTool: Tool = {
   name: "grep",
   displayName: "Grep",
   description: `Search file contents using regex patterns. Returns matching lines in the format "file:line_number:content".
@@ -51,7 +98,7 @@ Effective search patterns:
       path: {
         type: "string",
         description:
-          "Optional directory to search in (absolute or relative to cwd). Defaults to cwd.",
+          "Optional file or directory to search in (absolute or relative to cwd). Defaults to cwd.",
       },
       include: {
         type: "string",
@@ -60,16 +107,17 @@ Effective search patterns:
       },
       gitignore: {
         type: "boolean",
-        description:
-          "Whether to respect .gitignore rules and exclude ignored files. Defaults to true. Set to false to include gitignored files.",
+        description: "Whether to respect .gitignore rules. Defaults to true.",
       },
     },
     required: ["pattern"],
   },
-  interactive: false,
-  async execute(args: string, context: ToolContext): Promise<ToolResult> {
-    const parsed = parseToolArgs(argsSchema, args);
-    const { pattern, include, gitignore } = parsed;
+  argsSchema,
+  formatCall(args: Record<string, unknown>): string {
+    return String(args.pattern ?? "");
+  },
+  async execute(args: unknown, context: ToolContext): Promise<ToolResult> {
+    const parsed = argsSchema.parse(args);
     const resolved = parsed.path ? resolve(parsed.path) : process.cwd();
     const isFile = parsed.path
       ? statSync(resolved, { throwIfNoEntry: false })?.isFile()
@@ -77,77 +125,28 @@ Effective search patterns:
     const searchDir = isFile ? dirname(resolved) : resolved;
     const searchTarget = isFile ? resolved : undefined;
 
-    return withFilePermission({
-      context,
-      permission: "read_file",
-      filePath: searchDir,
-      execute: () =>
-        runGrep(pattern, searchDir, include, gitignore, searchTarget),
-      renderConfirm: () =>
-        context.renderInteractive((onResult) =>
-          createElement(FileAccessConfirm, {
-            filePath: searchDir,
-            action: `Search file contents for "${pattern}"?`,
-            onApprove: () => onResult("approved"),
-            onDeny: () => onResult("denied"),
-          }),
-        ),
-      denyMessage: denied("The user denied this search."),
-    });
+    const permission = checkFilePermission(
+      searchDir,
+      "read",
+      context.permissions,
+    );
+
+    if (permission === "needs-confirmation") {
+      const approved = await context.confirm("Search files?", {
+        label: "Search files?",
+        detail: `"${parsed.pattern}" in ${searchDir}`,
+      });
+      if (!approved) {
+        return denied("The user denied this search.");
+      }
+    }
+
+    return runGrep(
+      parsed.pattern,
+      searchDir,
+      parsed.include,
+      parsed.gitignore,
+      searchTarget,
+    );
   },
-});
-
-function runGrep(
-  pattern: string,
-  cwd: string,
-  include: string | undefined,
-  gitignore: boolean,
-  file?: string,
-): ToolResult {
-  try {
-    const useGit = gitignore && isGitRepo(cwd);
-    let output: string;
-
-    if (file) {
-      // Search a single file directly.
-      output = execSync(
-        `grep -n -E ${JSON.stringify(pattern)} ${JSON.stringify(file)}`,
-        { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
-    } else if (useGit) {
-      // Auto-prepend **/ so bare globs like *.ts match in subdirectories
-      const globInclude = include?.includes("/") ? include : `**/${include}`;
-      const includeArgs = include
-        ? ` -- ${JSON.stringify(`:(glob)${globInclude}`)}`
-        : "";
-      output = execSync(
-        `git grep -n -I -P --untracked ${JSON.stringify(pattern)}${includeArgs}`,
-        { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
-    } else {
-      const includeArgs = include
-        ? ` --include=${JSON.stringify(include)}`
-        : "";
-      output = execSync(
-        `grep -rn -E ${JSON.stringify(pattern)}${includeArgs} .`,
-        { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
-    }
-
-    const lines = output.trimEnd();
-    if (!lines) {
-      return ok("No matches found.");
-    }
-    return ok(lines);
-  } catch (e) {
-    // grep/git grep exit with code 1 when no matches found
-    if (
-      e instanceof Error &&
-      "status" in e &&
-      (e as NodeJS.ErrnoException & { status: number }).status === 1
-    ) {
-      return ok("No matches found.");
-    }
-    return err(`${getErrorMessage(e)}`);
-  }
-}
+};

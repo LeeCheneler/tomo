@@ -1,24 +1,28 @@
-import React from "react";
 import { z } from "zod";
-import { AskSelector } from "../components/ask-selector";
-import { registerTool } from "./registry";
-import { ok, parseToolArgs, type ToolContext, type ToolResult } from "./types";
+import type { Tool, ToolContext, ToolResult } from "./types";
+import { err, ok } from "./types";
 
+/** Zod schema for ask arguments. */
 const argsSchema = z.object({
-  question: z.string().default("Please choose:"),
-  options: z.array(z.string()).default([]),
+  question: z.string().min(1, "question must not be empty"),
+  options: z.array(z.string()).optional(),
 });
 
-registerTool({
+/** The ask tool definition. */
+export const askTool: Tool = {
   name: "ask",
   displayName: "Ask",
   description: `Present the user with a question and return their response.
 
-- Use sparingly — only when you genuinely need the user to make a choice or provide input.
+Two modes:
+1. **With options** — pass an array of choices. The user picks one from the list, or presses tab to type a free-text response instead.
+2. **Without options** — omit the options array entirely. The user types a free-form answer. Use this for open-ended questions.
+
+Guidelines:
+- Use sparingly — only when you genuinely need user input to proceed.
 - Do not ask for confirmation on routine actions. Do not ask questions you can resolve by reading the codebase.
-- Provide clear, distinct options. The returned value is the exact option string the user selected.
-- A free-text input is always shown as the last option so the user can type a custom response instead of choosing a predefined option. Never include "Other", "Custom", or any free-text escape hatch in the options array — the tool provides this automatically.
-- If no options are provided, the user is shown a text-only input to type a free-form response.`,
+- When providing options, keep them clear and distinct. The returned value is the exact option string the user selected, or their typed response.
+- Do NOT include "Other" or "Custom" in the options array — a free-text input is always available automatically.`,
   parameters: {
     type: "object",
     properties: {
@@ -30,22 +34,21 @@ registerTool({
         type: "array",
         items: { type: "string" },
         description:
-          "The available choices. Omit or pass an empty array for a text-only input.",
+          "Predefined choices. Omit entirely for a free-text-only input.",
       },
     },
     required: ["question"],
   },
-  async execute(args: string, context: ToolContext): Promise<ToolResult> {
-    const { question, options } = parseToolArgs(argsSchema, args);
-
-    const answer = await context.renderInteractive((onResult, onCancel) =>
-      React.createElement(AskSelector, {
-        question,
-        options,
-        onSelect: onResult,
-        onCancel,
-      }),
-    );
+  argsSchema,
+  formatCall(args: Record<string, unknown>): string {
+    return String(args.question ?? "");
+  },
+  async execute(args: unknown, context: ToolContext): Promise<ToolResult> {
+    const parsed = argsSchema.parse(args);
+    const answer = await context.ask(parsed.question, parsed.options);
+    if (answer === null) {
+      return err("The user dismissed this question.");
+    }
     return ok(answer);
   },
-});
+};

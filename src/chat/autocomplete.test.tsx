@@ -1,0 +1,272 @@
+import { describe, expect, it } from "vitest";
+import { renderInk } from "../test-utils/ink";
+import { flushInkFrames } from "../test-utils/ink";
+import {
+  AutocompleteList,
+  filterAutocompleteItems,
+  getAutocompleteMode,
+  useAutocompleteNavigation,
+} from "./autocomplete";
+import type { AutocompleteItem, AutocompleteNavigation } from "./autocomplete";
+import { Text } from "ink";
+
+/** Test items covering more than MAX_VISIBLE (5). */
+const items: AutocompleteItem[] = [
+  { key: "ping", name: "ping", description: "Responds with pong" },
+  { key: "settings", name: "settings", description: "Edit settings" },
+  { key: "help", name: "help", description: "Show help" },
+  { key: "history", name: "history", description: "Show history" },
+  { key: "clear", name: "clear", description: "Clear chat" },
+  { key: "context", name: "context", description: "Show context" },
+];
+
+describe("filterAutocompleteItems", () => {
+  it("returns all items sorted alphabetically for empty filter", () => {
+    const result = filterAutocompleteItems(items, "");
+    expect(result.map((i) => i.name)).toEqual([
+      "clear",
+      "context",
+      "help",
+      "history",
+      "ping",
+      "settings",
+    ]);
+  });
+
+  it("filters using includes matching", () => {
+    const result = filterAutocompleteItems(items, "set");
+    expect(result.map((i) => i.name)).toEqual(["settings"]);
+  });
+
+  it("matches anywhere in the command name", () => {
+    const result = filterAutocompleteItems(items, "ing");
+    expect(result.map((i) => i.name)).toEqual(["ping", "settings"]);
+  });
+
+  it("is case insensitive", () => {
+    const result = filterAutocompleteItems(items, "PING");
+    expect(result.map((i) => i.name)).toEqual(["ping"]);
+  });
+
+  it("returns empty array when no items match", () => {
+    expect(filterAutocompleteItems(items, "zzz")).toEqual([]);
+  });
+});
+
+describe("useAutocompleteNavigation", () => {
+  /** Captures the hook return value for assertion. */
+  let nav: AutocompleteNavigation;
+  function Harness(props: {
+    items: readonly AutocompleteItem[];
+    filter: string;
+    isActive: boolean;
+  }) {
+    nav = useAutocompleteNavigation(props.items, props.filter, props.isActive);
+    return <Text>{nav.filtered.map((i) => i.name).join(",")}</Text>;
+  }
+
+  it("starts with selectedIndex 0 and windowStart 0", () => {
+    renderInk(<Harness items={items} filter="" isActive={true} />);
+    expect(nav.selectedIndex).toBe(0);
+    expect(nav.windowStart).toBe(0);
+  });
+
+  it("moveDown advances selection and loops", async () => {
+    renderInk(<Harness items={items} filter="" isActive={true} />);
+    // 6 items. Down 6 times should loop back to 0.
+    for (let i = 0; i < 6; i++) {
+      nav.moveDown();
+    }
+    await flushInkFrames();
+    expect(nav.selectedIndex).toBe(0);
+  });
+
+  it("moveUp loops from first to last", async () => {
+    renderInk(<Harness items={items} filter="" isActive={true} />);
+    nav.moveUp();
+    await flushInkFrames();
+    expect(nav.selectedIndex).toBe(5);
+  });
+
+  it("slides window when selection hits bottom edge", async () => {
+    renderInk(<Harness items={items} filter="" isActive={true} />);
+    // Move down 5 times: index 5, window should slide.
+    for (let i = 0; i < 5; i++) {
+      nav.moveDown();
+    }
+    await flushInkFrames();
+    expect(nav.selectedIndex).toBe(5);
+    expect(nav.windowStart).toBe(1);
+  });
+
+  it("slides window back to start when navigating up past it", async () => {
+    renderInk(<Harness items={items} filter="" isActive={true} />);
+    // Go to index 5 (window=1), then navigate back to index 0.
+    for (let i = 0; i < 5; i++) {
+      nav.moveDown();
+    }
+    await flushInkFrames();
+    expect(nav.windowStart).toBe(1);
+    // Navigate back up to index 0.
+    for (let i = 0; i < 5; i++) {
+      nav.moveUp();
+    }
+    await flushInkFrames();
+    expect(nav.selectedIndex).toBe(0);
+    expect(nav.windowStart).toBe(0);
+  });
+
+  it("select returns the currently selected item", () => {
+    renderInk(<Harness items={items} filter="" isActive={true} />);
+    const selected = nav.select();
+    // First alphabetically is clear.
+    expect(selected?.name).toBe("clear");
+  });
+
+  it("reset sets selectedIndex and windowStart to 0", async () => {
+    renderInk(<Harness items={items} filter="" isActive={true} />);
+    nav.moveDown();
+    nav.moveDown();
+    await flushInkFrames();
+    nav.reset();
+    await flushInkFrames();
+    expect(nav.selectedIndex).toBe(0);
+    expect(nav.windowStart).toBe(0);
+  });
+
+  it("does nothing on moveUp/moveDown when filtered is empty", async () => {
+    renderInk(<Harness items={items} filter="zzz" isActive={true} />);
+    nav.moveDown();
+    nav.moveUp();
+    await flushInkFrames();
+    expect(nav.selectedIndex).toBe(0);
+  });
+});
+
+describe("AutocompleteList", () => {
+  /** Creates a navigation object for rendering tests. */
+  let nav: AutocompleteNavigation;
+  function HarnessWithList(props: {
+    items: readonly AutocompleteItem[];
+    filter: string;
+  }) {
+    nav = useAutocompleteNavigation(props.items, props.filter, true);
+    return <AutocompleteList autocomplete={nav} />;
+  }
+
+  it("renders nothing when no items match", () => {
+    const { lastFrame } = renderInk(
+      <HarnessWithList items={items} filter="zzz" />,
+    );
+    expect(lastFrame()).toBe("");
+  });
+
+  it("shows up to 5 items", () => {
+    const { lastFrame } = renderInk(
+      <HarnessWithList items={items} filter="" />,
+    );
+    const frame = lastFrame() ?? "";
+    // 5 visible items, each on its own line with a name from the items array.
+    const lines = frame.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(5);
+  });
+
+  it("shows command descriptions", () => {
+    const { lastFrame } = renderInk(
+      <HarnessWithList items={items} filter="ping" />,
+    );
+    expect(lastFrame()).toContain("Responds with pong");
+  });
+
+  it("highlights the selected item", async () => {
+    const { lastFrame } = renderInk(
+      <HarnessWithList items={items} filter="" />,
+    );
+    nav.moveDown();
+    await flushInkFrames();
+    const frame = lastFrame() ?? "";
+    // Both clear and context should be visible.
+    expect(frame).toContain("clear");
+    expect(frame).toContain("context");
+  });
+
+  it("slides window to keep selected item visible", async () => {
+    const { lastFrame } = renderInk(
+      <HarnessWithList items={items} filter="" />,
+    );
+    // Move to index 5 (settings).
+    for (let i = 0; i < 5; i++) {
+      nav.moveDown();
+    }
+    await flushInkFrames();
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("settings");
+    expect(frame).not.toContain("clear");
+  });
+
+  it("renders tag when present", () => {
+    const taggedItems: AutocompleteItem[] = [
+      {
+        key: "review:local",
+        name: "review",
+        description: "Review code",
+        tag: "(local)",
+      },
+    ];
+    const { lastFrame } = renderInk(
+      <HarnessWithList items={taggedItems} filter="" />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("(local)");
+    expect(frame).toContain("Review code");
+  });
+});
+
+describe("getAutocompleteMode", () => {
+  const commandItems: AutocompleteItem[] = [
+    { key: "ping", name: "ping", description: "Responds with pong" },
+  ];
+  const skillItems: AutocompleteItem[] = [
+    { key: "review", name: "review", description: "Review code" },
+  ];
+
+  it("returns command for / prefix", () => {
+    expect(getAutocompleteMode("/", commandItems, [])).toBe("command");
+  });
+
+  it("returns command for /p prefix", () => {
+    expect(getAutocompleteMode("/p", commandItems, [])).toBe("command");
+  });
+
+  it("returns skill for // prefix", () => {
+    expect(getAutocompleteMode("//", [], skillItems)).toBe("skill");
+  });
+
+  it("returns skill for //r prefix", () => {
+    expect(getAutocompleteMode("//r", [], skillItems)).toBe("skill");
+  });
+
+  it("returns none when input has a space", () => {
+    expect(getAutocompleteMode("/ping ", commandItems, [])).toBe("none");
+  });
+
+  it("returns none for regular text", () => {
+    expect(getAutocompleteMode("hello", commandItems, skillItems)).toBe("none");
+  });
+
+  it("returns none for empty input", () => {
+    expect(getAutocompleteMode("", commandItems, skillItems)).toBe("none");
+  });
+
+  it("returns none for / when no command items exist", () => {
+    expect(getAutocompleteMode("/", [], skillItems)).toBe("none");
+  });
+
+  it("returns none for // when no skill items exist", () => {
+    expect(getAutocompleteMode("//", commandItems, [])).toBe("none");
+  });
+
+  it("returns skill over command for // when both exist", () => {
+    expect(getAutocompleteMode("//", commandItems, skillItems)).toBe("skill");
+  });
+});

@@ -1,200 +1,308 @@
-import { describe, expect, it, vi } from "vitest";
-import { getTool } from "./registry";
-import type { ToolContext } from "./types";
+import { type ChildProcess, spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockToolContext } from "../test-utils/stub-context";
+import { runCommandTool } from "./run-command";
 
-// Import to trigger registration
-import "./run-command";
+vi.mock("node:child_process", () => ({
+  spawn: vi.fn(),
+}));
 
-vi.mock("../config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config")>();
-  return {
-    ...actual,
-    addAllowedCommand: vi.fn(),
-  };
-});
+const mockedSpawn = vi.mocked(spawn);
 
-function makeContext(overrides?: Partial<ToolContext>): ToolContext {
-  return {
-    renderInteractive: vi.fn().mockResolvedValue("approved"),
-    reportProgress: vi.fn(),
-    permissions: {},
-    signal: new AbortController().signal,
-    depth: 0,
-    providerConfig: {
-      baseUrl: "http://localhost",
-      model: "test-model",
-      apiKey: undefined,
-      maxTokens: 1024,
-      contextWindow: 8192,
-    },
-    allowedCommands: [],
-    ...overrides,
-  };
+/**
+ * Creates a mock child process that emits the given stdout/stderr then closes.
+ * When `hang` is true, the process does not close on its own — it only emits
+ * close (with code null) when kill() is called, simulating a timeout scenario.
+ */
+function createMockProcess(opts: {
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  errorEvent?: Error;
+  hang?: boolean;
+}): ChildProcess {
+  const stdoutStream = new EventEmitter();
+  const stderrStream = new EventEmitter();
+  const proc = Object.assign(new EventEmitter(), {
+    stdout: stdoutStream,
+    stderr: stderrStream,
+    stdin: null,
+    stdio: [null, stdoutStream, stderrStream, null, null],
+    pid: 1234,
+    kill: vi.fn(() => true),
+    connected: false,
+    exitCode: null,
+    signalCode: null,
+    spawnargs: [],
+    spawnfile: "",
+  });
+
+  if (opts.hang) {
+    // Emit output but don't close — close only when killed
+    proc.kill = vi.fn(() => {
+      proc.emit("close", null);
+      return true;
+    });
+    setImmediate(() => {
+      if (opts.stdout) stdoutStream.emit("data", Buffer.from(opts.stdout));
+      if (opts.stderr) stderrStream.emit("data", Buffer.from(opts.stderr));
+    });
+  } else {
+    // Normal: emit output then close
+    setImmediate(() => {
+      if (opts.errorEvent) {
+        proc.emit("error", opts.errorEvent);
+        return;
+      }
+      if (opts.stdout) stdoutStream.emit("data", Buffer.from(opts.stdout));
+      if (opts.stderr) stderrStream.emit("data", Buffer.from(opts.stderr));
+      proc.emit("close", opts.exitCode ?? 0);
+    });
+  }
+
+  // The EventEmitter + Object.assign satisfies ChildProcess for spawn mock purposes
+  return proc satisfies EventEmitter as unknown as ChildProcess;
 }
 
-describe("run_command tool", () => {
-  it("is registered in the tool registry", () => {
-    const tool = getTool("run_command");
-    expect(tool).toBeDefined();
-    expect(tool?.name).toBe("run_command");
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("runCommandTool", () => {
+  it("has correct name and parameters", () => {
+    expect(runCommandTool.name).toBe("run_command");
+    expect(runCommandTool.parameters).toHaveProperty("properties");
+    expect(runCommandTool.parameters).toHaveProperty("required");
   });
 
-  it("has correct parameter schema", () => {
-    const tool = getTool("run_command");
-    expect(tool?.parameters).toEqual({
-      type: "object",
-      properties: {
-        command: {
-          type: "string",
-          description: "The shell command to execute",
+  describe("formatCall", () => {
+    it("returns the command argument", () => {
+      expect(runCommandTool.formatCall({ command: "git status" })).toBe(
+        "git status",
+      );
+    });
+
+    it("returns empty string when command is missing", () => {
+      expect(runCommandTool.formatCall({})).toBe("");
+    });
+  });
+
+  describe("execute", () => {
+    it("runs a simple command and returns stdout", async () => {
+      mockedSpawn.mockReturnValue(
+        createMockProcess({ stdout: "hello\n", exitCode: 0 }),
+      );
+
+      const result = await runCommandTool.execute(
+        { command: "echo hello" },
+        mockToolContext({ allowedCommands: ["echo:*"] }),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("Exit code: 0");
+      expect(result.output).toContain("stdout:\nhello\n");
+      expect(mockedSpawn).toHaveBeenCalledWith(
+        "/bin/sh",
+        ["-c", "echo hello"],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
         },
-      },
-      required: ["command"],
-    });
-  });
-
-  it("throws when no command provided", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext();
-
-    await expect(
-      tool?.execute(JSON.stringify({ command: "" }), context),
-    ).rejects.toThrow("no command provided");
-    expect(context.renderInteractive).not.toHaveBeenCalled();
-  });
-});
-
-describe("approval flow", () => {
-  it("auto-approves exact match in allowedCommands", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      allowedCommands: ["echo hello"],
+      );
     });
 
-    const result = await tool?.execute(
-      JSON.stringify({ command: "echo hello" }),
-      context,
-    );
+    it("returns error status for non-zero exit code", async () => {
+      mockedSpawn.mockReturnValue(
+        createMockProcess({ stderr: "not found\n", exitCode: 1 }),
+      );
 
-    expect(context.renderInteractive).not.toHaveBeenCalled();
-    expect(result?.output).toContain("echo hello");
-    expect(result?.output).toContain("Exit code: 0");
-  });
+      const result = await runCommandTool.execute(
+        { command: "false" },
+        mockToolContext({ allowedCommands: ["false"] }),
+      );
 
-  it("auto-approves prefix match (word:*)", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      allowedCommands: ["echo:*"],
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("Exit code: 1");
+      expect(result.output).toContain("stderr:\nnot found\n");
     });
 
-    const result = await tool?.execute(
-      JSON.stringify({ command: "echo hello" }),
-      context,
-    );
+    it("includes both stdout and stderr when present", async () => {
+      mockedSpawn.mockReturnValue(
+        createMockProcess({
+          stdout: "output\n",
+          stderr: "warning\n",
+          exitCode: 0,
+        }),
+      );
 
-    expect(context.renderInteractive).not.toHaveBeenCalled();
-    expect(result?.output).toContain("echo hello");
-  });
+      const result = await runCommandTool.execute(
+        { command: "cmd" },
+        mockToolContext({ allowedCommands: ["cmd"] }),
+      );
 
-  it("skips prefix match for compound commands", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      allowedCommands: ["echo:*"],
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("stdout:\noutput\n");
+      expect(result.output).toContain("stderr:\nwarning\n");
     });
 
-    await tool?.execute(
-      JSON.stringify({ command: "echo a && echo b" }),
-      context,
-    );
+    it("handles spawn errors", async () => {
+      mockedSpawn.mockReturnValue(
+        createMockProcess({ errorEvent: new Error("spawn failed") }),
+      );
 
-    expect(context.renderInteractive).toHaveBeenCalled();
-  });
+      const result = await runCommandTool.execute(
+        { command: "bogus" },
+        mockToolContext({ allowedCommands: ["bogus"] }),
+      );
 
-  it("exact match still works for compound commands", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      allowedCommands: ["echo a && echo b"],
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("Exit code: unknown");
+      expect(result.output).toContain("stderr:\nspawn failed");
     });
 
-    const result = await tool?.execute(
-      JSON.stringify({ command: "echo a && echo b" }),
-      context,
-    );
+    it("reports timeout when command exceeds the timeout", async () => {
+      vi.useFakeTimers();
+      mockedSpawn.mockReturnValue(
+        createMockProcess({ stdout: "partial\n", hang: true }),
+      );
 
-    expect(context.renderInteractive).not.toHaveBeenCalled();
-    expect(result?.output).toContain("echo a && echo b");
-  });
+      const promise = runCommandTool.execute(
+        { command: "sleep 999", timeout: 5 },
+        mockToolContext({ allowedCommands: ["sleep:*"] }),
+      );
 
-  it("prompts when no match", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext();
+      // Flush setImmediate so stdout is emitted, then advance past the timeout
+      await vi.advanceTimersByTimeAsync(5000);
 
-    await tool?.execute(JSON.stringify({ command: "echo hello" }), context);
+      const result = await promise;
 
-    expect(context.renderInteractive).toHaveBeenCalled();
-  });
-
-  it("returns denial message when user denies", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      renderInteractive: vi.fn().mockResolvedValue("denied"),
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("Command timed out after 5s");
+      expect(result.output).toContain("Exit code: unknown");
+      expect(result.output).toContain("stdout:\npartial\n");
+      vi.useRealTimers();
     });
 
-    const result = await tool?.execute(
-      JSON.stringify({ command: "echo hello" }),
-      context,
-    );
+    it("kills the process when the abort signal fires", async () => {
+      const proc = createMockProcess({ hang: true });
+      mockedSpawn.mockReturnValue(proc);
+      const controller = new AbortController();
 
-    expect(result?.output).toBe("The user denied this command.");
-  });
+      const promise = runCommandTool.execute(
+        { command: "sleep 999" },
+        mockToolContext({
+          allowedCommands: ["sleep:*"],
+          signal: controller.signal,
+        }),
+      );
 
-  it("persists command on approve always", async () => {
-    const { addAllowedCommand } = await import("../config");
-    const tool = getTool("run_command");
-    const context = makeContext({
-      renderInteractive: vi.fn().mockResolvedValue("approved_always"),
+      // Let setImmediate flush, then abort
+      await new Promise((r) => setImmediate(r));
+      controller.abort();
+
+      const result = await promise;
+      expect(result.output).toContain("Exit code: unknown");
     });
 
-    const result = await tool?.execute(
-      JSON.stringify({ command: "echo hello" }),
-      context,
-    );
+    it("calls onProgress with combined output", async () => {
+      mockedSpawn.mockReturnValue(
+        createMockProcess({ stdout: "line1\n", exitCode: 0 }),
+      );
+      const onProgress = vi.fn();
 
-    expect(addAllowedCommand).toHaveBeenCalledWith("echo hello");
-    expect(result?.output).toContain("echo hello");
-    expect(result?.output).toContain("Exit code: 0");
-  });
-});
+      await runCommandTool.execute(
+        { command: "cmd" },
+        mockToolContext({ allowedCommands: ["cmd"], onProgress }),
+      );
 
-describe("command execution", () => {
-  it("streams output via reportProgress", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      allowedCommands: ["echo hello"],
+      expect(onProgress).toHaveBeenCalledWith("line1\n");
     });
 
-    await tool?.execute(JSON.stringify({ command: "echo hello" }), context);
+    describe("permissions", () => {
+      it("auto-approves commands in the allowed list", async () => {
+        mockedSpawn.mockReturnValue(
+          createMockProcess({ stdout: "ok\n", exitCode: 0 }),
+        );
+        const confirm = vi.fn();
 
-    const rp = context.reportProgress as ReturnType<typeof vi.fn>;
-    expect(rp).toHaveBeenCalled();
-    const lastCall = rp.mock.calls[rp.mock.calls.length - 1];
-    expect(lastCall[0]).toBe("");
-  });
+        await runCommandTool.execute(
+          { command: "npm test" },
+          mockToolContext({ allowedCommands: ["npm test"], confirm }),
+        );
 
-  it("captures stderr and non-zero exit codes", async () => {
-    const tool = getTool("run_command");
-    const context = makeContext({
-      renderInteractive: vi.fn().mockResolvedValue("approved"),
+        expect(confirm).not.toHaveBeenCalled();
+      });
+
+      it("auto-approves commands matching a prefix pattern", async () => {
+        mockedSpawn.mockReturnValue(
+          createMockProcess({ stdout: "ok\n", exitCode: 0 }),
+        );
+        const confirm = vi.fn();
+
+        await runCommandTool.execute(
+          { command: "git diff --staged" },
+          mockToolContext({ allowedCommands: ["git:*"], confirm }),
+        );
+
+        expect(confirm).not.toHaveBeenCalled();
+      });
+
+      it("prompts for commands not in the allowed list", async () => {
+        mockedSpawn.mockReturnValue(
+          createMockProcess({ stdout: "ok\n", exitCode: 0 }),
+        );
+        const confirm = vi.fn(async () => true);
+
+        await runCommandTool.execute(
+          { command: "rm -rf /" },
+          mockToolContext({ allowedCommands: ["git:*"], confirm }),
+        );
+
+        expect(confirm).toHaveBeenCalledWith("Run command?", {
+          label: "Run command?",
+          detail: "rm -rf /",
+        });
+      });
+
+      it("returns denied when user rejects", async () => {
+        const confirm = vi.fn(async () => false);
+
+        const result = await runCommandTool.execute(
+          { command: "rm -rf /" },
+          mockToolContext({ confirm }),
+        );
+
+        expect(result.status).toBe("denied");
+        expect(mockedSpawn).not.toHaveBeenCalled();
+      });
+
+      it("always prompts for compound commands even if base is allowed", async () => {
+        mockedSpawn.mockReturnValue(
+          createMockProcess({ stdout: "ok\n", exitCode: 0 }),
+        );
+        const confirm = vi.fn(async () => true);
+
+        await runCommandTool.execute(
+          { command: "git add . && git commit" },
+          mockToolContext({ allowedCommands: ["git:*"], confirm }),
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+      });
+
+      it("always prompts for piped commands even if base is allowed", async () => {
+        mockedSpawn.mockReturnValue(
+          createMockProcess({ stdout: "ok\n", exitCode: 0 }),
+        );
+        const confirm = vi.fn(async () => true);
+
+        await runCommandTool.execute(
+          { command: "git log | head -5" },
+          mockToolContext({ allowedCommands: ["git:*"], confirm }),
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+      });
     });
-
-    const result = await tool?.execute(
-      JSON.stringify({ command: "echo err >&2 && exit 1" }),
-      context,
-    );
-
-    expect(result?.output).toContain("Exit code: 1");
-    expect(result?.output).toContain("stderr:");
-    expect(result?.output).toContain("err");
-    expect(result?.status).toBe("error");
   });
 });

@@ -1,127 +1,117 @@
 import { spawn } from "node:child_process";
-import { createElement } from "react";
 import { z } from "zod";
-import { isCommandAllowed, isCompoundCommand } from "../command-safety";
-import { CommandConfirm } from "../components/command-confirm";
-import { addAllowedCommand } from "../config";
-import { registerTool } from "./registry";
-import {
-  denied,
-  err,
-  ok,
-  parseToolArgs,
-  type ToolContext,
-  type ToolResult,
-} from "./types";
+import { isCommandAllowed, isCompoundCommand } from "./command-safety";
+import type { Tool, ToolContext, ToolResult } from "./types";
+import { denied, err, ok } from "./types";
 
+/** Default command timeout in seconds. */
+const DEFAULT_TIMEOUT_SECONDS = 30;
+
+/** Zod schema for run_command arguments. */
 const argsSchema = z.object({
   command: z.string().min(1, "no command provided"),
+  timeout: z.number().positive().default(DEFAULT_TIMEOUT_SECONDS),
 });
 
-const DEFAULT_TIMEOUT_MS = 30_000;
-
-interface SpawnResult {
-  exitCode: number;
+/** Result of a spawned process. */
+interface RunResult {
+  exitCode: number | null;
   stdout: string;
   stderr: string;
   timedOut: boolean;
 }
 
-/** Runs a command via spawn, streaming output through onData as it arrives. */
+/** Spawns a shell command and collects its output. */
 function spawnCommand(
   command: string,
-  timeout: number,
-  onData: (accumulated: string) => void,
-): Promise<SpawnResult> {
+  timeoutMs: number,
+  signal: AbortSignal,
+  onProgress?: (output: string) => void,
+): Promise<RunResult> {
   return new Promise((resolve) => {
-    const child = spawn(command, { shell: "/bin/sh", stdio: "pipe" });
+    const proc = spawn("/bin/sh", ["-c", command], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
 
     let stdout = "";
     let stderr = "";
+    let combined = "";
     let timedOut = false;
+
+    const onAbort = () => proc.kill("SIGTERM");
+    signal.addEventListener("abort", onAbort, { once: true });
+
+    proc.stdout.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      stdout += text;
+      combined += text;
+      onProgress?.(combined);
+    });
+
+    proc.stderr.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      stderr += text;
+      combined += text;
+      onProgress?.(combined);
+    });
 
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-    }, timeout);
+      proc.kill("SIGTERM");
+    }, timeoutMs);
 
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-      onData(stdout);
-    });
-
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-
-    child.on("close", (code) => {
+    proc.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ exitCode: code ?? 1, stdout, stderr, timedOut });
+      signal.removeEventListener("abort", onAbort);
+      resolve({ exitCode: code, stdout, stderr, timedOut });
     });
 
-    child.on("error", (err) => {
+    proc.on("error", (error) => {
       clearTimeout(timer);
-      resolve({ exitCode: 1, stdout: "", stderr: err.message, timedOut });
+      signal.removeEventListener("abort", onAbort);
+      resolve({
+        exitCode: null,
+        stdout,
+        stderr: error.message,
+        timedOut: false,
+      });
     });
   });
 }
 
-async function runAndReport(
-  command: string,
-  context: ToolContext,
-): Promise<ToolResult> {
-  const result = await spawnCommand(command, DEFAULT_TIMEOUT_MS, (output) => {
-    context.reportProgress(`$ ${command}\n${output}`);
-  });
-
-  context.reportProgress("");
+/** Formats the process result into a string for the LLM. */
+function formatResult(result: RunResult, timeoutSeconds: number): string {
+  const parts: string[] = [];
 
   if (result.timedOut) {
-    return err(
-      `$ ${command}\nCommand timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`,
-    );
+    parts.push(`Command timed out after ${timeoutSeconds}s`);
   }
 
-  return formatResult(command, result.exitCode, result.stdout, result.stderr);
+  parts.push(`Exit code: ${result.exitCode ?? "unknown"}`);
+
+  if (result.stdout) {
+    parts.push(`stdout:\n${result.stdout}`);
+  }
+
+  if (result.stderr) {
+    parts.push(`stderr:\n${result.stderr}`);
+  }
+
+  return parts.join("\n\n");
 }
 
-async function promptAndRun(
-  command: string,
-  context: ToolContext,
-): Promise<ToolResult> {
-  const result = await context.renderInteractive((onResult, _onCancel) =>
-    createElement(CommandConfirm, {
-      command,
-      onApprove: () => onResult("approved"),
-      onApproveAlways: () => onResult("approved_always"),
-      onDeny: () => onResult("denied"),
-    }),
-  );
-
-  if (result === "denied") {
-    return denied("The user denied this command.");
-  }
-
-  if (result === "approved_always") {
-    addAllowedCommand(command);
-  }
-
-  return runAndReport(command, context);
-}
-
-registerTool({
+/** The run_command tool definition. */
+export const runCommandTool: Tool = {
   name: "run_command",
   displayName: "Run Command",
-  description: `Execute a shell command via /bin/sh. Returns the exit code, stdout, and stderr.
+  description: `Run a shell command and return its output.
 
-- Commands time out after ${DEFAULT_TIMEOUT_MS / 1000} seconds.
-- Do NOT use this for tasks that have dedicated tools:
-  - Reading files → use read_file
-  - Writing/editing files → use write_file or edit_file
-  - Searching file names → use glob
-  - Searching file contents → use grep
-- Use this for: running tests, builds, linters, git commands, package managers, and other CLI operations.
-- Commands may require user approval depending on the configured allow list.`,
+- Commands run in /bin/sh in the current working directory.
+- Use this for build commands, test runners, git operations, and general shell tasks.
+- Do NOT use this for reading files (use read_file), searching files (use grep/glob), or writing files (use write_file/edit_file).
+- Commands that match the user's allowed-commands list run without confirmation. All other commands require explicit approval.
+- Compound commands (using &&, ||, ;, |, redirections) always require confirmation regardless of the allowed list.
+- The timeout parameter is in seconds (default ${DEFAULT_TIMEOUT_SECONDS}s). Increase it for long-running commands like builds or test suites.`,
   parameters: {
     type: "object",
     properties: {
@@ -129,42 +119,45 @@ registerTool({
         type: "string",
         description: "The shell command to execute",
       },
+      timeout: {
+        type: "number",
+        description: `Timeout in seconds (default ${DEFAULT_TIMEOUT_SECONDS}). Increase for slow commands.`,
+      },
     },
     required: ["command"],
   },
-  async execute(args: string, context: ToolContext): Promise<ToolResult> {
-    const { command } = parseToolArgs(argsSchema, args);
+  argsSchema,
+  formatCall(args: Record<string, unknown>): string {
+    return String(args.command ?? "");
+  },
+  async execute(args: unknown, context: ToolContext): Promise<ToolResult> {
+    const parsed = argsSchema.parse(args);
+    const command = parsed.command;
+    const timeoutSeconds = parsed.timeout;
 
-    // 1. Exact match — auto-approve
-    // 2. Compound — skip prefix matching, prompt
-    // 3. Prefix match (word:*) — auto-approve
-    const compound = isCompoundCommand(command);
-    if (
-      isCommandAllowed(command, context.allowedCommands, {
-        skipPrefix: compound,
-      })
-    ) {
-      return runAndReport(command, context);
+    // Compound commands always require confirmation
+    const needsConfirmation =
+      isCompoundCommand(command) ||
+      !isCommandAllowed(command, context.allowedCommands);
+
+    if (needsConfirmation) {
+      const approved = await context.confirm("Run command?", {
+        label: "Run command?",
+        detail: command,
+      });
+      if (!approved) {
+        return denied("The user denied this command.");
+      }
     }
 
-    // 4. Prompt for everything else
-    return promptAndRun(command, context);
-  },
-});
+    const result = await spawnCommand(
+      command,
+      timeoutSeconds * 1000,
+      context.signal,
+      context.onProgress,
+    );
 
-function formatResult(
-  command: string,
-  exitCode: number,
-  stdout: string,
-  stderr: string,
-): ToolResult {
-  const parts = [`$ ${command}`, `Exit code: ${exitCode}`];
-  if (stdout.trim()) {
-    parts.push(`\nstdout:\n${stdout.trim()}`);
-  }
-  if (stderr.trim()) {
-    parts.push(`\nstderr:\n${stderr.trim()}`);
-  }
-  const output = parts.join("\n");
-  return exitCode === 0 ? ok(output) : err(output);
-}
+    const output = formatResult(result, timeoutSeconds);
+    return result.exitCode === 0 ? ok(output) : err(output);
+  },
+};

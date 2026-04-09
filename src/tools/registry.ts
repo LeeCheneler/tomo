@@ -1,51 +1,46 @@
 import type { ToolDefinition } from "../provider/client";
 import type { Tool } from "./types";
-import { toToolDefinition } from "./types";
 
-const tools = new Map<string, Tool>();
-
-/** Adds a tool to the registry. */
-export function registerTool(tool: Tool): void {
-  tools.set(tool.name, tool);
+/** Registry for managing available tools. */
+export interface ToolRegistry {
+  /** Registers a tool. Overwrites if the name already exists. */
+  register: (tool: Tool) => void;
+  /** Removes a tool by name. No-op if the tool isn't registered. */
+  unregister: (name: string) => void;
+  /** Returns a tool by name, or undefined if not found. */
+  get: (name: string) => Tool | undefined;
+  /** Returns all registered tools. */
+  list: () => readonly Tool[];
+  /** Returns OpenAI-compatible tool definitions for the LLM API. */
+  getDefinitions: () => ToolDefinition[];
 }
 
-/** Returns a registered tool by name, or undefined if not found. */
-export function getTool(name: string): Tool | undefined {
-  return tools.get(name);
-}
+/** Creates a new tool registry. */
+export function createToolRegistry(): ToolRegistry {
+  const tools = new Map<string, Tool>();
 
-/** Returns all registered tools. */
-export function getAllTools(): Tool[] {
-  return [...tools.values()];
-}
-
-/** Returns the display name for a tool, falling back to the raw name. */
-export function getToolDisplayName(name: string): string {
-  return tools.get(name)?.displayName ?? name;
-}
-
-/**
- * Resolves which tools are enabled. Config overrides take priority,
- * then the tool's own `enabled` default, then true.
- * Returns a map of tool name → boolean.
- */
-export function resolveToolAvailability(
-  config?: Record<string, boolean>,
-): Record<string, boolean> {
-  const result: Record<string, boolean> = {};
-  for (const tool of getAllTools()) {
-    result[tool.name] = config?.[tool.name] ?? tool.enabled ?? true;
-  }
-  return result;
-}
-
-/** Returns enabled tools as OpenAI tool definitions for the API request. */
-export function getToolDefinitions(
-  availability?: Record<string, boolean>,
-): ToolDefinition[] {
-  const all = getAllTools();
-  if (!availability) return all.map(toToolDefinition);
-  return all
-    .filter((t) => availability[t.name] !== false)
-    .map(toToolDefinition);
+  return {
+    register(tool: Tool) {
+      tools.set(tool.name, tool);
+    },
+    unregister(name: string) {
+      tools.delete(name);
+    },
+    get(name: string) {
+      return tools.get(name);
+    },
+    list() {
+      return [...tools.values()];
+    },
+    getDefinitions() {
+      return [...tools.values()].map((tool) => ({
+        type: "function" as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+      }));
+    },
+  };
 }

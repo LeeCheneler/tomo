@@ -1,142 +1,93 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { Tool } from "./types";
-import { parseToolArgs, toToolDefinition } from "./types";
+import { denied, err, ok, okDiff, parseToolArgs } from "./types";
 
-describe("parseToolArgs", () => {
-  const schema = z.object({
-    path: z.string().min(1, "path is required"),
-    count: z.number().int().positive().optional(),
-  });
-
-  it("parses valid JSON matching the schema", () => {
-    const result = parseToolArgs(schema, '{"path": "/tmp/test.txt"}');
-    expect(result).toEqual({ path: "/tmp/test.txt" });
-  });
-
-  it("parses with optional fields present", () => {
-    const result = parseToolArgs(
-      schema,
-      '{"path": "/tmp/test.txt", "count": 5}',
-    );
-    expect(result).toEqual({ path: "/tmp/test.txt", count: 5 });
-  });
-
-  it("throws on invalid JSON", () => {
-    expect(() => parseToolArgs(schema, "not json")).toThrow(SyntaxError);
-  });
-
-  it("throws on empty string JSON", () => {
-    expect(() => parseToolArgs(schema, "")).toThrow();
-  });
-
-  it("throws with message for missing required field", () => {
-    expect(() => parseToolArgs(schema, "{}")).toThrow();
-  });
-
-  it("throws with message for wrong type", () => {
-    expect(() => parseToolArgs(schema, '{"path": 123}')).toThrow();
-  });
-
-  it("joins multiple validation errors with semicolons", () => {
-    const strictSchema = z.object({
-      a: z.string(),
-      b: z.number(),
+describe("ok", () => {
+  it("creates a result with ok status and plain format", () => {
+    const result = ok("success");
+    expect(result).toEqual({
+      output: "success",
+      status: "ok",
+      format: "plain",
     });
-    try {
-      parseToolArgs(strictSchema, '{"a": 1, "b": "x"}');
-      expect.unreachable();
-    } catch (err) {
-      expect(err).toBeInstanceOf(Error);
-      expect((err as Error).message).toContain("; ");
-    }
-  });
-
-  it("throws for negative count when positive is required", () => {
-    expect(() => parseToolArgs(schema, '{"path": "x", "count": -1}')).toThrow();
   });
 });
 
-describe("toToolDefinition", () => {
-  it("maps tool properties to OpenAI format", () => {
-    const tool: Tool = {
-      name: "read_file",
-      description: "Read a file",
-      parameters: {
-        type: "object",
-        properties: {
-          path: { type: "string" },
-        },
-        required: ["path"],
-      },
-      execute: vi.fn(),
-    };
-
-    const def = toToolDefinition(tool);
-
-    expect(def).toEqual({
-      type: "function",
-      function: {
-        name: "read_file",
-        description: "Read a file",
-        parameters: {
-          type: "object",
-          properties: {
-            path: { type: "string" },
-          },
-          required: ["path"],
-        },
-      },
+describe("okDiff", () => {
+  it("creates a result with ok status and diff format", () => {
+    const result = okDiff("+added line");
+    expect(result).toEqual({
+      output: "+added line",
+      status: "ok",
+      format: "diff",
     });
   });
+});
 
-  it("excludes non-API fields like displayName, interactive, enabled", () => {
-    const tool: Tool = {
-      name: "test_tool",
-      displayName: "Test Tool",
-      description: "A test",
-      parameters: {},
-      interactive: true,
-      enabled: false,
-      warning: () => "misconfigured",
-      execute: vi.fn(),
-    };
-
-    const def = toToolDefinition(tool);
-
-    expect(def).toEqual({
-      type: "function",
-      function: {
-        name: "test_tool",
-        description: "A test",
-        parameters: {},
-      },
+describe("err", () => {
+  it("creates a result with error status and plain format", () => {
+    const result = err("something broke");
+    expect(result).toEqual({
+      output: "something broke",
+      status: "error",
+      format: "plain",
     });
-    expect(def).not.toHaveProperty("displayName");
-    expect(def).not.toHaveProperty("interactive");
-    expect(def).not.toHaveProperty("enabled");
-    expect(def).not.toHaveProperty("warning");
+  });
+});
+
+describe("denied", () => {
+  it("creates a result with denied status and plain format", () => {
+    const result = denied("user said no");
+    expect(result).toEqual({
+      output: "user said no",
+      status: "denied",
+      format: "plain",
+    });
+  });
+});
+
+describe("parseToolArgs", () => {
+  const schema = z.object({
+    path: z.string().min(1),
+    startLine: z.number().optional(),
   });
 
-  it("preserves nested parameter structure", () => {
-    const tool: Tool = {
-      name: "complex",
-      description: "Complex params",
-      parameters: {
-        type: "object",
-        properties: {
-          config: {
-            type: "object",
-            properties: {
-              nested: { type: "string" },
-            },
-          },
-        },
-      },
-      execute: vi.fn(),
-    };
+  it("parses valid JSON args against schema", () => {
+    const result = parseToolArgs(schema, '{"path": "/foo.ts"}');
+    expect(result).toEqual({ path: "/foo.ts" });
+  });
 
-    const def = toToolDefinition(tool);
-    expect(def.function.parameters).toEqual(tool.parameters);
+  it("includes optional fields when present", () => {
+    const result = parseToolArgs(
+      schema,
+      '{"path": "/foo.ts", "startLine": 10}',
+    );
+    expect(result).toEqual({ path: "/foo.ts", startLine: 10 });
+  });
+
+  it("throws on invalid JSON", () => {
+    expect(() => parseToolArgs(schema, "not json")).toThrow();
+  });
+
+  it("throws on validation failure", () => {
+    expect(() => parseToolArgs(schema, '{"path": ""}')).toThrow();
+  });
+
+  it("throws with joined messages on multiple failures", () => {
+    const multi = z.object({
+      a: z.string().min(1, "a required"),
+      b: z.number({ message: "b must be number" }),
+    });
+    const thrownError = (() => {
+      try {
+        parseToolArgs(multi, '{"a": "", "b": "x"}');
+      } catch (e) {
+        return e as Error;
+      }
+      return null;
+    })();
+    expect(thrownError).toBeTruthy();
+    expect(thrownError?.message).toContain("a required");
+    expect(thrownError?.message).toContain(";");
   });
 });

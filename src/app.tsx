@@ -1,236 +1,96 @@
-import { spawnSync } from "node:child_process";
-import chalk from "chalk";
-import { Box, Static, Text } from "ink";
-import { useEffect, useMemo } from "react";
-import "./commands";
-import { AgentIndicators } from "./components/agent-indicators";
-import { AssistantMessage } from "./components/assistant-message";
-import { ChatInput } from "./components/chat-input";
-import { Header } from "./components/header";
-import { completePartialMarkdown, renderMarkdown } from "./components/markdown";
-import type { DisplayMessage } from "./components/message-list";
-import { Message } from "./components/message-list";
-import { ThinkingIndicator } from "./components/thinking-indicator";
-import { getProviderByName, loadConfig } from "./config";
-import { useChat } from "./hooks/use-chat";
-import { loadInstructions } from "./instructions";
-import { createSession } from "./session";
-import { getAllTools, resolveToolAvailability } from "./tools";
+import { Chat } from "./chat/chat";
+import { contextCommand } from "./commands/context";
+import { createHelpCommand } from "./commands/help";
+import { modelCommand } from "./commands/model";
+import { newCommand } from "./commands/new";
+import { createCommandRegistry } from "./commands/registry";
+import { sessionCommand } from "./commands/session";
+import { settingsCommand } from "./commands/settings";
+import { loadConfig } from "./config/file";
+import { discoverSkillSets, loadSkillSetSkills } from "./skill-sets/loader";
+import { loadAllSkills } from "./skills/loader";
+import type { SkillRegistry } from "./skills/registry";
+import { createSkillRegistry } from "./skills/registry";
+import { createAgentTool } from "./tools/agent";
+import { askTool } from "./tools/ask";
+import { editFileTool } from "./tools/edit-file";
+import { globTool } from "./tools/glob";
+import { grepTool } from "./tools/grep";
+import { readFileTool } from "./tools/read-file";
+import { createToolRegistry } from "./tools/registry";
+import { runCommandTool } from "./tools/run-command";
+import { createSkillTool } from "./tools/skill";
+import { webSearchTool } from "./tools/web-search";
+import { writeFileTool } from "./tools/write-file";
 
-/** Build startup warnings for enabled tools that are misconfigured. */
-function getToolWarnings(): string[] {
+/** Creates the application command registry with all built-in commands. */
+function buildCommandRegistry() {
+  const registry = createCommandRegistry();
+  registry.register(contextCommand);
+  registry.register(modelCommand);
+  registry.register(newCommand);
+  registry.register(sessionCommand);
+  registry.register(settingsCommand);
+  // Registered last so /help lists every other command (and itself).
+  registry.register(createHelpCommand(registry));
+  return registry;
+}
+
+/** Creates the application skill registry from global, local, and skill set skills. */
+function buildSkillRegistry() {
+  const registry = createSkillRegistry();
+
+  // Load skills from enabled skill sets (lowest priority — global/local override these).
   const config = loadConfig();
-  const availability = resolveToolAvailability(config.tools);
-  const warnings: string[] = [];
-  for (const tool of getAllTools()) {
-    if (availability[tool.name] && tool.warning) {
-      const msg = tool.warning();
-      if (msg) warnings.push(`${tool.displayName ?? tool.name}: ${msg}`);
+  for (const source of config.skillSets.sources) {
+    try {
+      const discovered = discoverSkillSets(source.url);
+      for (const set of discovered) {
+        if (!source.enabledSets.includes(set.name)) continue;
+        for (const skill of loadSkillSetSkills(set)) {
+          registry.register(skill);
+        }
+      }
+    } catch {
+      // Skip sources that fail to discover (e.g. missing clone, permission error).
     }
   }
-  return warnings;
+
+  // Global and local skills override skill set skills.
+  for (const skill of loadAllSkills()) {
+    registry.register(skill);
+  }
+
+  return registry;
 }
 
-function initApp() {
-  const config = loadConfig();
-  const initialProvider = getProviderByName(config, config.activeProvider);
-  const initialSession = initialProvider
-    ? createSession(initialProvider.name, config.activeModel)
-    : createSession("none", "none");
-  const instructions = loadInstructions();
-  const startupWarnings = getToolWarnings();
-  return {
-    config,
-    initialProvider,
-    initialSession,
-    instructions,
-    startupWarnings,
-    needsSetup: !initialProvider,
-  };
+/** Creates the application tool registry with all built-in tools. */
+function buildToolRegistry(skillRegistry: SkillRegistry) {
+  const registry = createToolRegistry();
+  registry.register(askTool);
+  registry.register(readFileTool);
+  registry.register(writeFileTool);
+  registry.register(editFileTool);
+  registry.register(globTool);
+  registry.register(grepTool);
+  registry.register(runCommandTool);
+  registry.register(createSkillTool(skillRegistry));
+  registry.register(webSearchTool);
+  registry.register(createAgentTool(registry));
+  return registry;
 }
 
-type StaticItem =
-  | { type: "header"; id: string }
-  | { type: "warning"; id: string; text: string }
-  | (DisplayMessage & { type?: undefined });
-
-interface AppProps {
-  onRestart: () => void;
-}
-
-/** Root application component. Renders the chat UI and delegates state to useChat. */
-export function App({ onRestart }: AppProps) {
-  const {
-    config,
-    initialProvider,
-    initialSession,
-    instructions,
-    startupWarnings,
-    needsSetup,
-  } = useMemo(() => initApp(), []);
-
-  const placeholderProvider = {
-    name: "none",
-    type: "ollama" as const,
-    baseUrl: "http://localhost:11434",
-  };
-
-  const chat = useChat(
-    config,
-    initialProvider ?? placeholderProvider,
-    initialProvider ? config.activeModel : "none",
-    initialSession,
-    instructions,
-    onRestart,
-  );
-
-  // Auto-launch /provider when no providers are configured.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only run once on mount
-  useEffect(() => {
-    if (needsSetup) {
-      chat.submit("/provider");
-    }
-  }, []);
-
-  const headerItem = useMemo(
-    (): StaticItem => ({ type: "header", id: "__header__" }),
-    [],
-  );
-  const warningItems = useMemo(
-    (): StaticItem[] =>
-      startupWarnings.map((text, i) => ({
-        type: "warning" as const,
-        id: `__warning_${i}__`,
-        text,
-      })),
-    [startupWarnings],
-  );
-  const mcpWarningItems: StaticItem[] = chat.mcpWarnings.map((text, i) => ({
-    type: "warning" as const,
-    id: `__mcp_warning_${i}__`,
-    text,
-  }));
-  const staticItems: StaticItem[] = [
-    headerItem,
-    ...warningItems,
-    ...mcpWarningItems,
-    ...chat.messages,
-  ];
-
-  const handleTab = () => {
-    if (chat.messages.length === 0) return;
-    const parts = chat.messages.map((msg) => {
-      if (msg.role === "user") {
-        return chalk.bgGray.white(msg.content);
-      }
-      if (msg.role === "assistant") {
-        return msg.content ? renderMarkdown(msg.content) : "";
-      }
-      if (msg.role === "tool") {
-        const lines = msg.content.split("\n");
-        const header = lines[0] ?? "";
-        const body = lines.slice(1).join("\n");
-        return body ? `${header}\n${chalk.dim(body)}` : header;
-      }
-      return chalk.cyan(msg.content);
-    });
-    const content = parts.filter(Boolean).join("\n\n");
-    const ALLOWED_PAGERS = new Set(["less", "more", "most", "bat", "cat"]);
-    const pager = process.env.PAGER || "less";
-    if (!ALLOWED_PAGERS.has(pager)) {
-      return;
-    }
-    spawnSync(pager, ["-R", "+G"], {
-      input: content,
-      stdio: ["pipe", "inherit", "inherit"],
-    });
-  };
+/** Root application component. Renders the chat UI. */
+export function App() {
+  const commandRegistry = buildCommandRegistry();
+  const skillRegistry = buildSkillRegistry();
+  const toolRegistry = buildToolRegistry(skillRegistry);
 
   return (
-    <Box flexDirection="column" paddingX={1}>
-      <Static items={staticItems}>
-        {(item) => {
-          if (item.type === "header") {
-            return (
-              <Box key={item.id} flexDirection="column">
-                <Header
-                  model={chat.activeModel}
-                  provider={chat.activeProvider.name}
-                />
-              </Box>
-            );
-          }
-          if (item.type === "warning") {
-            return (
-              <Box key={item.id}>
-                <Text color="yellow">{`  ⚠ ${item.text}`}</Text>
-              </Box>
-            );
-          }
-          return (
-            <Box key={item.id} flexDirection="column" marginBottom={1}>
-              <Message msg={item} />
-            </Box>
-          );
-        }}
-      </Static>
-
-      {chat.streaming && chat.streamingContent ? (
-        <Box flexDirection="column" marginBottom={1}>
-          {chat.toolActive ? (
-            <Text dimColor>{chat.streamingContent}</Text>
-          ) : (
-            <AssistantMessage>
-              {completePartialMarkdown(chat.streamingContent)}
-            </AssistantMessage>
-          )}
-        </Box>
-      ) : null}
-
-      {chat.error ? (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text color="red">{`Error: ${chat.error}`}</Text>
-        </Box>
-      ) : null}
-
-      {chat.pendingMessage ? (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text>
-            <Text color="yellow" bold>
-              {"Queued: "}
-            </Text>
-            <Text backgroundColor="gray" color="white">
-              {chat.pendingMessage}
-            </Text>
-          </Text>
-          <Text dimColor>{"↑ edit"}</Text>
-        </Box>
-      ) : null}
-
-      <AgentIndicators />
-
-      {chat.streaming && !chat.streamingContent && !chat.activeCommand ? (
-        <ThinkingIndicator />
-      ) : null}
-
-      {chat.activeCommand}
-      <ChatInput
-        onSubmit={chat.submit}
-        onEscape={chat.cancel}
-        onTab={chat.messages.length > 0 ? handleTab : undefined}
-        hidden={!!chat.activeCommand}
-        contextPercent={
-          chat.tokenUsage
-            ? ((chat.tokenUsage.promptTokens +
-                chat.tokenUsage.completionTokens) /
-                chat.contextWindow) *
-              100
-            : null
-        }
-        pendingMessage={chat.pendingMessage}
-        onCancelPending={chat.cancelPending}
-        inputHistory={chat.inputHistory}
-      />
-    </Box>
+    <Chat
+      commandRegistry={commandRegistry}
+      skillRegistry={skillRegistry}
+      toolRegistry={toolRegistry}
+    />
   );
 }

@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, it, expect } from "vitest";
 import { parseSSEStream } from "./sse";
 
+/** Creates a ReadableStream from an array of string chunks. */
 function createStream(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
@@ -13,43 +14,40 @@ function createStream(chunks: string[]): ReadableStream<Uint8Array> {
   });
 }
 
+/** Collects all values from an async generator into an array. */
 async function collect(gen: AsyncGenerator<string>): Promise<string[]> {
   const results: string[] = [];
-  for await (const item of gen) {
-    results.push(item);
+  for await (const value of gen) {
+    results.push(value);
   }
   return results;
 }
 
 describe("parseSSEStream", () => {
-  it("parses complete data lines", async () => {
-    const stream = createStream([
-      'data: {"content":"hello"}\n\ndata: {"content":"world"}\n\n',
-    ]);
+  it("yields data from a single chunk", async () => {
+    const stream = createStream(['data: {"a":1}\n\n']);
     const results = await collect(parseSSEStream(stream));
-    expect(results).toEqual(['{"content":"hello"}', '{"content":"world"}']);
+    expect(results).toEqual(['{"a":1}']);
   });
 
-  it("handles data split across chunks", async () => {
-    const stream = createStream(['data: {"con', 'tent":"hello"}\n\n']);
+  it("yields multiple events from a single chunk", async () => {
+    const stream = createStream(['data: {"a":1}\n\ndata: {"b":2}\n\n']);
     const results = await collect(parseSSEStream(stream));
-    expect(results).toEqual(['{"content":"hello"}']);
+    expect(results).toEqual(['{"a":1}', '{"b":2}']);
+  });
+
+  it("yields data split across multiple chunks", async () => {
+    const stream = createStream(['data: {"a":', "1}\n\n"]);
+    const results = await collect(parseSSEStream(stream));
+    expect(results).toEqual(['{"a":1}']);
   });
 
   it("stops at [DONE]", async () => {
     const stream = createStream([
-      'data: {"content":"hello"}\n\ndata: [DONE]\n\ndata: {"content":"ignored"}\n\n',
+      'data: {"a":1}\n\ndata: [DONE]\n\ndata: {"b":2}\n\n',
     ]);
     const results = await collect(parseSSEStream(stream));
-    expect(results).toEqual(['{"content":"hello"}']);
-  });
-
-  it("ignores non-data lines", async () => {
-    const stream = createStream([
-      ': comment\nevent: something\ndata: {"content":"hello"}\n\n',
-    ]);
-    const results = await collect(parseSSEStream(stream));
-    expect(results).toEqual(['{"content":"hello"}']);
+    expect(results).toEqual(['{"a":1}']);
   });
 
   it("handles empty stream", async () => {
@@ -58,26 +56,22 @@ describe("parseSSEStream", () => {
     expect(results).toEqual([]);
   });
 
-  it("handles multiple data lines in sequence", async () => {
-    const stream = createStream([
-      'data: {"a":1}\ndata: {"b":2}\n',
-      'data: {"c":3}\n',
-    ]);
+  it("ignores non-data lines", async () => {
+    const stream = createStream(['event: message\ndata: {"a":1}\nid: 123\n\n']);
     const results = await collect(parseSSEStream(stream));
-    expect(results).toEqual(['{"a":1}', '{"b":2}', '{"c":3}']);
+    expect(results).toEqual(['{"a":1}']);
   });
 
-  it("handles \\r\\n line endings", async () => {
-    const stream = createStream([
-      'data: {"content":"hello"}\r\n\r\ndata: {"content":"world"}\r\n\r\n',
-    ]);
+  it("handles events split on newline boundaries", async () => {
+    const stream = createStream(['data: {"a":1}\n', "\n", 'data: {"b":2}\n\n']);
     const results = await collect(parseSSEStream(stream));
-    expect(results).toEqual(['{"content":"hello"}', '{"content":"world"}']);
+    expect(results).toEqual(['{"a":1}', '{"b":2}']);
   });
 
-  it("handles remaining buffer without trailing newline", async () => {
-    const stream = createStream(['data: {"content":"last"}']);
+  it("handles trailing data without double newline", async () => {
+    const stream = createStream(['data: {"a":1}\n\ndata: {"b":2}']);
     const results = await collect(parseSSEStream(stream));
-    expect(results).toEqual(['{"content":"last"}']);
+    // Only first event is complete; second lacks the terminating \n\n
+    expect(results).toEqual(['{"a":1}']);
   });
 });

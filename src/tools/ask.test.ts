@@ -1,143 +1,58 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTool } from "./registry";
+import { mockToolContext } from "../test-utils/stub-context";
+import { askTool } from "./ask";
 
-// Import to trigger registration
-import "./ask";
-
-describe("ask tool", () => {
-  it("is registered in the tool registry", () => {
-    const tool = getTool("ask");
-    expect(tool).toBeDefined();
-    expect(tool?.name).toBe("ask");
+describe("askTool", () => {
+  it("has correct name and parameters", () => {
+    expect(askTool.name).toBe("ask");
+    expect(askTool.parameters).toHaveProperty("properties");
+    expect(askTool.parameters).toHaveProperty("required");
   });
 
-  it("has correct parameter schema", () => {
-    const tool = getTool("ask");
-    expect(tool?.parameters).toEqual({
-      type: "object",
-      properties: {
-        question: {
-          type: "string",
-          description: "The question to ask the user",
-        },
-        options: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "The available choices. Omit or pass an empty array for a text-only input.",
-        },
-      },
-      required: ["question"],
+  describe("formatCall", () => {
+    it("returns the question argument", () => {
+      expect(askTool.formatCall({ question: "Which one?" })).toBe("Which one?");
+    });
+
+    it("returns empty string when question is missing", () => {
+      expect(askTool.formatCall({})).toBe("");
     });
   });
 
-  it("accepts empty options array", async () => {
-    const tool = getTool("ask");
-    const context = {
-      renderInteractive: vi.fn().mockResolvedValue("typed answer"),
-      reportProgress: vi.fn(),
-      permissions: {},
-      signal: new AbortController().signal,
-      depth: 0,
-      providerConfig: {
-        baseUrl: "http://localhost",
-        model: "test-model",
-        apiKey: undefined,
-        maxTokens: 1024,
-        contextWindow: 8192,
-      },
+  describe("execute", () => {
+    it("calls context.ask with question and options", async () => {
+      const ask = vi.fn(async () => "option A");
+      const result = await askTool.execute(
+        { question: "Pick one", options: ["option A", "option B"] },
+        mockToolContext({ ask }),
+      );
 
-      allowedCommands: [],
-    };
+      expect(ask).toHaveBeenCalledWith("Pick one", ["option A", "option B"]);
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("option A");
+    });
 
-    const result = await tool?.execute(
-      JSON.stringify({ question: "pick", options: [] }),
-      context,
-    );
+    it("calls context.ask without options for open-ended questions", async () => {
+      const ask = vi.fn(async () => "typed answer");
+      const result = await askTool.execute(
+        { question: "What do you think?" },
+        mockToolContext({ ask }),
+      );
 
-    expect(context.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result?.output).toBe("typed answer");
-  });
+      expect(ask).toHaveBeenCalledWith("What do you think?", undefined);
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("typed answer");
+    });
 
-  it("defaults options to empty array when omitted", async () => {
-    const tool = getTool("ask");
-    const context = {
-      renderInteractive: vi.fn().mockResolvedValue("typed answer"),
-      reportProgress: vi.fn(),
-      permissions: {},
-      signal: new AbortController().signal,
-      depth: 0,
-      providerConfig: {
-        baseUrl: "http://localhost",
-        model: "test-model",
-        apiKey: undefined,
-        maxTokens: 1024,
-        contextWindow: 8192,
-      },
+    it("returns error when user cancels", async () => {
+      const ask = vi.fn(async () => null);
+      const result = await askTool.execute(
+        { question: "Pick one" },
+        mockToolContext({ ask }),
+      );
 
-      allowedCommands: [],
-    };
-
-    const result = await tool?.execute(
-      JSON.stringify({ question: "What do you think?" }),
-      context,
-    );
-
-    expect(context.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result?.output).toBe("typed answer");
-  });
-
-  it("uses default question when none provided", async () => {
-    const tool = getTool("ask");
-    const context = {
-      reportProgress: vi.fn(),
-      renderInteractive: vi.fn().mockResolvedValue("A"),
-      permissions: {},
-      signal: new AbortController().signal,
-      depth: 0,
-      providerConfig: {
-        baseUrl: "http://localhost",
-        model: "test-model",
-        apiKey: undefined,
-        maxTokens: 1024,
-        contextWindow: 8192,
-      },
-
-      allowedCommands: [],
-    };
-
-    await tool?.execute(JSON.stringify({ options: ["A", "B"] }), context);
-
-    // Factory should be called (renderInteractive was invoked)
-    expect(context.renderInteractive).toHaveBeenCalledTimes(1);
-  });
-
-  it("calls renderInteractive with a factory function", async () => {
-    const tool = getTool("ask");
-    const context = {
-      reportProgress: vi.fn(),
-      renderInteractive: vi.fn().mockResolvedValue("option A"),
-      permissions: {},
-      signal: new AbortController().signal,
-      depth: 0,
-      providerConfig: {
-        baseUrl: "http://localhost",
-        model: "test-model",
-        apiKey: undefined,
-        maxTokens: 1024,
-        contextWindow: 8192,
-      },
-
-      allowedCommands: [],
-    };
-
-    const result = await tool?.execute(
-      JSON.stringify({ question: "pick one", options: ["A", "B"] }),
-      context,
-    );
-
-    expect(context.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(typeof context.renderInteractive.mock.calls[0][0]).toBe("function");
-    expect(result?.output).toBe("option A");
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("dismissed");
+    });
   });
 });

@@ -1,79 +1,97 @@
-import type { ReactElement } from "react";
 import type { z } from "zod";
-import type { ToolDefinition } from "../provider/client";
+import type { Permissions, Provider } from "../config/schema";
 
-/** Provider details needed by tools that spawn completion loops (e.g. agent). */
-export interface ProviderInfo {
-  baseUrl: string;
-  model: string;
-  apiKey?: string;
-  maxTokens: number;
-  contextWindow: number;
+/** Status of a tool execution result. */
+export type ToolResultStatus = "ok" | "error" | "denied";
+
+/** Display format for tool output in the chat list. */
+export type ToolResultFormat = "plain" | "diff";
+
+/** Structured result returned by a tool's execute function. */
+export interface ToolResult {
+  output: string;
+  status: ToolResultStatus;
+  format: ToolResultFormat;
+}
+
+/** Creates a successful tool result with plain text output. */
+export function ok(output: string): ToolResult {
+  return { output, status: "ok", format: "plain" };
+}
+
+/** Creates a successful tool result with diff-formatted output. */
+export function okDiff(output: string): ToolResult {
+  return { output, status: "ok", format: "diff" };
+}
+
+/** Creates an error tool result. */
+export function err(output: string): ToolResult {
+  return { output, status: "error", format: "plain" };
+}
+
+/** Creates a denied tool result (user rejected the action). */
+export function denied(output: string): ToolResult {
+  return { output, status: "denied", format: "plain" };
+}
+
+/** Options for the confirmation prompt. */
+export interface ConfirmOptions {
+  /** Diff output to display above the approval prompt. */
+  diff?: string;
+  /** Short label identifying the action type (e.g. "Run Command", "Edit File"). */
+  label?: string;
+  /** Detail text for the action (e.g. the command string, file path). */
+  detail?: string;
 }
 
 /** Context provided to a tool's execute function. */
 export interface ToolContext {
-  /** Render an interactive component and await the user's response. */
-  renderInteractive: (
-    factory: (
-      onResult: (result: string) => void,
-      onCancel: () => void,
-    ) => ReactElement,
-  ) => Promise<string>;
-  /** Report partial output to the UI during long-running operations. */
-  reportProgress: (content: string) => void;
-  /** Resolved tool permissions from config. */
-  permissions: Record<string, boolean>;
+  /** Resolved file access permissions from config. */
+  permissions: Permissions;
+  /** Auto-approved command patterns from config (e.g. "git:*", "npm test"). */
+  allowedCommands: readonly string[];
+  /** Prompts the user for confirmation. Returns true if approved, false if denied. */
+  confirm: (message: string, options?: ConfirmOptions) => Promise<boolean>;
+  /** Prompts the user with a question. Returns the answer, or null if the user cancels. */
+  ask: (question: string, options?: string[]) => Promise<string | null>;
+  /** Tavily API key for web search, if configured. */
+  webSearchApiKey?: string;
+  /** Reports incremental output during tool execution (for streaming display). */
+  onProgress?: (output: string) => void;
   /** Abort signal from the parent conversation. */
   signal: AbortSignal;
-  /** Current agent nesting depth. 0 = main conversation. */
+  /** Provider config for the active provider. Used by the agent tool to create sub-agent clients. */
+  provider: Provider;
+  /** Active model ID. */
+  model: string;
+  /** Context window size for the active model. */
+  contextWindow: number;
+  /** Current agent nesting depth. 0 for the top-level agent. */
   depth: number;
-  /** Provider config for spawning sub-agent completion loops. */
-  providerConfig: ProviderInfo;
-  /** Commands that are auto-approved. Exact strings or "prefix:*" entries. */
-  allowedCommands: string[];
 }
 
-/** Structured result returned by a tool's execute function. */
-export type ToolResultStatus = "ok" | "error" | "denied";
-
-export interface ToolResult {
-  output: string;
-  status: ToolResultStatus;
-}
-
-/** Create a successful tool result. */
-export function ok(output: string): ToolResult {
-  return { output, status: "ok" };
-}
-
-/** Create an error tool result. Displayed with a red header. */
-export function err(output: string): ToolResult {
-  return { output, status: "error" };
-}
-
-/** Create a denied tool result (user rejected the action). Displayed with a dim header. */
-export function denied(output: string): ToolResult {
-  return { output, status: "denied" };
-}
-
-/** A model-initiated tool with a name, description, parameters, and execute handler. */
+/** A tool that the LLM can invoke. */
 export interface Tool {
+  /** Tool name as sent to the LLM (e.g. "read_file"). */
   name: string;
-  /** Human-readable display name for the TUI (e.g. "Read File" instead of "read_file"). */
-  displayName?: string;
+  /** Human-readable display name for the UI (e.g. "Read File"). */
+  displayName: string;
+  /** Human-readable description for the LLM. */
   description: string;
+  /** JSON Schema for the tool's parameters (sent to the LLM). */
   parameters: Record<string, unknown>;
-  /** Whether the tool requires user interaction (confirmation, input). Defaults to true. */
-  interactive?: boolean;
-  /** Whether the tool is enabled by default. Defaults to true. */
-  enabled?: boolean;
-  /** Returns a warning message when the tool is enabled but misconfigured, or undefined if OK. */
-  warning?: () => string | undefined;
-  execute: (args: string, context: ToolContext) => Promise<ToolResult>;
+  /** Zod schema for validating parsed arguments at runtime. */
+  argsSchema: z.ZodType;
+  /** Returns a short summary string for display next to the tool name (e.g. a file path). */
+  formatCall: (args: Record<string, unknown>) => string;
+  /** Executes the tool with validated arguments. */
+  execute: (args: unknown, context: ToolContext) => Promise<ToolResult>;
 }
 
-/** Parse and validate tool arguments against a Zod schema. Throws with a clean message on failure. */
+/**
+ * Parses and validates tool arguments against a zod schema.
+ * Throws with a clean message on failure.
+ */
 export function parseToolArgs<T extends z.ZodType>(
   schema: T,
   args: string,
@@ -85,16 +103,4 @@ export function parseToolArgs<T extends z.ZodType>(
     throw new Error(messages.join("; "));
   }
   return result.data;
-}
-
-/** Converts a Tool to the OpenAI tool definition format for the API request. */
-export function toToolDefinition(tool: Tool): ToolDefinition {
-  return {
-    type: "function",
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-    },
-  };
 }

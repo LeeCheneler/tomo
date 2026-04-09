@@ -1,180 +1,255 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTool } from "./registry";
-import { makeMockContext } from "./test-helpers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockFs } from "../test-utils/mock-fs";
+import { mockToolContext } from "../test-utils/stub-context";
+import { readFileTool } from "./read-file";
 
-// Import to trigger registration
-import "./read-file";
-
-const tmpDir = resolve(import.meta.dirname, "../../.test-read-file-tmp");
-let mockContext = makeMockContext();
-
-beforeEach(() => {
-  mkdirSync(tmpDir, { recursive: true });
-  vi.clearAllMocks();
-  mockContext = makeMockContext();
-});
-
-afterEach(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
-});
-
-describe("read_file tool", () => {
-  it("is registered as non-interactive", () => {
-    const tool = getTool("read_file");
-    expect(tool).toBeDefined();
-    expect(tool?.name).toBe("read_file");
-    expect(tool?.interactive).toBe(false);
+describe("readFileTool", () => {
+  it("has correct name and parameters", () => {
+    expect(readFileTool.name).toBe("read_file");
+    expect(readFileTool.parameters).toHaveProperty("properties");
+    expect(readFileTool.parameters).toHaveProperty("required");
   });
 
-  it("reads a file and returns numbered lines", async () => {
-    const filePath = resolve(tmpDir, "test.txt");
-    writeFileSync(filePath, "hello\nworld\n");
+  describe("formatCall", () => {
+    it("returns the path argument", () => {
+      expect(readFileTool.formatCall({ path: "./foo.ts" })).toBe("./foo.ts");
+    });
 
-    const tool = getTool("read_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("hello");
-    expect(result?.output).toContain("world");
-    expect(result?.output).toContain("1 |");
-    expect(result?.output).toContain("2 |");
+    it("returns empty string when path is missing", () => {
+      expect(readFileTool.formatCall({})).toBe("");
+    });
   });
 
-  it("returns error for non-existent file", async () => {
-    const tool = getTool("read_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: resolve(tmpDir, "nope.txt") }),
-      mockContext,
-    );
+  describe("execute", () => {
+    let fs: ReturnType<typeof mockFs>;
 
-    expect(result?.output).toContain("file not found");
-  });
+    afterEach(() => {
+      fs.restore();
+    });
 
-  it("throws for empty path", async () => {
-    const tool = getTool("read_file");
-    await expect(
-      tool?.execute(JSON.stringify({ path: "" }), mockContext),
-    ).rejects.toThrow("no file path provided");
-  });
+    it("reads a file with numbered lines", async () => {
+      const filePath = resolve("test.txt");
+      fs = mockFs({ [filePath]: "line one\nline two\nline three\n" });
 
-  it("returns error for directories", async () => {
-    const tool = getTool("read_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: tmpDir }),
-      mockContext,
-    );
+      const result = await readFileTool.execute(
+        { path: "test.txt" },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toContain("is a directory");
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("   1 | line one");
+      expect(result.output).toContain("   2 | line two");
+      expect(result.output).toContain("   3 | line three");
+    });
 
-  it("truncates files exceeding 500 lines", async () => {
-    const lines = Array.from({ length: 600 }, (_, i) => `line ${i + 1}`);
-    const filePath = resolve(tmpDir, "big.txt");
-    writeFileSync(filePath, lines.join("\n"));
+    it("reads a specific line range", async () => {
+      const lines = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);
+      const filePath = resolve("big.txt");
+      fs = mockFs({ [filePath]: lines.join("\n") });
 
-    const tool = getTool("read_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath }),
-      mockContext,
-    );
+      const result = await readFileTool.execute(
+        { path: "big.txt", startLine: 3, endLine: 5 },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toContain("showing first 500 of 600 lines");
-    expect(result?.output).toContain("line 1");
-    expect(result?.output).toContain("line 500");
-    expect(result?.output).not.toContain("line 501");
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("   3 | line 3");
+      expect(result.output).toContain("   5 | line 5");
+      expect(result.output).not.toContain("| line 2");
+      expect(result.output).not.toContain("| line 6");
+    });
 
-  it("supports startLine and endLine for range reads", async () => {
-    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
-    const filePath = resolve(tmpDir, "range.txt");
-    writeFileSync(filePath, lines.join("\n"));
+    it("reads from startLine to end when endLine is omitted", async () => {
+      const lines = Array.from({ length: 5 }, (_, i) => `line ${i + 1}`);
+      const filePath = resolve("range.txt");
+      fs = mockFs({ [filePath]: lines.join("\n") });
 
-    const tool = getTool("read_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath, startLine: 5, endLine: 10 }),
-      mockContext,
-    );
+      const result = await readFileTool.execute(
+        { path: "range.txt", startLine: 3 },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toContain("lines 5-10 of 20");
-    expect(result?.output).toContain("line 5");
-    expect(result?.output).toContain("line 10");
-    expect(result?.output).not.toContain("line 4\n");
-    expect(result?.output).not.toContain("line 11");
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("   3 | line 3");
+      expect(result.output).toContain("   5 | line 5");
+    });
 
-  it("clamps line range to file bounds", async () => {
-    const filePath = resolve(tmpDir, "short.txt");
-    writeFileSync(filePath, "a\nb\nc\n");
+    it("reads from start to endLine when startLine is omitted", async () => {
+      const lines = Array.from({ length: 5 }, (_, i) => `line ${i + 1}`);
+      const filePath = resolve("range.txt");
+      fs = mockFs({ [filePath]: lines.join("\n") });
 
-    const tool = getTool("read_file");
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath, startLine: 1, endLine: 100 }),
-      mockContext,
-    );
+      const result = await readFileTool.execute(
+        { path: "range.txt", endLine: 2 },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toContain("lines 1-4 of 4");
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("   1 | line 1");
+      expect(result.output).toContain("   2 | line 2");
+      expect(result.output).not.toContain("| line 3");
+    });
 
-  it("does not prompt when read_file permission is granted and path in cwd", async () => {
-    const filePath = resolve(tmpDir, "allowed.txt");
-    writeFileSync(filePath, "content\n");
-    const tool = getTool("read_file");
+    it("clamps line range to file bounds", async () => {
+      const filePath = resolve("short.txt");
+      fs = mockFs({ [filePath]: "a\nb\nc" });
 
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath }),
-      mockContext,
-    );
+      const result = await readFileTool.execute(
+        { path: "short.txt", startLine: -5, endLine: 999 },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toContain("content");
-    expect(mockContext.renderInteractive).not.toHaveBeenCalled();
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("   1 | a");
+      expect(result.output).toContain("   3 | c");
+    });
 
-  it("prompts when read_file permission is not granted", async () => {
-    const filePath = resolve(tmpDir, "gated.txt");
-    writeFileSync(filePath, "secret\n");
-    const tool = getTool("read_file");
-    const ctx = {
-      ...mockContext,
-      permissions: { read_file: false },
-    };
+    it("truncates files over 500 lines", async () => {
+      const lines = Array.from({ length: 600 }, (_, i) => `line ${i + 1}`);
+      const filePath = resolve("huge.txt");
+      fs = mockFs({ [filePath]: lines.join("\n") });
 
-    const result = await tool?.execute(JSON.stringify({ path: filePath }), ctx);
+      const result = await readFileTool.execute(
+        { path: "huge.txt" },
+        mockToolContext(),
+      );
 
-    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result?.output).toContain("secret");
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("   1 | line 1");
+      expect(result.output).toContain(" 500 | line 500");
+      expect(result.output).not.toContain("| line 501");
+    });
 
-  it("returns denial when user denies read", async () => {
-    const filePath = resolve(tmpDir, "denied.txt");
-    writeFileSync(filePath, "secret\n");
-    const tool = getTool("read_file");
-    const ctx = {
-      ...mockContext,
-      renderInteractive: vi.fn().mockResolvedValue("denied"),
-      permissions: { read_file: false },
-    };
+    it("returns error for missing file", async () => {
+      fs = mockFs();
 
-    const result = await tool?.execute(JSON.stringify({ path: filePath }), ctx);
+      const result = await readFileTool.execute(
+        { path: "nope.txt" },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toBe("The user denied this read.");
-  });
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("file not found");
+    });
 
-  it("prompts for files outside cwd even with permission granted", async () => {
-    const filePath = "/tmp/.test-read-outside.txt";
-    writeFileSync(filePath, "outside\n");
-    const tool = getTool("read_file");
+    it("returns error for directory path", async () => {
+      const dirPath = resolve("src");
+      fs = mockFs({ [`${dirPath}/foo.ts`]: "content" });
 
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath }),
-      mockContext,
-    );
+      const result = await readFileTool.execute(
+        { path: "src" },
+        mockToolContext(),
+      );
 
-    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result?.output).toContain("outside");
-    rmSync(filePath, { force: true });
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("is a directory");
+    });
+
+    describe("permissions", () => {
+      it("reads without confirmation when cwd permission granted", async () => {
+        const filePath = resolve("allowed.txt");
+        fs = mockFs({ [filePath]: "content" });
+        const confirm = vi.fn();
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
+
+        const result = await readFileTool.execute({ path: "allowed.txt" }, ctx);
+
+        expect(result.status).toBe("ok");
+        expect(confirm).not.toHaveBeenCalled();
+      });
+
+      it("prompts for confirmation when permission not granted", async () => {
+        const filePath = resolve("restricted.txt");
+        fs = mockFs({ [filePath]: "secret" });
+        const confirm = vi.fn(async () => true);
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: false,
+            cwdWriteFile: false,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
+
+        const result = await readFileTool.execute(
+          { path: "restricted.txt" },
+          ctx,
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("ok");
+      });
+
+      it("returns denied when user rejects confirmation", async () => {
+        const filePath = resolve("restricted.txt");
+        fs = mockFs({ [filePath]: "secret" });
+        const confirm = vi.fn(async () => false);
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: false,
+            cwdWriteFile: false,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
+
+        const result = await readFileTool.execute(
+          { path: "restricted.txt" },
+          ctx,
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("denied");
+      });
+
+      it("prompts for global file even when cwd read is allowed", async () => {
+        fs = mockFs({ "/etc/hosts": "127.0.0.1 localhost" });
+        const confirm = vi.fn(async () => true);
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
+
+        const result = await readFileTool.execute({ path: "/etc/hosts" }, ctx);
+
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("ok");
+      });
+
+      it("reads global file without confirmation when globalReadFile is true", async () => {
+        fs = mockFs({ "/etc/hosts": "127.0.0.1 localhost" });
+        const confirm = vi.fn();
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: true,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
+
+        const result = await readFileTool.execute({ path: "/etc/hosts" }, ctx);
+
+        expect(result.status).toBe("ok");
+        expect(confirm).not.toHaveBeenCalled();
+      });
+    });
   });
 });

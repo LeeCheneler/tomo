@@ -1,118 +1,67 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { parse } from "yaml";
-import type { Skill } from "./types";
+import { z } from "zod";
+import { fileExists, isDirectory, listDir, readFile } from "../utils/fs";
+import type { SkillDefinition, SkillSource } from "./types";
 
-/** Returns the global skills directory (~/.tomo/skills). */
-function globalSkillsDir(): string {
-  return resolve(homedir(), ".tomo", "skills");
-}
+/** Path to the global skills directory (~/.tomo/skills). */
+export const GLOBAL_SKILLS_DIR = resolve(homedir(), ".tomo", "skills");
 
-/** Returns the local skills directory (.tomo/skills). */
-function localSkillsDir(): string {
-  return resolve(process.cwd(), ".tomo", "skills");
-}
+/** Path to the local skills directory (.tomo/skills in cwd). */
+export const LOCAL_SKILLS_DIR = resolve(process.cwd(), ".tomo", "skills");
 
-/**
- * Parses a SKILL.md file into a Skill object.
- * Returns null if the file cannot be parsed or is missing required fields.
- */
-export function parseSkillFile(
-  content: string,
-  dirName: string,
-  local: boolean,
-): Skill | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+/** Schema for SKILL.md frontmatter. */
+const frontmatterSchema = z.object({
+  name: z.string().min(1, "skill name is required"),
+  description: z.string().min(1, "skill description is required"),
+});
+
+/** Separates YAML frontmatter from markdown body content. */
+function parseFrontmatter(raw: string): { meta: unknown; body: string } | null {
+  const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
   if (!match) return null;
-
-  const frontmatter = parse(match[1]) as Record<string, unknown> | null;
-  if (!frontmatter) return null;
-
-  const name =
-    typeof frontmatter.name === "string" ? frontmatter.name : dirName;
-  const description =
-    typeof frontmatter.description === "string" ? frontmatter.description : "";
-  const body = match[2].trim();
-
-  if (!name) return null;
-
-  return { name, description, body, local };
+  return { meta: parse(match[1]), body: match[2].trim() };
 }
 
-/**
- * Scans a skills directory for subdirectories containing SKILL.md files.
- * Returns an array of parsed skills.
- */
-function loadFromDir(dir: string, local: boolean): Skill[] {
-  if (!existsSync(dir)) return [];
+/** Loads all skills from a directory. Each subdirectory should contain a SKILL.md file. */
+export function loadSkillsFromDir(
+  dir: string,
+  source: SkillSource,
+): SkillDefinition[] {
+  if (!isDirectory(dir)) return [];
 
-  const skills: Skill[] = [];
-  const entries = readdirSync(dir, { withFileTypes: true });
+  const entries = listDir(dir);
+  const skills: SkillDefinition[] = [];
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    const skillDir = resolve(dir, entry);
+    if (!isDirectory(skillDir)) continue;
 
-    const skillPath = join(dir, entry.name, "SKILL.md");
-    if (!existsSync(skillPath)) continue;
+    const skillPath = resolve(skillDir, "SKILL.md");
+    if (!fileExists(skillPath)) continue;
 
-    const content = readFileSync(skillPath, "utf-8");
-    const skill = parseSkillFile(content, entry.name, local);
-    if (skill) skills.push(skill);
+    const raw = readFile(skillPath);
+    const parsed = parseFrontmatter(raw);
+    if (!parsed) continue;
+
+    const result = frontmatterSchema.safeParse(parsed.meta);
+    if (!result.success) continue;
+
+    skills.push({
+      name: result.data.name,
+      description: result.data.description,
+      content: parsed.body,
+      source,
+    });
   }
 
   return skills;
 }
 
-/** A skill set directory with its name for tagging loaded skills. */
-export interface SkillSetDir {
-  name: string;
-  path: string;
-}
-
-/**
- * Discovers and loads all skills from skill set directories, global, and local directories.
- * Precedence (later wins): skill sets → global → local.
- * Local skills have "(local)" prefixed to their description.
- */
-export function loadSkills(
-  globalDir?: string,
-  localDir?: string,
-  skillSetDirs?: SkillSetDir[],
-): Skill[] {
-  const byName = new Map<string, Skill>();
-
-  // Skill set skills are namespaced as setName:skillName.
-  if (skillSetDirs) {
-    for (const setDir of skillSetDirs) {
-      const skills = loadFromDir(setDir.path, false);
-      for (const skill of skills) {
-        const namespacedName = `${setDir.name}:${skill.name}`;
-        byName.set(namespacedName, {
-          ...skill,
-          name: namespacedName,
-          skillSet: setDir.name,
-        });
-      }
-    }
-  }
-
-  // Global skills override skill set skills.
-  const globalSkills = loadFromDir(globalDir ?? globalSkillsDir(), false);
-  for (const skill of globalSkills) {
-    byName.set(skill.name, skill);
-  }
-
-  // Local skills override everything.
-  const localSkills = loadFromDir(localDir ?? localSkillsDir(), true).map(
-    (skill) => ({
-      ...skill,
-      description: `(local) ${skill.description}`,
-    }),
-  );
-  for (const skill of localSkills) {
-    byName.set(skill.name, skill);
-  }
-
-  return [...byName.values()];
+/** Loads skills from both global and local directories. */
+export function loadAllSkills(): SkillDefinition[] {
+  const global = loadSkillsFromDir(GLOBAL_SKILLS_DIR, "global");
+  const local = loadSkillsFromDir(LOCAL_SKILLS_DIR, "local");
+  return [...global, ...local];
 }

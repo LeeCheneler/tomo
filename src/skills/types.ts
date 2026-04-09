@@ -1,13 +1,14 @@
+/** Where a skill was loaded from. */
+export type SkillSource = "local" | "global";
+
 /** A loaded skill definition parsed from a SKILL.md file. */
-export interface Skill {
-  /** The skill name (from frontmatter or directory name). */
+export interface SkillDefinition {
+  /** Display name used in autocomplete and invocation. */
   name: string;
-  /** A short description of the skill. */
+  /** Short description shown in autocomplete. */
   description: string;
-  /** The markdown body (everything after the frontmatter). */
-  body: string;
-  /** Whether this skill was loaded from the local project directory. */
-  local: boolean;
-  /** The skill set name this skill was loaded from, if any. */
-  skillSet?: string;
+  /** Prompt content from the SKILL.md body. */
+  content: string;
+  /** Whether the skill was loaded from the global or local directory. */
+  source: SkillSource;
 }

@@ -1,237 +1,205 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTool } from "./registry";
-import { makeMockContext } from "./test-helpers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockFs } from "../test-utils/mock-fs";
+import { mockToolContext } from "../test-utils/stub-context";
+import { editFileTool } from "./edit-file";
 
-// Import to trigger registration
-import "./edit-file";
-
-const tmpDir = resolve(import.meta.dirname, "../../.test-edit-file-tmp");
-let mockContext = makeMockContext({ permissions: {} });
-
-beforeEach(() => {
-  mkdirSync(tmpDir, { recursive: true });
-  vi.clearAllMocks();
-  mockContext = makeMockContext({ permissions: {} });
-});
-
-afterEach(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
-});
-
-describe("edit_file tool", () => {
-  it("is registered as interactive", () => {
-    const tool = getTool("edit_file");
-    expect(tool).toBeDefined();
-    expect(tool?.name).toBe("edit_file");
-    expect(tool?.interactive).toBeUndefined();
+describe("editFileTool", () => {
+  it("has correct name and parameters", () => {
+    expect(editFileTool.name).toBe("edit_file");
+    expect(editFileTool.parameters).toHaveProperty("properties");
+    expect(editFileTool.parameters).toHaveProperty("required");
   });
 
-  it("replaces a unique string in the file", async () => {
-    const filePath = resolve(tmpDir, "test.txt");
-    writeFileSync(filePath, "hello world\ngoodbye world\n");
-    const tool = getTool("edit_file");
+  describe("formatCall", () => {
+    it("returns the path argument", () => {
+      expect(editFileTool.formatCall({ path: "./baz.ts" })).toBe("./baz.ts");
+    });
 
-    const result = await tool?.execute(
-      JSON.stringify({
-        path: filePath,
-        old_string: "hello world",
-        new_string: "hi world",
-      }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("Successfully edited");
-    expect(readFileSync(filePath, "utf-8")).toBe("hi world\ngoodbye world\n");
+    it("returns empty string when path is missing", () => {
+      expect(editFileTool.formatCall({})).toBe("");
+    });
   });
 
-  it("returns error when old_string is not found", async () => {
-    const filePath = resolve(tmpDir, "test.txt");
-    writeFileSync(filePath, "hello\n");
-    const tool = getTool("edit_file");
+  describe("execute", () => {
+    let fs: ReturnType<typeof mockFs>;
 
-    const result = await tool?.execute(
-      JSON.stringify({
-        path: filePath,
-        old_string: "missing",
-        new_string: "replaced",
-      }),
-      mockContext,
-    );
+    afterEach(() => {
+      fs.restore();
+    });
 
-    expect(result?.output).toContain("old_string not found");
-    expect(mockContext.renderInteractive).not.toHaveBeenCalled();
-  });
+    it("replaces a unique string and returns a diff", async () => {
+      const filePath = resolve("test.txt");
+      fs = mockFs({ [filePath]: "hello world\n" });
 
-  it("returns error when old_string is not unique", async () => {
-    const filePath = resolve(tmpDir, "test.txt");
-    writeFileSync(filePath, "dup\ndup\n");
-    const tool = getTool("edit_file");
+      const result = await editFileTool.execute(
+        { path: "test.txt", oldString: "world", newString: "earth" },
+        mockToolContext(),
+      );
 
-    const result = await tool?.execute(
-      JSON.stringify({
-        path: filePath,
-        old_string: "dup",
-        new_string: "replaced",
-      }),
-      mockContext,
-    );
+      expect(result.status).toBe("ok");
+      expect(result.format).toBe("diff");
+      expect(result.output).toContain("-hello world");
+      expect(result.output).toContain("+hello earth");
+      expect(fs.getFile(filePath)).toBe("hello earth\n");
+    });
 
-    expect(result?.output).toContain("found 2 times");
-    expect(result?.output).toContain("must be unique");
-    expect(mockContext.renderInteractive).not.toHaveBeenCalled();
-  });
+    it("replaces a multi-line string", async () => {
+      const filePath = resolve("multi.txt");
+      fs = mockFs({ [filePath]: "line one\nline two\nline three\n" });
 
-  it("returns error for non-existent file", async () => {
-    const tool = getTool("edit_file");
-    const result = await tool?.execute(
-      JSON.stringify({
-        path: resolve(tmpDir, "nope.txt"),
-        old_string: "x",
-        new_string: "y",
-      }),
-      mockContext,
-    );
+      const result = await editFileTool.execute(
+        {
+          path: "multi.txt",
+          oldString: "line two\nline three",
+          newString: "replaced",
+        },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toContain("file not found");
-  });
+      expect(result.status).toBe("ok");
+      expect(fs.getFile(filePath)).toBe("line one\nreplaced\n");
+    });
 
-  it("throws for empty path", async () => {
-    const tool = getTool("edit_file");
-    await expect(
-      tool?.execute(
-        JSON.stringify({ path: "", old_string: "x", new_string: "y" }),
-        mockContext,
-      ),
-    ).rejects.toThrow("no file path provided");
-  });
+    it("returns error when oldString is not found", async () => {
+      const filePath = resolve("test.txt");
+      fs = mockFs({ [filePath]: "hello world\n" });
 
-  it("throws for empty old_string", async () => {
-    const tool = getTool("edit_file");
-    await expect(
-      tool?.execute(
-        JSON.stringify({
-          path: resolve(tmpDir, "test.txt"),
-          old_string: "",
-          new_string: "y",
-        }),
-        mockContext,
-      ),
-    ).rejects.toThrow("old_string must not be empty");
-  });
+      const result = await editFileTool.execute(
+        { path: "test.txt", oldString: "missing", newString: "new" },
+        mockToolContext(),
+      );
 
-  it("returns error when old_string equals new_string", async () => {
-    const tool = getTool("edit_file");
-    const result = await tool?.execute(
-      JSON.stringify({
-        path: resolve(tmpDir, "test.txt"),
-        old_string: "same",
-        new_string: "same",
-      }),
-      mockContext,
-    );
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("not found in file");
+    });
 
-    expect(result?.output).toBe("old_string and new_string are identical");
-  });
+    it("returns error when oldString appears multiple times", async () => {
+      const filePath = resolve("test.txt");
+      fs = mockFs({ [filePath]: "foo bar foo\n" });
 
-  it("returns denial message when user denies", async () => {
-    mockContext.renderInteractive.mockResolvedValue("denied");
-    const filePath = resolve(tmpDir, "test.txt");
-    writeFileSync(filePath, "hello\n");
-    const tool = getTool("edit_file");
+      const result = await editFileTool.execute(
+        { path: "test.txt", oldString: "foo", newString: "baz" },
+        mockToolContext(),
+      );
 
-    const result = await tool?.execute(
-      JSON.stringify({
-        path: filePath,
-        old_string: "hello",
-        new_string: "bye",
-      }),
-      mockContext,
-    );
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("2 times");
+    });
 
-    expect(result?.output).toBe("The user denied this edit.");
-    // File should be unchanged
-    expect(readFileSync(filePath, "utf-8")).toBe("hello\n");
-  });
+    it("returns error when oldString and newString are identical", async () => {
+      const filePath = resolve("test.txt");
+      fs = mockFs({ [filePath]: "hello\n" });
 
-  it("calls renderInteractive for confirmation", async () => {
-    const filePath = resolve(tmpDir, "test.txt");
-    writeFileSync(filePath, "hello\n");
-    const tool = getTool("edit_file");
+      const result = await editFileTool.execute(
+        { path: "test.txt", oldString: "hello", newString: "hello" },
+        mockToolContext(),
+      );
 
-    await tool?.execute(
-      JSON.stringify({
-        path: filePath,
-        old_string: "hello",
-        new_string: "bye",
-      }),
-      mockContext,
-    );
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("identical");
+    });
 
-    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
-  });
+    it("returns error for missing file", async () => {
+      fs = mockFs();
 
-  it("skips confirmation when write_file permission granted and path in cwd", async () => {
-    const filePath = resolve(process.cwd(), ".test-edit-perm.txt");
-    writeFileSync(filePath, "hello\n");
-    const tool = getTool("edit_file");
-    const ctx = {
-      ...mockContext,
-      permissions: { write_file: true },
-    };
+      const result = await editFileTool.execute(
+        { path: "nope.txt", oldString: "a", newString: "b" },
+        mockToolContext(),
+      );
 
-    const result = await tool?.execute(
-      JSON.stringify({
-        path: filePath,
-        old_string: "hello",
-        new_string: "bye",
-      }),
-      ctx,
-    );
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("file not found");
+    });
 
-    expect(result?.output).toContain("Successfully edited");
-    expect(ctx.renderInteractive).not.toHaveBeenCalled();
-    expect(readFileSync(filePath, "utf-8")).toBe("bye\n");
-    rmSync(filePath, { force: true });
-  });
+    it("returns error for directory path", async () => {
+      const dirPath = resolve("src");
+      fs = mockFs({ [`${dirPath}/foo.ts`]: "content" });
 
-  it("still prompts when write_file permission granted but path outside cwd", async () => {
-    const filePath = "/tmp/.test-edit-perm-outside.txt";
-    writeFileSync(filePath, "hello\n");
-    const tool = getTool("edit_file");
-    const ctx = {
-      ...mockContext,
-      permissions: { write_file: true },
-    };
+      const result = await editFileTool.execute(
+        { path: "src", oldString: "a", newString: "b" },
+        mockToolContext(),
+      );
 
-    await tool?.execute(
-      JSON.stringify({
-        path: filePath,
-        old_string: "hello",
-        new_string: "bye",
-      }),
-      ctx,
-    );
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("is a directory");
+    });
 
-    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
-    rmSync(filePath, { force: true });
-  });
+    describe("permissions", () => {
+      it("edits without confirmation when cwd write permission granted", async () => {
+        const filePath = resolve("allowed.txt");
+        fs = mockFs({ [filePath]: "old content\n" });
+        const confirm = vi.fn();
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: true,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
 
-  it("prompts when write_file permission not granted even for cwd paths", async () => {
-    const filePath = resolve(tmpDir, "test.txt");
-    writeFileSync(filePath, "hello\n");
-    const tool = getTool("edit_file");
+        const result = await editFileTool.execute(
+          { path: "allowed.txt", oldString: "old", newString: "new" },
+          ctx,
+        );
 
-    await tool?.execute(
-      JSON.stringify({
-        path: filePath,
-        old_string: "hello",
-        new_string: "bye",
-      }),
-      mockContext,
-    );
+        expect(result.status).toBe("ok");
+        expect(confirm).not.toHaveBeenCalled();
+      });
 
-    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
+      it("prompts for confirmation with diff when write permission not granted", async () => {
+        const filePath = resolve("restricted.txt");
+        fs = mockFs({ [filePath]: "old content\n" });
+        const confirm = vi.fn(async () => true);
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
+
+        const result = await editFileTool.execute(
+          { path: "restricted.txt", oldString: "old", newString: "new" },
+          ctx,
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(confirm).toHaveBeenCalledWith("Edit file?", {
+          label: "Edit file?",
+          detail: expect.stringContaining("restricted.txt"),
+          diff: expect.any(String),
+        });
+        expect(result.status).toBe("ok");
+      });
+
+      it("returns denied and does not write when user rejects confirmation", async () => {
+        const filePath = resolve("restricted.txt");
+        fs = mockFs({ [filePath]: "old content\n" });
+        const confirm = vi.fn(async () => false);
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
+
+        const result = await editFileTool.execute(
+          { path: "restricted.txt", oldString: "old", newString: "new" },
+          ctx,
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("denied");
+        expect(fs.getFile(filePath)).toBe("old content\n");
+      });
+    });
   });
 });

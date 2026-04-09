@@ -1,403 +1,540 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CompletionLoopOptions } from "../completion-loop";
-import { getTool } from "./registry";
-import type { ToolContext } from "./types";
+import { z } from "zod";
+import { loadConfig } from "../config/file";
+import type { CompletionStream, ProviderClient } from "../provider/client";
+import { createOpenAICompatibleClient } from "../provider/openai-compatible";
+import { mockToolContext } from "../test-utils/stub-context";
+import { createToolRegistry } from "./registry";
+import { ok } from "./types";
+import { createAgentTool } from "./agent";
 
-vi.mock("../completion-loop", () => ({
-  runCompletionLoop: vi.fn(),
+vi.mock("../config/file", () => ({
+  loadConfig: vi.fn(() => ({
+    agents: {
+      maxDepth: 1,
+      maxConcurrent: 3,
+      maxTimeoutSeconds: 300,
+      tools: ["read_file", "glob", "grep"],
+    },
+    providers: [],
+    activeProvider: null,
+    activeModel: null,
+    permissions: { cwdReadFile: true },
+    allowedCommands: [],
+    mcp: { connections: {} },
+    skillSets: { sources: [] },
+    tools: {
+      agent: { enabled: true },
+      ask: { enabled: true },
+      editFile: { enabled: true },
+      glob: { enabled: true },
+      grep: { enabled: true },
+      readFile: { enabled: true },
+      runCommand: { enabled: true },
+      skill: { enabled: true },
+      webSearch: { enabled: false },
+      writeFile: { enabled: true },
+    },
+  })),
 }));
 
-vi.mock("../instructions", () => ({
-  loadSubAgentInstructions: () =>
-    "System info here\n\nYou are a read-only research sub-agent.",
+vi.mock("node:os", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:os")>()),
+  platform: () => "linux",
+  release: () => "6.1.0",
+  arch: () => "x64",
+  userInfo: () => ({ username: "testuser" }),
 }));
 
-vi.mock("../config", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../config")>();
+vi.mock("node:child_process", () => ({
+  execFileSync: vi.fn(() => {
+    throw new Error("not a git repo");
+  }),
+}));
+
+/** Creates an async iterable that yields the given tokens. */
+function tokens(values: string[]): AsyncIterable<string> {
   return {
-    ...original,
-    loadConfig: vi.fn().mockReturnValue({
-      activeProvider: "",
-      activeModel: "",
-      maxTokens: 8192,
-      providers: [],
-    }),
+    async *[Symbol.asyncIterator]() {
+      for (const v of values) {
+        yield v;
+      }
+    },
   };
-});
+}
 
-// Import tools index to trigger all tool registrations.
-await import("./index");
+/** Creates a mock CompletionStream. */
+function mockStream(content: string[]): CompletionStream {
+  return {
+    content: tokens(content),
+    getUsage: () => null,
+    getToolCalls: () => [],
+  };
+}
 
-const { runCompletionLoop } = await import("../completion-loop");
-const { loadConfig } = await import("../config");
-const mockLoop = vi.mocked(runCompletionLoop);
-const mockLoadConfig = vi.mocked(loadConfig);
+/** Creates a mock ProviderClient that returns the given content. */
+function mockClient(content: string[]): ProviderClient {
+  return {
+    fetchModels: vi.fn(async () => []),
+    fetchContextWindow: vi.fn(async () => 8192),
+    streamCompletion: vi.fn(async () => mockStream(content)),
+  };
+}
+
+vi.mock("../provider/openai-compatible", () => ({
+  createOpenAICompatibleClient: vi.fn(() => mockClient(["agent result"])),
+}));
 
 afterEach(() => {
-  mockLoop.mockReset();
-  mockLoadConfig.mockReturnValue({
-    activeProvider: "",
-    activeModel: "",
-    maxTokens: 8192,
-    providers: [],
-  });
+  vi.restoreAllMocks();
 });
 
-const defaultProviderConfig = {
-  baseUrl: "http://localhost",
-  model: "test-model",
-  apiKey: "key",
-  maxTokens: 1024,
-  contextWindow: 8192,
-};
-
-function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
-  return {
-    renderInteractive: () => Promise.reject(new Error("not implemented")),
-    reportProgress: () => {},
-    permissions: {},
-    signal: new AbortController().signal,
-    depth: 0,
-    providerConfig: defaultProviderConfig,
-
-    allowedCommands: [],
-    ...overrides,
-  };
-}
-
-function getAgentTool() {
-  const tool = getTool("agent");
-  if (!tool) throw new Error("agent tool not registered");
-  return tool;
-}
-
-describe("agent tool", () => {
-  it("is registered as non-interactive", () => {
-    const tool = getAgentTool();
-    expect(tool.interactive).toBe(false);
+describe("createAgentTool", () => {
+  it("returns a tool with the correct name and displayName", () => {
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+    expect(tool.name).toBe("agent");
+    expect(tool.displayName).toBe("Agent");
   });
 
-  it("returns final content from the completion loop", async () => {
-    mockLoop.mockResolvedValueOnce({
-      content: "Here are my findings",
-      messages: [],
-      aborted: false,
-    });
+  it("formatCall returns the agent name", () => {
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+    expect(tool.formatCall({ name: "auth-review", prompt: "check auth" })).toBe(
+      "auth-review",
+    );
+  });
 
-    const tool = getAgentTool();
-    const result = await tool.execute(
-      JSON.stringify({ prompt: "find all config files" }),
-      makeContext(),
+  it("requires name and prompt parameters", () => {
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+    expect(tool.parameters).toEqual(
+      expect.objectContaining({
+        required: ["name", "prompt"],
+      }),
+    );
+  });
+
+  it("executes successfully and returns sub-agent content", async () => {
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(
+      mockClient(["research findings"]),
     );
 
-    expect(result?.output).toBe("Here are my findings");
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+    const context = mockToolContext();
+
+    const result = await tool.execute(
+      { name: "test-agent", prompt: "find something" },
+      context,
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.output).toBe("research findings");
   });
 
   it("returns fallback message when sub-agent produces no output", async () => {
-    mockLoop.mockResolvedValueOnce({
-      content: "",
-      messages: [],
-      aborted: false,
-    });
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(mockClient([]));
 
-    const tool = getAgentTool();
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+
     const result = await tool.execute(
-      JSON.stringify({ prompt: "do something" }),
-      makeContext(),
+      { name: "empty-agent", prompt: "do nothing" },
+      mockToolContext(),
     );
 
-    expect(result?.output).toBe("(sub-agent produced no output)");
+    expect(result.status).toBe("ok");
+    expect(result.output).toBe("(sub-agent produced no output)");
   });
 
-  it("passes provider config to the completion loop", async () => {
-    mockLoop.mockResolvedValueOnce({
-      content: "done",
-      messages: [],
-      aborted: false,
-    });
+  it("streams content via onProgress", async () => {
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(
+      mockClient(["streaming", " content"]),
+    );
 
-    const tool = getAgentTool();
-    await tool.execute(JSON.stringify({ prompt: "test" }), makeContext());
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+    const onProgress = vi.fn();
 
-    const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    expect(opts.baseUrl).toBe("http://localhost");
-    expect(opts.model).toBe("test-model");
-    expect(opts.apiKey).toBe("key");
-    expect(opts.maxTokens).toBe(1024);
-    expect(opts.contextWindow).toBe(8192);
-  });
-
-  it("passes the prompt as the initial user message", async () => {
-    mockLoop.mockResolvedValueOnce({
-      content: "done",
-      messages: [],
-      aborted: false,
-    });
-
-    const tool = getAgentTool();
     await tool.execute(
-      JSON.stringify({ prompt: "search for bugs" }),
-      makeContext(),
+      { name: "streaming-agent", prompt: "stream it" },
+      mockToolContext({ onProgress }),
     );
 
-    const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    expect(opts.initialMessages).toEqual([
-      { role: "user", content: "search for bugs" },
-    ]);
+    expect(onProgress).toHaveBeenCalledWith("streaming");
+    expect(onProgress).toHaveBeenCalledWith("streaming content");
   });
 
-  it("includes sub-agent guidance in system message", async () => {
-    mockLoop.mockResolvedValueOnce({
-      content: "done",
-      messages: [],
-      aborted: false,
-    });
+  it("returns error on timeout", async () => {
+    const hangingClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(
+        (opts: { signal?: AbortSignal }) =>
+          new Promise<CompletionStream>((_resolve, reject) => {
+            opts.signal?.addEventListener("abort", () => {
+              reject(new DOMException("Aborted", "AbortError"));
+            });
+          }),
+      ),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(hangingClient);
 
-    const tool = getAgentTool();
-    await tool.execute(JSON.stringify({ prompt: "test" }), makeContext());
+    vi.mocked(loadConfig).mockReturnValue({
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 3,
+        maxTimeoutSeconds: 1,
+        tools: ["read_file"],
+      },
+    } as unknown as ReturnType<typeof loadConfig>);
 
-    const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    expect(opts.systemMessage).toContain(
-      "You are a read-only research sub-agent",
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+
+    const result = await tool.execute(
+      { name: "slow-agent", prompt: "take forever", timeout: 1 },
+      mockToolContext(),
     );
+
+    expect(result.status).toBe("error");
+    expect(result.output).toContain("timed out");
+    expect(result.output).toContain("slow-agent");
   });
 
-  it("passes only allowed tools to the sub-agent", async () => {
-    mockLoop.mockResolvedValueOnce({
-      content: "done",
-      messages: [],
-      aborted: false,
+  it("propagates parent abort as a thrown error", async () => {
+    const parentController = new AbortController();
+    const hangingClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(
+        (opts: { signal?: AbortSignal }) =>
+          new Promise<CompletionStream>((_resolve, reject) => {
+            opts.signal?.addEventListener("abort", () => {
+              reject(new DOMException("Aborted", "AbortError"));
+            });
+          }),
+      ),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(hangingClient);
+
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+    const context = mockToolContext({ signal: parentController.signal });
+
+    const promise = tool.execute(
+      { name: "doomed-agent", prompt: "will be cancelled" },
+      context,
+    );
+
+    parentController.abort();
+    await expect(promise).rejects.toThrow();
+  });
+
+  it("builds sub-agent tool registry from config allowlist", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 3,
+        maxTimeoutSeconds: 300,
+        tools: ["read_file", "glob", "grep"],
+      },
+    } as unknown as ReturnType<typeof loadConfig>);
+
+    let capturedTools: unknown;
+    const capturingClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(async (opts) => {
+        capturedTools = opts.tools;
+        return mockStream(["done"]);
+      }),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(capturingClient);
+
+    const registry = createToolRegistry();
+    registry.register({
+      name: "read_file",
+      displayName: "Read File",
+      description: "reads files",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => ok("content"),
+    });
+    registry.register({
+      name: "write_file",
+      displayName: "Write File",
+      description: "writes files",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => ok("written"),
     });
 
-    const tool = getAgentTool();
+    const tool = createAgentTool(registry);
     await tool.execute(
-      JSON.stringify({ prompt: "test" }),
-      makeContext({ depth: 0 }),
+      { name: "scoped-agent", prompt: "check files" },
+      mockToolContext(),
     );
 
-    const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    const toolNames = opts.tools?.map((t) => t.function.name) ?? [];
-
+    const toolDefs = capturedTools as Array<{ function: { name: string } }>;
+    const toolNames = toolDefs.map((t) => t.function.name);
     expect(toolNames).toContain("read_file");
-    expect(toolNames).toContain("glob");
-    expect(toolNames).toContain("grep");
-    expect(toolNames).not.toContain("edit_file");
     expect(toolNames).not.toContain("write_file");
-    expect(toolNames).not.toContain("run_command");
-  });
-
-  it("excludes agent tool at max depth", async () => {
-    mockLoop.mockResolvedValueOnce({
-      content: "done",
-      messages: [],
-      aborted: false,
-    });
-
-    const tool = getAgentTool();
-    await tool.execute(
-      JSON.stringify({ prompt: "test" }),
-      makeContext({ depth: 0 }),
-    );
-
-    const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    const toolNames = opts.tools?.map((t) => t.function.name) ?? [];
-
-    // depth 0 + 1 = 1 which is default maxDepth, so agent should be excluded
     expect(toolNames).not.toContain("agent");
   });
 
-  it("returns error string on non-abort errors", async () => {
-    mockLoop.mockRejectedValueOnce(new Error("connection failed"));
+  it("auto-includes MCP tools in sub-agent registry regardless of allowlist", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 3,
+        maxTimeoutSeconds: 300,
+        tools: ["read_file"],
+      },
+    } as unknown as ReturnType<typeof loadConfig>);
 
-    const tool = getAgentTool();
-    const result = await tool.execute(
-      JSON.stringify({ prompt: "test" }),
-      makeContext(),
-    );
+    let capturedTools: unknown;
+    const capturingClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(async (opts) => {
+        capturedTools = opts.tools;
+        return mockStream(["done"]);
+      }),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(capturingClient);
 
-    expect(result?.output).toBe("Sub-agent error: connection failed");
-  });
-
-  it("re-throws abort errors from parent signal", async () => {
-    const controller = new AbortController();
-    mockLoop.mockImplementationOnce(async () => {
-      controller.abort();
-      throw new DOMException("aborted", "AbortError");
+    const registry = createToolRegistry();
+    registry.register({
+      name: "read_file",
+      displayName: "Read File",
+      description: "reads files",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => ok("content"),
+    });
+    registry.register({
+      name: "mcp__mock__get_time",
+      displayName: "mock/get_time",
+      description: "Returns the time",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => ok("12:00"),
     });
 
-    const tool = getAgentTool();
-    await expect(
-      tool.execute(
-        JSON.stringify({ prompt: "test" }),
-        makeContext({ signal: controller.signal }),
-      ),
-    ).rejects.toThrow("aborted");
-  });
-
-  it("increments depth for the sub-agent tool context", async () => {
-    mockLoop.mockResolvedValueOnce({
-      content: "done",
-      messages: [],
-      aborted: false,
-    });
-
-    const tool = getAgentTool();
+    const tool = createAgentTool(registry);
     await tool.execute(
-      JSON.stringify({ prompt: "test" }),
-      makeContext({ depth: 0 }),
+      { name: "scoped-agent", prompt: "check time" },
+      mockToolContext(),
     );
 
-    const opts = mockLoop.mock.calls[0][0] as CompletionLoopOptions;
-    expect(opts.toolContext.depth).toBe(1);
+    const toolDefs = capturedTools as Array<{ function: { name: string } }>;
+    const toolNames = toolDefs.map((t) => t.function.name);
+    expect(toolNames).toContain("read_file");
+    expect(toolNames).toContain("mcp__mock__get_time");
   });
 
-  it("returns timeout message when agent exceeds timeout", async () => {
-    vi.useFakeTimers();
-    mockLoadConfig.mockReturnValue({
-      activeProvider: "",
-      activeModel: "",
-      maxTokens: 8192,
-      providers: [],
-      agents: { maxDepth: 1, maxConcurrent: 3, timeoutSeconds: 1, tools: [] },
-    });
+  it("includes agent tool in sub-agent registry when below max depth", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      agents: {
+        maxDepth: 2,
+        maxConcurrent: 3,
+        maxTimeoutSeconds: 300,
+        tools: ["read_file"],
+      },
+    } as unknown as ReturnType<typeof loadConfig>);
 
-    mockLoop.mockImplementationOnce(async ({ signal }) => {
-      await new Promise<never>((_, reject) => {
-        signal.addEventListener("abort", () =>
-          reject(new DOMException("aborted", "AbortError")),
-        );
-      });
-      return { content: "", messages: [], aborted: true };
-    });
+    let capturedTools: unknown;
+    const capturingClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(async (opts) => {
+        capturedTools = opts.tools;
+        return mockStream(["done"]);
+      }),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(capturingClient);
 
-    const tool = getAgentTool();
-    const resultPromise = tool.execute(
-      JSON.stringify({ prompt: "slow task" }),
-      makeContext(),
+    const registry = createToolRegistry();
+    registry.register({
+      name: "read_file",
+      displayName: "Read File",
+      description: "reads",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => ok("content"),
+    });
+    const agentTool = createAgentTool(registry);
+    registry.register(agentTool);
+
+    await agentTool.execute(
+      { name: "nested-agent", prompt: "go deeper" },
+      mockToolContext({ depth: 0 }),
     );
 
-    await vi.advanceTimersByTimeAsync(1500);
-
-    const result = await resultPromise;
-    expect(result?.output).toContain("timed out");
-
-    vi.useRealTimers();
+    const toolDefs = capturedTools as Array<{ function: { name: string } }>;
+    const toolNames = toolDefs.map((t) => t.function.name);
+    expect(toolNames).toContain("agent");
   });
 
-  it("respects concurrency limit", async () => {
-    mockLoadConfig.mockReturnValue({
-      activeProvider: "",
-      activeModel: "",
-      maxTokens: 8192,
-      providers: [],
+  it("wraps sub-agent confirm calls with agent name label", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 3,
+        maxTimeoutSeconds: 300,
+        tools: ["confirming_tool"],
+      },
+    } as unknown as ReturnType<typeof loadConfig>);
+
+    // The sub-agent's first response triggers a tool call, second returns content.
+    let streamCount = 0;
+    const subClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(async () => {
+        streamCount++;
+        if (streamCount === 1) {
+          return {
+            content: tokens([""]),
+            getUsage: () => null,
+            getToolCalls: () => [
+              {
+                id: "call_1",
+                type: "function" as const,
+                function: { name: "confirming_tool", arguments: "{}" },
+              },
+            ],
+          };
+        }
+        return mockStream(["done"]);
+      }),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(subClient);
+
+    const parentConfirm = vi.fn(async () => true);
+    const registry = createToolRegistry();
+    registry.register({
+      name: "confirming_tool",
+      displayName: "Confirming",
+      description: "needs confirm",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async (_args, ctx) => {
+        await ctx.confirm("Allow?", { label: "Run Command" });
+        await ctx.confirm("Proceed?");
+        return ok("confirmed");
+      },
+    });
+
+    const tool = createAgentTool(registry);
+    await tool.execute(
+      { name: "my-agent", prompt: "do something" },
+      mockToolContext({ confirm: parentConfirm }),
+    );
+
+    // The wrapped confirm should inject the agent name.
+    expect(parentConfirm).toHaveBeenCalledTimes(2);
+    expect(parentConfirm).toHaveBeenCalledWith("Allow?", {
+      label: "Agent my-agent: Run Command",
+    });
+    // Second call has no label — falls back to message.
+    expect(parentConfirm).toHaveBeenCalledWith("Proceed?", {
+      label: "Agent my-agent: Proceed?",
+    });
+  });
+
+  it("returns error for non-abort exceptions", async () => {
+    const failingClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(async () => {
+        throw new Error("network failure");
+      }),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(failingClient);
+
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+
+    const result = await tool.execute(
+      { name: "failing-agent", prompt: "will fail" },
+      mockToolContext(),
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.output).toContain("network failure");
+    expect(result.output).toContain("failing-agent");
+  });
+
+  it("queues agents when concurrency limit is reached", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
       agents: {
         maxDepth: 1,
         maxConcurrent: 1,
-        timeoutSeconds: 120,
+        maxTimeoutSeconds: 300,
         tools: [],
       },
-    });
+    } as unknown as ReturnType<typeof loadConfig>);
 
-    let running = 0;
-    let maxRunning = 0;
+    const order: string[] = [];
+    // eslint-disable-next-line -- assigned inside async mock callback
+    let resolveFirst: (() => void) | undefined;
 
-    mockLoop.mockImplementation(async () => {
-      running++;
-      maxRunning = Math.max(maxRunning, running);
-      await new Promise((r) => setTimeout(r, 10));
-      running--;
-      return { content: "done", messages: [], aborted: false };
-    });
+    const delayClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(async () => {
+        const callIndex = order.length;
+        if (callIndex === 0) {
+          order.push("first-start");
+          await new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          });
+          order.push("first-end");
+        } else {
+          order.push("second-start");
+          order.push("second-end");
+        }
+        return mockStream(["done"]);
+      }),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(delayClient);
 
-    const tool = getAgentTool();
-    const ctx = makeContext();
+    const registry = createToolRegistry();
+    const tool = createAgentTool(registry);
+    const context = mockToolContext();
 
-    // Spawn 3 agents with concurrency limit of 1
-    await Promise.all([
-      tool.execute(JSON.stringify({ prompt: "a" }), ctx),
-      tool.execute(JSON.stringify({ prompt: "b" }), ctx),
-      tool.execute(JSON.stringify({ prompt: "c" }), ctx),
+    const firstPromise = tool.execute(
+      { name: "first", prompt: "go first" },
+      context,
+    );
+    const secondPromise = tool.execute(
+      { name: "second", prompt: "go second" },
+      context,
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(order).toEqual(["first-start"]);
+
+    if (resolveFirst) resolveFirst();
+    await new Promise((r) => setTimeout(r, 50));
+
+    const [r1, r2] = await Promise.all([firstPromise, secondPromise]);
+    expect(r1.status).toBe("ok");
+    expect(r2.status).toBe("ok");
+    expect(order).toEqual([
+      "first-start",
+      "first-end",
+      "second-start",
+      "second-end",
     ]);
-
-    // Only 1 should have been running at a time
-    expect(maxRunning).toBe(1);
-  });
-
-  it("per-call timeout is capped to global maximum", async () => {
-    vi.useFakeTimers();
-    mockLoadConfig.mockReturnValue({
-      activeProvider: "",
-      activeModel: "",
-      maxTokens: 8192,
-      providers: [],
-      agents: {
-        maxDepth: 1,
-        maxConcurrent: 3,
-        timeoutSeconds: 2,
-        tools: [],
-      },
-    });
-
-    mockLoop.mockImplementationOnce(async ({ signal }) => {
-      await new Promise<never>((_, reject) => {
-        signal.addEventListener("abort", () =>
-          reject(new DOMException("aborted", "AbortError")),
-        );
-      });
-      return { content: "", messages: [], aborted: true };
-    });
-
-    const tool = getAgentTool();
-    // Request 60s but global max is 2s — should be capped to 2s
-    const resultPromise = tool.execute(
-      JSON.stringify({ prompt: "test", timeout: 60 }),
-      makeContext(),
-    );
-
-    await vi.advanceTimersByTimeAsync(2500);
-
-    const result = await resultPromise;
-    expect(result?.output).toContain("timed out after 2s");
-
-    vi.useRealTimers();
-  });
-
-  it("uses per-call timeout when under global maximum", async () => {
-    vi.useFakeTimers();
-    mockLoadConfig.mockReturnValue({
-      activeProvider: "",
-      activeModel: "",
-      maxTokens: 8192,
-      providers: [],
-      agents: {
-        maxDepth: 1,
-        maxConcurrent: 3,
-        timeoutSeconds: 60,
-        tools: [],
-      },
-    });
-
-    mockLoop.mockImplementationOnce(async ({ signal }) => {
-      await new Promise<never>((_, reject) => {
-        signal.addEventListener("abort", () =>
-          reject(new DOMException("aborted", "AbortError")),
-        );
-      });
-      return { content: "", messages: [], aborted: true };
-    });
-
-    const tool = getAgentTool();
-    // Request 1s, global max is 60s — should use 1s
-    const resultPromise = tool.execute(
-      JSON.stringify({ prompt: "test", timeout: 1 }),
-      makeContext(),
-    );
-
-    await vi.advanceTimersByTimeAsync(1500);
-
-    const result = await resultPromise;
-    expect(result?.output).toContain("timed out after 1s");
-
-    vi.useRealTimers();
   });
 });

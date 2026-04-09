@@ -1,46 +1,28 @@
 import { z } from "zod";
-import { runCompletionLoop } from "../completion-loop";
-import { type AgentsConfig, getAgentsConfig, loadConfig } from "../config";
-import { getErrorMessage } from "../errors";
-import { loadSubAgentInstructions } from "../instructions";
-import type { ChatMessage } from "../provider/client";
-import { addAgent, incrementToolCalls, removeAgent } from "./agent-tracker";
-import { getTool, registerTool } from "./registry";
-import {
-  err,
-  ok,
-  parseToolArgs,
-  type ToolContext,
-  type ToolResult,
-  toToolDefinition,
-} from "./types";
+import { runCompletionLoop } from "../agent/completion-loop";
+import { loadConfig } from "../config/file";
+import type { Agents } from "../config/schema";
+import { createOpenAICompatibleClient } from "../provider/openai-compatible";
+import { buildSubAgentSystemPrompt } from "../prompt/build-system-prompt";
+import { getErrorMessage } from "../utils/error";
+import type { ToolRegistry } from "./registry";
+import { createToolRegistry } from "./registry";
+import type { Tool, ToolContext, ToolResult } from "./types";
+import { err, ok } from "./types";
 
+/** Zod schema for the agent tool arguments. */
 const argsSchema = z.object({
+  name: z.string().min(1, "agent name is required"),
   prompt: z.string().min(1, "prompt is required"),
   timeout: z.number().int().positive().optional(),
 });
 
-/** Builds the scoped system prompt for a sub-agent. */
-function buildSubAgentSystemPrompt(): string {
-  return loadSubAgentInstructions();
-}
+// -- Concurrency semaphore --------------------------------------------------
 
-/** Builds tool definitions for the sub-agent from the configured allowlist. */
-function getSubAgentToolDefs(agentsConfig: AgentsConfig, depth: number) {
-  const names = [...agentsConfig.tools];
-  if (depth < agentsConfig.maxDepth) {
-    names.push("agent");
-  }
-  return names
-    .map((name) => getTool(name))
-    .filter((t) => t != null)
-    .map(toToolDefinition);
-}
-
-// Concurrency semaphore — limits how many agents run simultaneously.
 let activeAgents = 0;
 const waitQueue: Array<() => void> = [];
 
+/** Acquires a concurrency slot, blocking if at capacity. */
 async function acquireSlot(maxConcurrent: number): Promise<void> {
   if (activeAgents < maxConcurrent) {
     activeAgents++;
@@ -52,18 +34,56 @@ async function acquireSlot(maxConcurrent: number): Promise<void> {
   activeAgents++;
 }
 
+/** Releases a concurrency slot and wakes the next waiter. */
 function releaseSlot(): void {
   activeAgents--;
   const next = waitQueue.shift();
   if (next) next();
 }
 
-function buildDescription(): string {
-  const agentsConfig = getAgentsConfig(loadConfig());
-  const mins = Math.round(agentsConfig.timeoutSeconds / 60);
+// -- Sub-agent tool scoping -------------------------------------------------
+
+/**
+ * Builds a scoped tool registry for a sub-agent from the config allowlist.
+ * Includes the agent tool itself when the sub-agent hasn't reached max depth.
+ * MCP tools (names prefixed with `mcp__`) are auto-included so sub-agents
+ * inherit any MCP servers the user has connected.
+ */
+function buildSubAgentToolRegistry(
+  parentRegistry: ToolRegistry,
+  agentsConfig: Agents,
+  nextDepth: number,
+): ToolRegistry {
+  const registry = createToolRegistry();
+  for (const name of agentsConfig.tools) {
+    const tool = parentRegistry.get(name);
+    if (tool) registry.register(tool);
+  }
+  // Auto-include all MCP tools — if the user enabled an MCP server, they want
+  // it usable from sub-agents too, without having to remember to add each tool
+  // name to the agents allowlist.
+  for (const tool of parentRegistry.list()) {
+    if (tool.name.startsWith("mcp__")) {
+      registry.register(tool);
+    }
+  }
+  // Allow nested agents if the next depth is still below max.
+  // The agent tool may not be in the registry if it was disabled.
+  const agentTool =
+    nextDepth < agentsConfig.maxDepth ? parentRegistry.get("agent") : undefined;
+  if (agentTool) registry.register(agentTool);
+  return registry;
+}
+
+// -- Tool description -------------------------------------------------------
+
+/** Builds the LLM-facing description for the agent tool. */
+function buildDescription(agentsConfig: Agents): string {
+  const mins = Math.round(agentsConfig.maxTimeoutSeconds / 60);
   const timeoutLabel =
-    mins >= 1 ? `${mins}-minute` : `${agentsConfig.timeoutSeconds}-second`;
-  return `Spawn a sub-agent that autonomously researches, explores, or analyses. The sub-agent has access to read-only tools (read_file, glob, grep, web_search, skill) and returns a text summary when done. It cannot edit files, write files, or run commands.
+    mins >= 1 ? `${mins}-minute` : `${agentsConfig.maxTimeoutSeconds}-second`;
+
+  return `Spawn a sub-agent that autonomously researches, explores, or analyses. The sub-agent has access to tools for reading files, searching, running commands, and more. It returns a text summary when done.
 
 You MUST use this tool when:
 - The user asks to explore, investigate, describe, review, or understand a codebase or large area of code.
@@ -79,99 +99,131 @@ Example: if asked "describe this codebase", spawn agents for: project structure,
 Each agent has a default ${timeoutLabel} timeout which is sufficient for most tasks. Do NOT set a timeout unless you specifically need to cut an agent short. Omit timeout to use the default.`;
 }
 
-registerTool({
-  name: "agent",
-  displayName: "Agent",
-  description: buildDescription(),
-  parameters: {
-    type: "object",
-    properties: {
-      prompt: {
-        type: "string",
-        description: "The task for the sub-agent to perform",
-      },
-      timeout: {
-        type: "number",
-        description:
-          "Optional. Overrides the default timeout. Only set this to cut an agent short — e.g. a quick check that should fail fast within seconds. Capped to the configured maximum.",
-      },
-    },
-    required: ["prompt"],
-  },
-  interactive: false,
-  async execute(args: string, context: ToolContext): Promise<ToolResult> {
-    const { prompt, timeout: requestedTimeout } = parseToolArgs(
-      argsSchema,
-      args,
-    );
+// -- Factory ----------------------------------------------------------------
 
-    const freshConfig = loadConfig();
-    const agentsConfig = getAgentsConfig(freshConfig);
-    const { providerConfig } = context;
-    const systemMessage = buildSubAgentSystemPrompt();
-    const toolDefs = getSubAgentToolDefs(agentsConfig, context.depth + 1);
+/**
+ * Creates the agent tool.
+ *
+ * Needs the parent tool registry to build scoped sub-agent registries at
+ * execution time. The returned tool is registered in the same registry.
+ */
+export function createAgentTool(parentRegistry: ToolRegistry): Tool {
+  const config = loadConfig();
+  const description = buildDescription(config.agents);
 
-    const subAgentContext: ToolContext = {
-      renderInteractive: () => {
-        throw new Error("Sub-agents cannot render interactive components");
-      },
-      reportProgress: () => {},
-      permissions: context.permissions,
-      signal: context.signal,
-      depth: context.depth + 1,
-      providerConfig,
-      allowedCommands: context.allowedCommands,
-    };
-
-    // Per-call timeout capped to the global maximum.
-    const effectiveTimeout = requestedTimeout
-      ? Math.min(requestedTimeout, agentsConfig.timeoutSeconds)
-      : agentsConfig.timeoutSeconds;
-
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(
-      () => timeoutController.abort(),
-      effectiveTimeout * 1000,
-    );
-
-    const signal = AbortSignal.any([context.signal, timeoutController.signal]);
-
-    const agentId = crypto.randomUUID();
-    addAgent(agentId, prompt);
-
-    await acquireSlot(agentsConfig.maxConcurrent);
-    try {
-      const result = await runCompletionLoop({
-        baseUrl: providerConfig.baseUrl,
-        model: providerConfig.model,
-        apiKey: providerConfig.apiKey,
-        systemMessage,
-        initialMessages: [{ role: "user", content: prompt }],
-        tools: toolDefs.length > 0 ? toolDefs : undefined,
-        toolContext: subAgentContext,
-        maxTokens: providerConfig.maxTokens,
-        contextWindow: providerConfig.contextWindow,
-        signal,
-        onMessage: (msg: ChatMessage) => {
-          if (msg.role === "tool") {
-            incrementToolCalls(agentId);
-          }
+  return {
+    name: "agent",
+    displayName: "Agent",
+    description,
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description:
+            "A short, descriptive name for the agent (e.g. 'auth-review', 'test-coverage').",
         },
-      });
+        prompt: {
+          type: "string",
+          description: "The task for the sub-agent to perform.",
+        },
+        timeout: {
+          type: "number",
+          description:
+            "Optional. Overrides the default timeout in seconds. Only set this to cut an agent short. Capped to the configured maximum.",
+        },
+      },
+      required: ["name", "prompt"],
+    },
+    argsSchema,
+    formatCall(args) {
+      return String(args.name);
+    },
+    async execute(args: unknown, context: ToolContext): Promise<ToolResult> {
+      const parsed = argsSchema.parse(args);
 
-      return ok(result.content || "(sub-agent produced no output)");
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        if (timeoutController.signal.aborted && !context.signal.aborted) {
-          return err(`Sub-agent timed out after ${effectiveTimeout}s`);
+      // Read fresh config each invocation so runtime changes are picked up.
+      const freshConfig = loadConfig();
+      const agentsConfig = freshConfig.agents;
+      const nextDepth = context.depth + 1;
+
+      // Build scoped tools for the sub-agent.
+      const subRegistry = buildSubAgentToolRegistry(
+        parentRegistry,
+        agentsConfig,
+        nextDepth,
+      );
+      const toolDefs = subRegistry.getDefinitions();
+
+      // Sub-agent confirm calls include the agent name as context.
+      const subAgentContext: ToolContext = {
+        ...context,
+        depth: nextDepth,
+        // Sub-agents don't stream progress to the parent UI — only the
+        // completion loop's onContent does that via context.onProgress.
+        onProgress: undefined,
+        // Wrap confirm to inject agent name label.
+        confirm: (message, options) =>
+          context.confirm(message, {
+            ...options,
+            label: `Agent ${parsed.name}: ${options?.label ?? message}`,
+          }),
+      };
+
+      // Per-call timeout capped to the global maximum.
+      const effectiveTimeout = parsed.timeout
+        ? Math.min(parsed.timeout, agentsConfig.maxTimeoutSeconds)
+        : agentsConfig.maxTimeoutSeconds;
+
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(
+        () => timeoutController.abort(),
+        effectiveTimeout * 1000,
+      );
+
+      const signal = AbortSignal.any([
+        context.signal,
+        timeoutController.signal,
+      ]);
+
+      const client = createOpenAICompatibleClient(context.provider);
+      const toolNames = [...agentsConfig.tools];
+      if (nextDepth < agentsConfig.maxDepth) toolNames.push("agent");
+      const systemPrompt = buildSubAgentSystemPrompt(toolNames);
+
+      await acquireSlot(agentsConfig.maxConcurrent);
+      try {
+        const result = await runCompletionLoop({
+          client,
+          model: context.model,
+          contextWindow: context.contextWindow,
+          systemPrompt,
+          initialMessages: [{ role: "user", content: parsed.prompt }],
+          tools: toolDefs.length > 0 ? toolDefs : undefined,
+          toolRegistry: subRegistry,
+          toolContext: { ...subAgentContext, signal },
+          signal,
+          // Stream sub-agent content to the parent's live output slot.
+          onContent: context.onProgress,
+        });
+
+        return ok(result.content || "(sub-agent produced no output)");
+      } catch (e) {
+        // Distinguish timeout from parent abort.
+        if (e instanceof DOMException && e.name === "AbortError") {
+          if (timeoutController.signal.aborted && !context.signal.aborted) {
+            return err(
+              `Sub-agent "${parsed.name}" timed out after ${effectiveTimeout}s`,
+            );
+          }
+          // Parent abort — propagate so the caller knows the conversation was cancelled.
+          throw e;
         }
-        throw e;
+        return err(`Sub-agent "${parsed.name}" error: ${getErrorMessage(e)}`);
+      } finally {
+        clearTimeout(timeoutId);
+        releaseSlot();
       }
-      return err(`Sub-agent error: ${getErrorMessage(e)}`);
-    } finally {
-      clearTimeout(timeoutId);
-      removeAgent(agentId);
-      releaseSlot();
-    }
-  },
-});
+    },
+  };
+}

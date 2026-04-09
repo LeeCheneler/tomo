@@ -1,7 +1,6 @@
 /**
- * Parses a Server-Sent Events stream, yielding the data payload of each event.
- * Handles buffering of partial lines across chunks.
- * Returns when it encounters `data: [DONE]` or the stream ends.
+ * Parses a ReadableStream of bytes as Server-Sent Events.
+ * Yields each `data:` payload as a string, stopping at `[DONE]`.
  */
 export async function* parseSSEStream(
   stream: ReadableStream<Uint8Array>,
@@ -16,24 +15,22 @@ export async function* parseSSEStream(
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
 
-      for (const rawLine of lines) {
-        const line = rawLine.replace(/\r$/, "");
-        if (line.startsWith("data: ")) {
+      // SSE events are separated by double newlines
+      const parts = buffer.split("\n\n");
+      // Last part may be incomplete — keep it in the buffer.
+      // split() always returns at least one element so pop() never returns undefined.
+      /* v8 ignore next -- defensive fallback */
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        for (const line of part.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
           const data = line.slice(6);
           if (data === "[DONE]") return;
           yield data;
         }
       }
-    }
-
-    // Handle remaining buffer after stream ends
-    const remaining = buffer.replace(/\r$/, "");
-    if (remaining.startsWith("data: ")) {
-      const data = remaining.slice(6);
-      if (data !== "[DONE]") yield data;
     }
   } finally {
     reader.releaseLock();

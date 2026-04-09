@@ -1,69 +1,31 @@
 import { z } from "zod";
-import { registerTool } from "./registry";
-import {
-  err,
-  ok,
-  parseToolArgs,
-  type ToolContext,
-  type ToolResult,
-} from "./types";
+import { env } from "../utils/env";
+import type { Tool, ToolContext, ToolResult } from "./types";
+import { err, ok } from "./types";
 
+/** Tavily search API endpoint. */
 const TAVILY_API_URL = "https://api.tavily.com/search";
 
+/** Zod schema for web_search arguments. */
 const argsSchema = z.object({
   query: z.string().min(1, "no search query provided"),
 });
 
-registerTool({
-  name: "web_search",
-  displayName: "Web Search",
-  description: `Search the web for current information. Returns up to 5 results with titles, URLs, and content snippets.
-
-- Use for information that is not available in the codebase: library documentation, API references, error messages, recent changes.
-- Do not use for questions answerable from the code itself — use grep or read_file instead.
-- Requires a TAVILY_API_KEY environment variable to be configured.`,
-  parameters: {
-    type: "object",
-    properties: {
-      query: {
-        type: "string",
-        description: "The search query",
-      },
-    },
-    required: ["query"],
-  },
-  interactive: false,
-  enabled: false,
-  warning: () =>
-    process.env.TAVILY_API_KEY
-      ? undefined
-      : "TAVILY_API_KEY env var is not set",
-  async execute(args: string, _context: ToolContext): Promise<ToolResult> {
-    const { query } = parseToolArgs(argsSchema, args);
-
-    const apiKey = process.env.TAVILY_API_KEY;
-    if (!apiKey) {
-      return err(
-        "TAVILY_API_KEY environment variable is not set. Set it to use web search.",
-      );
-    }
-
-    return search(query, apiKey);
-  },
+/** Zod schema for a single Tavily search result. */
+const tavilyResultSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  content: z.string(),
+  score: z.number(),
 });
 
-interface TavilyResult {
-  title: string;
-  url: string;
-  content: string;
-  score: number;
-}
+/** Zod schema for the Tavily search API response. */
+const tavilyResponseSchema = z.object({
+  answer: z.string().optional(),
+  results: z.array(tavilyResultSchema),
+});
 
-interface TavilyResponse {
-  answer?: string;
-  results: TavilyResult[];
-}
-
+/** Calls the Tavily search API and formats the results. */
 async function search(query: string, apiKey: string): Promise<ToolResult> {
   const response = await fetch(TAVILY_API_URL, {
     method: "POST",
@@ -82,7 +44,7 @@ async function search(query: string, apiKey: string): Promise<ToolResult> {
   if (!response.ok) {
     const status = response.status;
     if (status === 401) {
-      return err("Invalid TAVILY_API_KEY. Check your API key.");
+      return err("Invalid Tavily API key. Check your configuration.");
     }
     if (status === 429) {
       return err("Tavily rate limit exceeded. Try again later.");
@@ -90,7 +52,7 @@ async function search(query: string, apiKey: string): Promise<ToolResult> {
     return err(`Tavily API returned status ${status}`);
   }
 
-  const data = (await response.json()) as TavilyResponse;
+  const data = tavilyResponseSchema.parse(await response.json());
 
   if (!data.results || data.results.length === 0) {
     return ok("No results found.");
@@ -110,3 +72,40 @@ async function search(query: string, apiKey: string): Promise<ToolResult> {
 
   return ok(parts.join("\n\n"));
 }
+
+/** The web_search tool definition. */
+export const webSearchTool: Tool = {
+  name: "web_search",
+  displayName: "Web Search",
+  description: `Search the web for current information. Returns up to 5 results with titles, URLs, and content snippets.
+
+- Use for information that is not available in the codebase: library documentation, API references, error messages, recent changes.
+- Do not use for questions answerable from the code itself — use grep or read_file instead.
+- Requires a Tavily API key to be configured in settings.`,
+  parameters: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "The search query",
+      },
+    },
+    required: ["query"],
+  },
+  argsSchema,
+  formatCall(args: Record<string, unknown>): string {
+    return String(args.query ?? "");
+  },
+  async execute(args: unknown, context: ToolContext): Promise<ToolResult> {
+    const parsed = argsSchema.parse(args);
+    const apiKey = context.webSearchApiKey ?? env.getOptional("TAVILY_API_KEY");
+
+    if (!apiKey) {
+      return err(
+        "Tavily API key is not configured. Set it in /settings under Web Search, or set the TAVILY_API_KEY environment variable.",
+      );
+    }
+
+    return search(parsed.query, apiKey);
+  },
+};

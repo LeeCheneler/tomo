@@ -1,265 +1,255 @@
-import { execSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { statSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTool } from "./registry";
-import { makeMockContext } from "./test-helpers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { isGitRepo } from "../prompt/git-context";
+import { mockToolContext } from "../test-utils/stub-context";
+import { grepTool } from "./grep";
 
-// Import to trigger registration
-import "./grep";
+vi.mock("node:child_process", () => ({
+  execFileSync: vi.fn(),
+}));
 
-const tmpDir = resolve(import.meta.dirname, "../../.test-grep-tmp");
-let mockContext = makeMockContext();
+vi.mock("node:fs", () => ({
+  statSync: vi.fn(() => null),
+}));
 
-/** Initialise a git repo inside tmpDir with committed files. */
-function setupGitRepo() {
-  execSync("git init", { cwd: tmpDir, stdio: "pipe" });
-  execSync("git config user.email test@test.com", {
-    cwd: tmpDir,
-    stdio: "pipe",
-  });
-  execSync("git config user.name Test", { cwd: tmpDir, stdio: "pipe" });
-  execSync("git add -A && git commit -m init", { cwd: tmpDir, stdio: "pipe" });
-}
-
-beforeEach(() => {
-  mkdirSync(resolve(tmpDir, "src"), { recursive: true });
-  writeFileSync(
-    resolve(tmpDir, "readme.md"),
-    "# Hello World\nThis is a readme.",
-  );
-  writeFileSync(
-    resolve(tmpDir, "src/index.ts"),
-    "export function hello() {\n  return 'world';\n}\n",
-  );
-  writeFileSync(
-    resolve(tmpDir, "src/utils.ts"),
-    "export function add(a: number, b: number) {\n  return a + b;\n}\n",
-  );
-  writeFileSync(
-    resolve(tmpDir, "src/app.tsx"),
-    "function App() {\n  return <div>Hello</div>;\n}\n",
-  );
-  vi.clearAllMocks();
-  mockContext = makeMockContext();
-});
+vi.mock("../prompt/git-context", () => ({
+  isGitRepo: vi.fn(),
+}));
 
 afterEach(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
+  vi.resetAllMocks();
 });
 
-describe("grep tool", () => {
-  it("is registered as non-interactive", () => {
-    const tool = getTool("grep");
-    expect(tool).toBeDefined();
-    expect(tool?.name).toBe("grep");
-    expect(tool?.interactive).toBe(false);
+describe("grepTool", () => {
+  it("has correct name and parameters", () => {
+    expect(grepTool.name).toBe("grep");
+    expect(grepTool.parameters).toHaveProperty("properties");
+    expect(grepTool.parameters).toHaveProperty("required");
   });
 
-  it("finds matching lines with file paths and line numbers", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "function", path: tmpDir }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("src/index.ts");
-    expect(result?.output).toContain("src/utils.ts");
-    expect(result?.output).toContain("src/app.tsx");
-    // Should include line numbers
-    expect(result?.output).toMatch(/:\d+:/);
-  });
-
-  it("supports regex patterns", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "function\\s+hello", path: tmpDir }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("src/index.ts");
-    expect(result?.output).not.toContain("src/utils.ts");
-  });
-
-  it("returns message when no matches found", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "nonexistent_string_xyz", path: tmpDir }),
-      mockContext,
-    );
-
-    expect(result?.output).toBe("No matches found.");
-  });
-
-  it("throws for empty pattern", async () => {
-    const tool = getTool("grep");
-    await expect(
-      tool?.execute(JSON.stringify({ pattern: "" }), mockContext),
-    ).rejects.toThrow("no search pattern provided");
-  });
-
-  it("filters by include glob pattern", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "function", path: tmpDir, include: "*.tsx" }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("src/app.tsx");
-    expect(result?.output).not.toContain("src/index.ts");
-    expect(result?.output).not.toContain("src/utils.ts");
-  });
-
-  it("excludes gitignored files by default", async () => {
-    writeFileSync(resolve(tmpDir, ".gitignore"), "dist/\n");
-    mkdirSync(resolve(tmpDir, "dist"), { recursive: true });
-    writeFileSync(resolve(tmpDir, "dist/bundle.js"), "function bundled() {}");
-    setupGitRepo();
-
-    const tool = getTool("grep");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "bundled", path: tmpDir }),
-      mockContext,
-    );
-
-    expect(result?.output).toBe("No matches found.");
-  });
-
-  it("includes gitignored files when gitignore is false", async () => {
-    writeFileSync(resolve(tmpDir, ".gitignore"), "dist/\n");
-    mkdirSync(resolve(tmpDir, "dist"), { recursive: true });
-    writeFileSync(resolve(tmpDir, "dist/bundle.js"), "function bundled() {}");
-    setupGitRepo();
-
-    const tool = getTool("grep");
-    const result = await tool?.execute(
-      JSON.stringify({
-        pattern: "bundled",
-        path: tmpDir,
-        gitignore: false,
-      }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("bundle.js");
-    expect(result?.output).toContain("bundled");
-  });
-
-  it("falls back to grep for non-git directories", async () => {
-    const nonGitDir = resolve("/tmp/.test-grep-non-git");
-    mkdirSync(nonGitDir, { recursive: true });
-    writeFileSync(resolve(nonGitDir, "file.ts"), "function fallback() {}");
-
-    try {
-      const tool = getTool("grep");
-      const ctx = {
-        ...mockContext,
-        renderInteractive: vi.fn().mockResolvedValue("approved"),
-      };
-      const result = await tool?.execute(
-        JSON.stringify({ pattern: "fallback", path: nonGitDir }),
-        ctx,
-      );
-
-      expect(result?.output).toContain("file.ts");
-      expect(result?.output).toContain("fallback");
-    } finally {
-      rmSync(nonGitDir, { recursive: true, force: true });
-    }
-  });
-
-  it("does not prompt when read_file permission is granted and path in cwd", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    await tool?.execute(
-      JSON.stringify({ pattern: "hello", path: tmpDir }),
-      mockContext,
-    );
-
-    expect(mockContext.renderInteractive).not.toHaveBeenCalled();
-  });
-
-  it("prompts when read_file permission is not granted", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    const ctx = {
-      ...mockContext,
-      permissions: { read_file: false },
-    };
-
-    await tool?.execute(
-      JSON.stringify({ pattern: "hello", path: tmpDir }),
-      ctx,
-    );
-
-    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns denial when user denies search", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    const ctx = {
-      ...mockContext,
-      renderInteractive: vi.fn().mockResolvedValue("denied"),
-      permissions: { read_file: false },
-    };
-
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "hello", path: tmpDir }),
-      ctx,
-    );
-
-    expect(result?.output).toBe("The user denied this search.");
-  });
-
-  it("searches a single file when path points to a file", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    const filePath = resolve(tmpDir, "src/index.ts");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "hello", path: filePath }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("hello");
-    // Should not include results from other files
-    expect(result?.output).not.toContain("utils.ts");
-    expect(result?.output).not.toContain("app.tsx");
-  });
-
-  it("returns no matches for file path with no hits", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    const filePath = resolve(tmpDir, "src/index.ts");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "nonexistent_xyz", path: filePath }),
-      mockContext,
-    );
-
-    expect(result?.output).toBe("No matches found.");
-  });
-
-  it("prompts for paths outside cwd even with permission granted", async () => {
-    setupGitRepo();
-    const tool = getTool("grep");
-    await tool?.execute(JSON.stringify({ pattern: "hello", path: tmpDir }), {
-      ...mockContext,
-      permissions: { read_file: true },
+  describe("formatCall", () => {
+    it("returns the pattern argument", () => {
+      expect(grepTool.formatCall({ pattern: "TODO" })).toBe("TODO");
     });
 
-    // tmpDir is within cwd so this won't prompt — use an outside path instead
-    // but mock renderInteractive to avoid running a real grep on a huge directory
-    const ctx = {
-      ...mockContext,
-      renderInteractive: vi.fn().mockResolvedValue("denied"),
-      permissions: { read_file: true },
-    };
-    await tool?.execute(JSON.stringify({ pattern: "test", path: "/tmp" }), ctx);
+    it("returns empty string when pattern is missing", () => {
+      expect(grepTool.formatCall({})).toBe("");
+    });
+  });
 
-    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
+  describe("execute", () => {
+    it("uses git grep in a git repo with gitignore enabled", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(true);
+      vi.mocked(execFileSync).mockReturnValue("src/foo.ts:10:// TODO fix\n");
+
+      const result = await grepTool.execute(
+        { pattern: "TODO" },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("src/foo.ts:10:// TODO fix");
+      expect(execFileSync).toHaveBeenCalledOnce();
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[0]).toBe("git");
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[1]).toContain("grep");
+    });
+
+    it("uses regular grep outside a git repo", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(execFileSync).mockReturnValue("./foo.ts:5:match\n");
+
+      const result = await grepTool.execute(
+        { pattern: "match" },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("./foo.ts:5:match");
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[0]).toBe("grep");
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[1]).toContain("-rn");
+    });
+
+    it("uses regular grep when gitignore is false", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(true);
+      vi.mocked(execFileSync).mockReturnValue("./foo.ts:1:hit\n");
+
+      const result = await grepTool.execute(
+        { pattern: "hit", gitignore: false },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[0]).toBe("grep");
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[1]).toContain("-rn");
+    });
+
+    it("passes include filter to git grep", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(true);
+      vi.mocked(execFileSync).mockReturnValue("a.ts:1:x\n");
+
+      await grepTool.execute(
+        { pattern: "x", include: "*.ts" },
+        mockToolContext(),
+      );
+
+      const args = vi.mocked(execFileSync).mock.calls[0]?.[1] as string[];
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[0]).toBe("git");
+      expect(args).toContain("grep");
+      expect(args).toContain(":(glob)**/*.ts");
+    });
+
+    it("preserves include path with slash for git grep", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(true);
+      vi.mocked(execFileSync).mockReturnValue("a.ts:1:x\n");
+
+      await grepTool.execute(
+        { pattern: "x", include: "src/**/*.ts" },
+        mockToolContext(),
+      );
+
+      const args = vi.mocked(execFileSync).mock.calls[0]?.[1] as string[];
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[0]).toBe("git");
+      expect(args).toContain("grep");
+      // Should NOT prepend **/ since the include already has a path
+      expect(args).toContain(":(glob)src/**/*.ts");
+    });
+
+    it("passes include filter to regular grep", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(execFileSync).mockReturnValue("a.ts:1:x\n");
+
+      await grepTool.execute(
+        { pattern: "x", include: "*.ts" },
+        mockToolContext(),
+      );
+
+      const args = vi.mocked(execFileSync).mock.calls[0]?.[1] as string[];
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[0]).toBe("grep");
+      expect(args).toContain("-rn");
+      expect(args).toContain("--include");
+      expect(args).toContain("*.ts");
+    });
+
+    it("searches a single file when path points to a file", async () => {
+      const filePath = resolve("src/foo.ts");
+      vi.mocked(statSync).mockReturnValue({ isFile: () => true } as never);
+      vi.mocked(execFileSync).mockReturnValue("5:match\n");
+
+      const result = await grepTool.execute(
+        { pattern: "match", path: "src/foo.ts" },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      const args = vi.mocked(execFileSync).mock.calls[0]?.[1] as string[];
+      expect(vi.mocked(execFileSync).mock.calls[0]?.[0]).toBe("grep");
+      expect(args).toContain("-n");
+      expect(args).toContain(filePath);
+    });
+
+    it("returns no matches message when output is empty", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(execFileSync).mockReturnValue("");
+
+      const result = await grepTool.execute(
+        { pattern: "nothing" },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("No matches found.");
+    });
+
+    it("returns no matches when grep exits with code 1", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      const exitError = new Error("grep exited") as Error & { status: number };
+      exitError.status = 1;
+      vi.mocked(execFileSync).mockImplementation(() => {
+        throw exitError;
+      });
+
+      const result = await grepTool.execute(
+        { pattern: "nope" },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("No matches found.");
+    });
+
+    it("returns error for non-exit-code-1 failures", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(execFileSync).mockImplementation(() => {
+        throw new Error("command not found");
+      });
+
+      const result = await grepTool.execute(
+        { pattern: "test" },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("command not found");
+    });
+
+    describe("permissions", () => {
+      it("searches without confirmation when cwd read permission granted", async () => {
+        vi.mocked(isGitRepo).mockReturnValue(false);
+        vi.mocked(execFileSync).mockReturnValue("match\n");
+        const confirm = vi.fn();
+
+        const result = await grepTool.execute(
+          { pattern: "x" },
+          mockToolContext({ confirm }),
+        );
+
+        expect(result.status).toBe("ok");
+        expect(confirm).not.toHaveBeenCalled();
+      });
+
+      it("prompts for confirmation when read permission not granted", async () => {
+        vi.mocked(isGitRepo).mockReturnValue(false);
+        vi.mocked(execFileSync).mockReturnValue("match\n");
+        const confirm = vi.fn(async () => true);
+
+        const result = await grepTool.execute(
+          { pattern: "x" },
+          mockToolContext({
+            permissions: {
+              cwdReadFile: false,
+              cwdWriteFile: false,
+              globalReadFile: false,
+              globalWriteFile: false,
+            },
+            confirm,
+          }),
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("ok");
+      });
+
+      it("returns denied when user rejects confirmation", async () => {
+        const confirm = vi.fn(async () => false);
+
+        const result = await grepTool.execute(
+          { pattern: "x" },
+          mockToolContext({
+            permissions: {
+              cwdReadFile: false,
+              cwdWriteFile: false,
+              globalReadFile: false,
+              globalWriteFile: false,
+            },
+            confirm,
+          }),
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("denied");
+      });
+    });
   });
 });

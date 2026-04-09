@@ -1,151 +1,195 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTool } from "./registry";
-import { makeMockContext } from "./test-helpers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockFs } from "../test-utils/mock-fs";
+import { mockToolContext } from "../test-utils/stub-context";
+import { writeFileTool } from "./write-file";
 
-// Import to trigger registration
-import "./write-file";
-
-const tmpDir = resolve(import.meta.dirname, "../../.test-write-file-tmp");
-let mockContext = makeMockContext({ permissions: {} });
-
-beforeEach(() => {
-  mkdirSync(tmpDir, { recursive: true });
-  vi.clearAllMocks();
-  mockContext = makeMockContext({ permissions: {} });
-});
-
-afterEach(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
-});
-
-describe("write_file tool", () => {
-  it("is registered as interactive", () => {
-    const tool = getTool("write_file");
-    expect(tool).toBeDefined();
-    expect(tool?.name).toBe("write_file");
-    // interactive defaults to true (undefined)
-    expect(tool?.interactive).toBeUndefined();
+describe("writeFileTool", () => {
+  it("has correct name and parameters", () => {
+    expect(writeFileTool.name).toBe("write_file");
+    expect(writeFileTool.parameters).toHaveProperty("properties");
+    expect(writeFileTool.parameters).toHaveProperty("required");
   });
 
-  it("writes a new file", async () => {
-    const filePath = resolve(tmpDir, "new.txt");
-    const tool = getTool("write_file");
+  describe("formatCall", () => {
+    it("returns the path argument", () => {
+      expect(writeFileTool.formatCall({ path: "./bar.ts" })).toBe("./bar.ts");
+    });
 
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath, content: "hello world\n" }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("Successfully wrote to");
-    expect(readFileSync(filePath, "utf-8")).toBe("hello world\n");
+    it("returns empty string when path is missing", () => {
+      expect(writeFileTool.formatCall({})).toBe("");
+    });
   });
 
-  it("overwrites an existing file", async () => {
-    const filePath = resolve(tmpDir, "existing.txt");
-    writeFileSync(filePath, "old content\n");
-    const tool = getTool("write_file");
+  describe("execute", () => {
+    let fs: ReturnType<typeof mockFs>;
 
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath, content: "new content\n" }),
-      mockContext,
-    );
+    afterEach(() => {
+      fs.restore();
+    });
 
-    expect(result?.output).toContain("Successfully wrote to");
-    expect(readFileSync(filePath, "utf-8")).toBe("new content\n");
-  });
+    it("creates a new file and returns diff with + lines", async () => {
+      const filePath = resolve("new.txt");
+      fs = mockFs();
 
-  it("creates parent directories", async () => {
-    const filePath = resolve(tmpDir, "a/b/c/deep.txt");
-    const tool = getTool("write_file");
+      const result = await writeFileTool.execute(
+        { path: "new.txt", content: "hello\nworld" },
+        mockToolContext(),
+      );
 
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath, content: "deep\n" }),
-      mockContext,
-    );
+      expect(result.status).toBe("ok");
+      expect(result.format).toBe("diff");
+      expect(result.output).toContain("+hello");
+      expect(result.output).toContain("+world");
+      expect(fs.getFile(filePath)).toBe("hello\nworld");
+    });
 
-    expect(result?.output).toContain("Successfully wrote to");
-    expect(readFileSync(filePath, "utf-8")).toBe("deep\n");
-  });
+    it("overwrites an existing file and returns a unified diff", async () => {
+      const filePath = resolve("existing.txt");
+      fs = mockFs({ [filePath]: "old content\n" });
 
-  it("throws for empty path", async () => {
-    const tool = getTool("write_file");
-    await expect(
-      tool?.execute(JSON.stringify({ path: "", content: "x" }), mockContext),
-    ).rejects.toThrow("no file path provided");
-    expect(mockContext.renderInteractive).not.toHaveBeenCalled();
-  });
+      const result = await writeFileTool.execute(
+        { path: "existing.txt", content: "new content\n" },
+        mockToolContext(),
+      );
 
-  it("returns denial message when user denies", async () => {
-    mockContext.renderInteractive.mockResolvedValue("denied");
-    const filePath = resolve(tmpDir, "denied.txt");
-    const tool = getTool("write_file");
+      expect(result.status).toBe("ok");
+      expect(result.format).toBe("diff");
+      expect(result.output).toContain("-old content");
+      expect(result.output).toContain("+new content");
+      expect(fs.getFile(filePath)).toBe("new content\n");
+    });
 
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath, content: "should not exist" }),
-      mockContext,
-    );
+    it("returns error for directory path", async () => {
+      const dirPath = resolve("src");
+      fs = mockFs({ [`${dirPath}/foo.ts`]: "content" });
 
-    expect(result?.output).toBe("The user denied this write.");
-  });
+      const result = await writeFileTool.execute(
+        { path: "src", content: "nope" },
+        mockToolContext(),
+      );
 
-  it("calls renderInteractive for confirmation", async () => {
-    const filePath = resolve(tmpDir, "confirm.txt");
-    const tool = getTool("write_file");
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("is a directory");
+    });
 
-    await tool?.execute(
-      JSON.stringify({ path: filePath, content: "test\n" }),
-      mockContext,
-    );
+    describe("permissions", () => {
+      it("writes without confirmation when cwd write permission granted", async () => {
+        fs = mockFs();
+        const confirm = vi.fn();
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: true,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
 
-    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
-  });
+        const result = await writeFileTool.execute(
+          { path: "allowed.txt", content: "data" },
+          ctx,
+        );
 
-  it("skips confirmation when write_file permission granted and path in cwd", async () => {
-    const filePath = resolve(process.cwd(), ".test-write-perm.txt");
-    const tool = getTool("write_file");
-    const ctx = {
-      ...mockContext,
-      permissions: { write_file: true },
-    };
+        expect(result.status).toBe("ok");
+        expect(confirm).not.toHaveBeenCalled();
+      });
 
-    const result = await tool?.execute(
-      JSON.stringify({ path: filePath, content: "auto\n" }),
-      ctx,
-    );
+      it("prompts for confirmation with diff when write permission not granted", async () => {
+        fs = mockFs();
+        const confirm = vi.fn(async () => true);
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
 
-    expect(result?.output).toContain("Successfully wrote to");
-    expect(ctx.renderInteractive).not.toHaveBeenCalled();
-    // Clean up
-    rmSync(filePath, { force: true });
-  });
+        const result = await writeFileTool.execute(
+          { path: "restricted.txt", content: "data" },
+          ctx,
+        );
 
-  it("still prompts when write_file permission granted but path outside cwd", async () => {
-    const filePath = "/tmp/.test-write-perm-outside.txt";
-    const tool = getTool("write_file");
-    const ctx = {
-      ...mockContext,
-      permissions: { write_file: true },
-    };
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(confirm).toHaveBeenCalledWith("Write file?", {
+          label: "Write file?",
+          detail: expect.stringContaining("restricted.txt"),
+          diff: expect.any(String),
+        });
+        expect(result.status).toBe("ok");
+      });
 
-    await tool?.execute(
-      JSON.stringify({ path: filePath, content: "test\n" }),
-      ctx,
-    );
+      it("returns denied and does not write when user rejects confirmation", async () => {
+        const filePath = resolve("restricted.txt");
+        fs = mockFs();
+        const confirm = vi.fn(async () => false);
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
 
-    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
-  });
+        const result = await writeFileTool.execute(
+          { path: "restricted.txt", content: "data" },
+          ctx,
+        );
 
-  it("prompts when write_file permission not granted even for cwd paths", async () => {
-    const filePath = resolve(tmpDir, "no-perm.txt");
-    const tool = getTool("write_file");
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("denied");
+        expect(fs.getFile(filePath)).toBeUndefined();
+      });
 
-    await tool?.execute(
-      JSON.stringify({ path: filePath, content: "test\n" }),
-      mockContext,
-    );
+      it("prompts for global file even when cwd write is allowed", async () => {
+        fs = mockFs();
+        const confirm = vi.fn(async () => true);
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: true,
+            globalReadFile: false,
+            globalWriteFile: false,
+          },
+          confirm,
+        });
 
-    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
+        const result = await writeFileTool.execute(
+          { path: "/tmp/outside.txt", content: "data" },
+          ctx,
+        );
+
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("ok");
+      });
+
+      it("writes global file without confirmation when globalWriteFile is true", async () => {
+        fs = mockFs();
+        const confirm = vi.fn();
+        const ctx = mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: true,
+            globalReadFile: false,
+            globalWriteFile: true,
+          },
+          confirm,
+        });
+
+        const result = await writeFileTool.execute(
+          { path: "/tmp/outside.txt", content: "data" },
+          ctx,
+        );
+
+        expect(result.status).toBe("ok");
+        expect(confirm).not.toHaveBeenCalled();
+      });
+    });
   });
 });

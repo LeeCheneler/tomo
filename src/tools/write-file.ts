@@ -1,45 +1,33 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { createElement } from "react";
 import { z } from "zod";
-import { WriteFileConfirm } from "../components/write-file-confirm";
-import { getErrorMessage } from "../errors";
-import { withFilePermission } from "../permissions";
-import { formatDiff, formatNewFile } from "./format-diff";
-import { registerTool } from "./registry";
 import {
-  denied,
-  err,
-  ok,
-  parseToolArgs,
-  type ToolContext,
-  type ToolResult,
-} from "./types";
+  ensureDir,
+  fileExists,
+  isDirectory,
+  readFile,
+  writeFile,
+} from "../utils/fs";
+import { newFileDiff, unifiedDiff } from "./diff";
+import { checkFilePermission } from "./permissions";
+import type { Tool, ToolContext, ToolResult } from "./types";
+import { denied, err, okDiff } from "./types";
 
+/** Zod schema for write_file arguments. */
 const argsSchema = z.object({
   path: z.string().min(1, "no file path provided"),
   content: z.string(),
 });
 
-function performWrite(filePath: string, content: string): ToolResult {
-  try {
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, content, "utf-8");
-    return ok(`Successfully wrote to ${filePath}`);
-  } catch (e) {
-    return err(`writing file: ${getErrorMessage(e)}`);
-  }
-}
-
-registerTool({
+/** The write_file tool definition. */
+export const writeFileTool: Tool = {
   name: "write_file",
   displayName: "Write File",
-  description: `Write content to a file, creating it if it doesn't exist or overwriting it completely if it does. Parent directories are created automatically.
+  description: `Create or overwrite a file at the given path with the provided content.
 
-- For modifying existing files, prefer edit_file — it is safer and only changes what needs to change.
-- Only use write_file for creating new files or when the changes are so extensive that edit_file would be impractical.
-- You MUST read an existing file before overwriting it, to understand what you are replacing.
-- Do not use shell commands like echo or cat heredocs to write files — use this tool instead.`,
+- Creates parent directories automatically if they don't exist.
+- You MUST read a file before overwriting it. Never overwrite a file you have not read in the current conversation.
+- Prefer the edit_file tool for small, targeted changes to existing files. Use write_file only for new files or full rewrites.
+- Cannot write to a path that is an existing directory.`,
   parameters: {
     type: "object",
     properties: {
@@ -49,38 +37,49 @@ registerTool({
       },
       content: {
         type: "string",
-        description: "The content to write to the file",
+        description: "The full content to write to the file",
       },
     },
     required: ["path", "content"],
   },
-  async execute(args: string, context: ToolContext): Promise<ToolResult> {
-    const parsed = parseToolArgs(argsSchema, args);
-    const { content } = parsed;
+  argsSchema,
+  formatCall(args: Record<string, unknown>): string {
+    return String(args.path ?? "");
+  },
+  async execute(args: unknown, context: ToolContext): Promise<ToolResult> {
+    const parsed = argsSchema.parse(args);
     const filePath = resolve(parsed.path);
 
-    return withFilePermission({
-      context,
-      permission: "write_file",
-      filePath,
-      execute: () => performWrite(filePath, content),
-      renderConfirm: () => {
-        const isNewFile = !existsSync(filePath);
-        const diffPreview = isNewFile
-          ? formatNewFile(content)
-          : formatDiff(readFileSync(filePath, "utf-8"), content);
+    if (isDirectory(filePath)) {
+      return err(`${filePath} is a directory, not a file`);
+    }
 
-        return context.renderInteractive((onResult) =>
-          createElement(WriteFileConfirm, {
-            filePath,
-            isNewFile,
-            diffPreview,
-            onApprove: () => onResult("approved"),
-            onDeny: () => onResult("denied"),
-          }),
-        );
-      },
-      denyMessage: denied("The user denied this write."),
-    });
+    const existed = fileExists(filePath);
+    const oldContent = existed ? readFile(filePath) : "";
+    const diff = existed
+      ? unifiedDiff(filePath, oldContent, parsed.content)
+      : newFileDiff(parsed.content);
+
+    const permission = checkFilePermission(
+      filePath,
+      "write",
+      context.permissions,
+    );
+
+    if (permission === "needs-confirmation") {
+      const approved = await context.confirm("Write file?", {
+        label: "Write file?",
+        detail: filePath,
+        diff,
+      });
+      if (!approved) {
+        return denied("The user denied this write.");
+      }
+    }
+
+    ensureDir(dirname(filePath));
+    writeFile(filePath, parsed.content);
+
+    return okDiff(diff);
   },
-});
+};

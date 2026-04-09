@@ -2,7 +2,7 @@
 
 > 友 — friend, companion
 
-Terminal-native AI chat client. Works with [Ollama](https://ollama.com), [OpenCode Zen](https://opencode.ai), and [OpenRouter](https://openrouter.ai).
+Terminal-native AI chat client built with React and Ink. Works with [Ollama](https://ollama.com), [OpenCode Zen](https://opencode.ai), and [OpenRouter](https://openrouter.ai).
 
 ## Install
 
@@ -16,187 +16,118 @@ Or download the latest binary from [Releases](https://github.com/LeeCheneler/tom
 ## Quick Start
 
 1. Run `tomo`
-2. On first launch, `/provider` opens automatically — select a provider type, enter the URL and API key (if needed), and pick a model
-3. Start chatting
+2. Open `/settings → Providers` and add a provider (URL + API key if needed)
+3. Pick a model with `/model`
+4. Start chatting
 
-Tomo supports three provider types:
-
-| Type           | Description                           | Auth                                               |
-| -------------- | ------------------------------------- | -------------------------------------------------- |
-| `ollama`       | Local Ollama instance                 | None required                                      |
-| `opencode-zen` | OpenCode Zen API                      | `apiKey` in config or `OPENCODE_API_KEY` env var   |
-| `openrouter`   | OpenRouter (access to many providers) | `apiKey` in config or `OPENROUTER_API_KEY` env var |
-
-Context window size is auto-detected for all provider types.
+Type `/` to see available commands and `//` to browse skills.
 
 ## Slash Commands
 
-Type `/` to see available commands with autocomplete suggestions.
+| Command     | Description                       |
+| ----------- | --------------------------------- |
+| `/new`      | Start a new session               |
+| `/session`  | Browse and load saved sessions    |
+| `/model`    | Switch the active model           |
+| `/settings` | Manage providers, tools, MCP, etc |
+| `/context`  | Show context window usage         |
+| `/help`     | List commands and shortcuts       |
 
-| Command         | Description                                     |
-| --------------- | ----------------------------------------------- |
-| `/new`          | Start a new conversation                        |
-| `/session`      | Browse and load previous sessions               |
-| `/session <id>` | Load a session by ID                            |
-| `/model`        | Switch the active model                         |
-| `/provider`     | Manage providers (add/remove)                   |
-| `/settings`     | Manage tools, permissions, allowed commands, MCP servers, and skill sets |
-| `/context`      | Show context window usage stats                 |
-| `/skills`       | List available skills                           |
-| `/help`         | List available commands                         |
+## Keyboard Shortcuts
+
+| Key      | Action                                                 |
+| -------- | ------------------------------------------------------ |
+| `Tab`    | View the full conversation in your system pager        |
+| `↑`      | Browse input history                                   |
+| `Esc`    | Cancel an in-flight response, or clear the input       |
+| `Cmd+V`  | Paste an image file path (e.g. copied from Finder)     |
+| `Ctrl+V` | Paste an image from the clipboard (e.g. a screenshot) |
+| `↓`      | When images are attached, enter image navigation mode  |
+
+In image navigation mode: `← →` select, `Backspace` removes, `↑` or `Esc` exits.
+
+The pager defaults to `less`. Set `PAGER` to override (allow-listed: `less`, `more`, `most`, `bat`, `cat`).
 
 ## Tools
 
-Tomo can read, write, and search files, run commands, and more. Tools are enabled by default and the model calls them as needed.
+The model can call tools to read files, run commands, and more. Tools are enabled by default; toggle them in `/settings → Tools`.
 
-| Tool         | Description                                           | Default  |
-| ------------ | ----------------------------------------------------- | -------- |
-| Read File    | Read file contents with line numbers                  | Enabled  |
-| Write File   | Create or overwrite a file                            | Enabled  |
-| Edit File    | Apply string replacements to a file                   | Enabled  |
-| Glob         | Find files by glob pattern (respects `.gitignore`)    | Enabled  |
-| Grep         | Search file contents by regex (respects `.gitignore`) | Enabled  |
-| Run Command  | Run a shell command                                   | Enabled  |
-| Ask          | Ask the user a question                               | Enabled  |
-| Skill        | Load specialized task instructions                    | Enabled  |
-| Agent        | Spawn sub-agents for parallel research/exploration    | Enabled  |
-| Web Search   | Search the web via Tavily API                         | Disabled |
+| Tool         | Description                                        | Default  |
+| ------------ | -------------------------------------------------- | -------- |
+| Read File    | Read file contents with line numbers               | Enabled  |
+| Write File   | Create or overwrite a file                         | Enabled  |
+| Edit File    | Apply string replacements to a file                | Enabled  |
+| Glob         | Find files by glob pattern (respects `.gitignore`) | Enabled  |
+| Grep         | Search file contents by regex                      | Enabled  |
+| Run Command  | Run a shell command                                | Enabled  |
+| Ask          | Ask the user a question                            | Enabled  |
+| Skill        | Load specialised task instructions                 | Enabled  |
+| Agent        | Spawn sub-agents for parallel research             | Enabled  |
+| Web Search   | Search the web via Tavily API                      | Disabled |
 
-Web Search requires a [Tavily](https://tavily.com) API key. Set `TAVILY_API_KEY` in your environment and enable the tool with `/settings`.
+**Web Search** requires a [Tavily](https://tavily.com) API key. Set `TAVILY_API_KEY` in your environment and enable the tool in `/settings → Tools`.
 
-Agent spawns headless sub-agents that can read files, search code, and explore the codebase in parallel. The model decides when to spawn agents and how many. Active agents show color-coded progress indicators with tool call counts.
-
-## MCP Servers
-
-Tomo supports the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) for connecting to external tool servers. MCP servers extend Tomo with additional tools — database access, API integrations, file systems, and more.
-
-Use `/settings` → **MCP Servers** to add, remove, and configure servers. Individual tools within a server can be toggled off to hide them from the model while keeping the server connected.
-
-### Config
-
-MCP servers are stored in the global config (`~/.tomo/config.yaml`) under `mcpServers`:
-
-```yaml
-mcpServers:
-  my-http-server:
-    transport: http
-    url: https://mcp.example.com/mcp
-    headers:
-      Authorization: "Bearer ${MCP_API_KEY}"
-    enabled: true
-    tools:
-      - name: get_data
-        enabled: true
-        description: "Fetch data from the API"
-
-  my-stdio-server:
-    transport: stdio
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-filesystem"
-      - "/tmp"
-    env:
-      SOME_VAR: "${MY_ENV_VAR}"
-    enabled: true
-```
-
-**HTTP transport** fields: `url` (required), `headers` (optional).
-
-**Stdio transport** fields: `command` (required), `args` (optional), `env` (optional).
-
-Both transports support `enabled` and `tools` fields.
-
-### Environment Variables
-
-Use `${VAR_NAME}` in any string value to reference environment variables. This is useful for keeping secrets out of config files:
-
-```yaml
-headers:
-  Authorization: "Bearer ${MCP_API_KEY}"
-```
-
-If the variable is not set, it resolves to an empty string.
+**Agent** spawns headless sub-agents that can read and explore the codebase in parallel. The model decides when to spawn them. Active agents show colour-coded progress indicators with tool call counts. Configure depth, concurrency, and the tools available to sub-agents under `agents` in your config file.
 
 ## Permissions
 
-Write and edit operations prompt for confirmation by default. Read File is auto-allowed. Use `/settings` → **Tool Permissions** to change this, or set in config:
+Write and edit operations prompt for confirmation by default. Read File is auto-allowed inside the current working directory. Manage permissions in `/settings → Permissions`, or in your config file:
 
 ```yaml
 permissions:
-  read_file: true
-  write_file: true  # covers both Write File and Edit File
+  cwdReadFile: true # auto-allow reads inside cwd (default: true)
+  cwdWriteFile: true # auto-allow writes inside cwd
+  globalReadFile: true # auto-allow reads outside cwd
+  globalWriteFile: true # auto-allow writes outside cwd
 ```
 
-Run Command prompts by default. Commands can be auto-approved via allowed commands in config. Use exact commands or `prefix:*` for all commands starting with a given prefix:
+File operations outside the current working directory require the `global*` permissions even when the matching `cwd*` permission is enabled.
+
+Run Command prompts by default. Auto-approve commands with an allow list under `/settings → Allowed Commands`, or in config:
 
 ```yaml
-allowed_commands:
-  - "git:*"
+allowedCommands:
+  - "git:*" # any command starting with "git "
   - "npm:*"
-  - "npm test"
+  - "npm test" # exact match
 ```
 
-File operations outside the current working directory always prompt regardless of permissions.
+## MCP Servers
 
-## Config
+Tomo supports the [Model Context Protocol](https://modelcontextprotocol.io) for connecting to external tool servers. MCP tools appear alongside built-in tools and the model can call them transparently.
 
-Config lives at `~/.tomo/config.yaml` (global) with optional local overrides at `./.tomo/config.yaml`.
-
-On first run, an empty config is created and `/provider` launches automatically to set up your first provider. You can also edit the config file directly:
+Manage servers in `/settings → MCP Servers`, or in config under `mcp.connections`:
 
 ```yaml
-activeProvider: ollama
-activeModel: qwen3:8b
-maxTokens: 8192
+mcp:
+  connections:
+    my-stdio-server:
+      transport: stdio
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+        - "/tmp"
+      env:
+        SOME_VAR: "${MY_ENV_VAR}"
+      enabled: true
 
-providers:
-  - name: ollama
-    type: ollama
-    baseUrl: http://localhost:11434
-    # contextWindow: 32768  # optional override (auto-detected)
-    # models:               # optional per-model overrides
-    #   qwen3:4b:
-    #     maxTokens: 16384
-  - name: openrouter
-    type: openrouter
-    baseUrl: https://openrouter.ai/api
-    apiKey: sk-or-...  # or set OPENROUTER_API_KEY env var
+    my-http-server:
+      transport: http
+      url: https://mcp.example.com/mcp
+      headers:
+        Authorization: "Bearer ${MCP_API_KEY}"
+      enabled: true
 ```
 
-Use `/provider` to add or remove providers interactively.
+**Stdio transport** fields: `command` (required), `args`, `env`.
+**HTTP transport** fields: `url` (required), `headers`.
 
-### Agents
-
-Sub-agent behaviour is configurable via an optional `agents` section:
-
-```yaml
-agents:
-  maxDepth: 1         # maximum nesting depth (default: 1)
-  maxConcurrent: 3    # max agents running at once (default: 3)
-  timeoutSeconds: 300 # per-agent timeout (default: 300)
-  tools:              # tools available to agents (default below)
-    - read_file
-    - glob
-    - grep
-    - web_search
-    - skill
-```
-
-All fields are optional — sensible defaults apply if the section is omitted entirely.
-
-## Instruction Files
-
-Tomo loads instruction files as system messages from two locations:
-
-- **Global:** `~/tomo.md`
-- **Local:** `.tomo/tomo.md`
-
-When both exist, they are combined with a separator. Global instructions load first, then local instructions.
+Use `${VAR_NAME}` in any string value to interpolate an environment variable. Missing variables resolve to an empty string. This keeps secrets out of the config file.
 
 ## Skills
 
-Skills are reusable instruction sets that the model can load for specialized tasks. Each skill lives in its own directory with a `SKILL.md` file.
+Skills are reusable instruction sets the model can load for specialised tasks. Each skill lives in its own directory with a `SKILL.md` file.
 
 **Locations:**
 
@@ -216,13 +147,13 @@ description: What this skill does
 Instruction content loaded as context when the skill is invoked.
 ```
 
-Use `/skills` to list available skills. The model will automatically load relevant skills when appropriate, or you can ask it to use a specific skill.
+Type `//` to browse available skills, then `//skill-name` to invoke one. The model will also load relevant skills automatically when appropriate.
 
 ## Skill Sets
 
 Skill sets are collections of skills shared via git repos. A single repo can contain multiple skill sets, each marked by a `tomo-skills.json` file.
 
-### Repo Structure
+**Repo structure:**
 
 ```
 my-skills-repo/
@@ -238,44 +169,76 @@ my-skills-repo/
       SKILL.md
 ```
 
-The `tomo-skills.json` file marks a directory as a skill set. It requires a `name` field; `description` is optional.
+Skills from skill sets are namespaced as `setName:skillName` (e.g. `dev:commit`) to avoid conflicts with global and local skills.
 
-### Managing Skill Sets
+Manage sources and toggle individual sets under `/settings → Skill Sets`. Sources are cloned to `~/.tomo/skill-set-sources/`. Skill sets are off by default — opt in per set.
 
-Use `/settings` → **Skill Sets** to:
-
-- **Toggle skill sets** on/off — skill sets are off by default, you opt in per set
-- **Update Sources** — pull latest changes from all connected repos
-- **Manage Sources** — add/remove git repo URLs
-
-Sources are cloned to `~/.tomo/skill-set-sources/` on first connection.
-
-### Namespacing
-
-Skills from skill sets are namespaced as `setName:skillName` (e.g. `dev:commit`, `dev:pr`). This avoids conflicts with global/local skills and makes the source clear in `/skills` output.
-
-### Config
-
-Skill set sources and enabled sets are stored in the global config (`~/.tomo/config.yaml`):
+In config:
 
 ```yaml
-skillSetSources:
-  - url: "git@github.com:org/my-skills.git"
-
-enabledSkillSets:
-  - sourceUrl: "git@github.com:org/my-skills.git"
-    name: dev
+skillSets:
+  sources:
+    - url: "git@github.com:org/my-skills.git"
+      enabledSets:
+        - dev
 ```
-
-## Images
-
-Tomo supports sending images to vision-capable models (e.g. Qwen 2.5 VL).
-
-- **Paste a file** — copy an image file in Finder and `Cmd+V` in tomo. The file path is detected and the image is auto-attached.
-- **Paste a screenshot** — take a screenshot or copy image content, then press `Ctrl+V` to attach from clipboard (macOS).
-
-Attached images appear in the bottom bar as `[Img 1][Img 2]` etc. Press `↓` to navigate into images, `←→` to select, and `⌫` to remove.
 
 ## Sessions
 
-Conversations are saved automatically. Use `/session` to browse or `/session <id>` to resume.
+Conversations are saved automatically as JSONL files under `~/.tomo/sessions/`. Use `/session` to browse and resume a previous conversation. Press `Tab` from the input to view the current conversation in your system pager.
+
+## Instruction Files
+
+Tomo loads optional instruction files as system messages from two locations:
+
+- **Global:** `~/tomo.md`
+- **Local:** `.tomo/tomo.md`
+
+When both exist, they are combined. Use them for project-specific context, conventions, or rules you want the model to follow.
+
+## Configuration
+
+Config lives at `~/.tomo/config.yaml` (global) with optional local overrides at `./.tomo/config.yaml`. On first run, an empty config is created and `/settings → Providers` opens automatically so you can configure your first provider.
+
+Most settings are managed interactively via `/settings`. A minimal config looks like this:
+
+```yaml
+activeProvider: ollama
+activeModel: qwen3:8b
+providers:
+  - name: ollama
+    type: ollama
+    baseUrl: http://localhost:11434
+  - name: openrouter
+    type: openrouter
+    baseUrl: https://openrouter.ai/api
+    apiKey: sk-or-... # or set OPENROUTER_API_KEY
+```
+
+Provider API keys can also come from environment variables: `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`. Ollama needs no auth.
+
+The full schema (permissions, allowedCommands, agents, mcp, skillSets, tools) is defined in `src/config/schema.ts`.
+
+### Agents
+
+Sub-agent behaviour is configurable under `agents`:
+
+```yaml
+agents:
+  maxDepth: 1 # maximum nesting depth
+  maxConcurrent: 3 # max agents running at once
+  maxTimeoutSeconds: 300 # per-agent timeout
+  tools: # tools available to sub-agents
+    - read_file
+    - glob
+    - grep
+    - web_search
+    - skill
+    - run_command
+```
+
+All fields are optional and default to the values shown above.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md).

@@ -1,59 +1,63 @@
 import type { ChatMessage } from "../provider/client";
+import { countMessageTokens } from "./tokenizer";
+
+/**
+ * Headroom factor — reserve 5% of the context window as a safety buffer
+ * since token counts are approximate (different tokenizers per model).
+ */
+const HEADROOM = 0.05;
+
+/** Default tokens reserved for the model's response. */
+const RESPONSE_RESERVE = 4096;
 
 /**
  * Truncates messages to fit within a context window budget.
  *
- * The input budget is `contextWindow - maxTokens`, where maxTokens is the
- * number of tokens reserved for the model's response.
- *
- * Uses the last known prompt token count to estimate whether the next request
- * will exceed the budget. If so, drops the oldest non-system messages until
- * the estimated token count fits.
+ * Counts tokens for each message using an approximate tokenizer, then
+ * drops the oldest non-system messages until the total fits within
+ * `contextWindow - responseReserve - headroom`.
  *
  * The system message (first message if role is "system") is never dropped.
+ * At least one non-system message is always kept.
  */
 export function truncateMessages(
   messages: ChatMessage[],
   contextWindow: number,
-  maxTokens: number,
-  lastPromptTokens: number | null,
 ): ChatMessage[] {
-  if (!lastPromptTokens || messages.length === 0) return messages;
+  if (messages.length === 0) return messages;
 
-  const budget = contextWindow - maxTokens;
+  const budget = Math.floor(contextWindow * (1 - HEADROOM) - RESPONSE_RESERVE);
   if (budget <= 0) return messages;
+
+  // Count tokens for every message
+  const tokenCounts = messages.map(countMessageTokens);
+  const total = tokenCounts.reduce((sum, n) => sum + n, 0);
+
+  if (total <= budget) return messages;
 
   // Find where non-system messages start
   const systemCount = messages[0]?.role === "system" ? 1 : 0;
+  const systemTokens = tokenCounts
+    .slice(0, systemCount)
+    .reduce((s, n) => s + n, 0);
 
-  const lastNonSystemCount = messages.length - systemCount;
-  if (lastNonSystemCount <= 0) return messages;
-
-  // Estimate tokens per non-system message from the last request's prompt_tokens.
-  // Subtract a rough system message overhead estimate.
-  const systemOverhead =
-    systemCount > 0 ? Math.floor(lastPromptTokens * 0.1) : 0;
-  const tokensForMessages = lastPromptTokens - systemOverhead;
-  const tokensPerMessage =
-    lastNonSystemCount > 0
-      ? tokensForMessages / lastNonSystemCount
-      : tokensForMessages;
-
-  // Estimate total tokens for the current message list
-  const estimatedTotal = systemOverhead + lastNonSystemCount * tokensPerMessage;
-
-  if (estimatedTotal <= budget) return messages;
-
-  // Drop oldest non-system messages until under budget
-  const systemMessages = messages.slice(0, systemCount);
-  const nonSystemMessages = messages.slice(systemCount);
-
+  // Drop oldest non-system messages until under budget, always keeping at least one
   let dropCount = 0;
-  let estimated = estimatedTotal;
-  while (estimated > budget && dropCount < nonSystemMessages.length - 1) {
-    estimated -= tokensPerMessage;
+  let nonSystemTokens = total - systemTokens;
+  const nonSystemCounts = tokenCounts.slice(systemCount);
+
+  while (
+    systemTokens + nonSystemTokens > budget &&
+    dropCount < nonSystemCounts.length - 1
+  ) {
+    nonSystemTokens -= nonSystemCounts[dropCount];
     dropCount++;
   }
 
-  return [...systemMessages, ...nonSystemMessages.slice(dropCount)];
+  if (dropCount === 0) return messages;
+
+  return [
+    ...messages.slice(0, systemCount),
+    ...messages.slice(systemCount + dropCount),
+  ];
 }

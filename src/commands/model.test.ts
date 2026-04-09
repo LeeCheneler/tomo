@@ -1,37 +1,43 @@
+import { createElement, Fragment } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { getCommand } from "./registry";
-import "./model";
+import { renderInk } from "../test-utils/ink";
+import type { CommandContext } from "./registry";
+import { modelCommand } from "./model";
+import { createCommandRegistry } from "./registry";
 
-const mockCallbacks = () => ({
-  onComplete: vi.fn(),
-  onCancel: vi.fn(),
-  clearMessages: vi.fn(),
-  switchSession: vi.fn((_id: string): string | null => null),
-  setActiveModel: vi.fn(),
-  setActiveProvider: vi.fn((_name: string): string | null => null),
-  reloadProviders: vi.fn(),
-  providerBaseUrl: "http://localhost:11434",
-  activeModel: "qwen3:8b",
-  activeProvider: "ollama",
-  providers: [
-    { name: "ollama", baseUrl: "http://localhost:11434", type: "ollama" },
-  ],
+/** Default context for tests. */
+const DEFAULT_CONTEXT: CommandContext = {
+  usage: null,
   contextWindow: 8192,
-  maxTokens: 8192,
-  tokenUsage: null,
-  messageCount: 0,
-  mcpFailedServers: [],
-});
+  resetSession: () => {},
+  loadSession: () => {},
+};
 
-describe("/model command", () => {
-  it("is registered", () => {
-    expect(getCommand("model")).toBeDefined();
+describe("modelCommand", () => {
+  it("is named model", () => {
+    expect(modelCommand.name).toBe("model");
   });
 
-  it("returns interactive element", () => {
-    const command = getCommand("model");
-    if (!command) throw new Error("model command not registered");
-    const result = command.execute("", mockCallbacks());
-    expect(result).toHaveProperty("interactive");
+  it("registers and invokes as a takeover", async () => {
+    const registry = createCommandRegistry();
+    registry.register(modelCommand);
+    const result = await registry.invoke("/model", DEFAULT_CONTEXT);
+    expect(result.type).toBe("takeover");
+  });
+
+  it("renders the model selector when invoked", async () => {
+    const registry = createCommandRegistry();
+    registry.register(modelCommand);
+    const result = await registry.invoke("/model", DEFAULT_CONTEXT);
+    if (result.type !== "takeover") return;
+    const onDone = vi.fn();
+    const { lastFrame } = renderInk(
+      createElement(Fragment, null, result.render(onDone, DEFAULT_CONTEXT)),
+    );
+    expect(lastFrame()).toContain("Select Model");
+  });
+
+  it("has a description", () => {
+    expect(modelCommand.description).toBeTruthy();
   });
 });

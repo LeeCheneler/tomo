@@ -1,71 +1,97 @@
-import { describe, expect, it, vi } from "vitest";
-import type { Skill } from "../skills";
-import { makeMockContext } from "./test-helpers";
+import { describe, expect, it } from "vitest";
+import { createSkillRegistry } from "../skills/registry";
+import type { SkillDefinition } from "../skills/types";
+import { mockToolContext } from "../test-utils/stub-context";
+import { createSkillTool } from "./skill";
 
-const testSkills: Skill[] = [
-  {
-    name: "commit",
-    description: "Commit changes",
-    body: "Follow conventional commits.\n\nBe concise.",
-    local: false,
-  },
-  {
-    name: "review",
-    description: "(local) Review code",
-    body: "Review the code for bugs.",
-    local: true,
-  },
-];
+/** Builds a minimal skill definition for testing. */
+function fakeSkill(
+  name: string,
+  description: string,
+  content: string,
+): SkillDefinition {
+  return { name, description, content, source: "global" };
+}
 
-vi.mock("../skills", () => ({
-  getAllSkills: () => testSkills,
-  getSkill: (name: string) => testSkills.find((s) => s.name === name),
-}));
-
-// Import after mock to use mocked skills.
-await import("./skill");
-const { getTool } = await import("./registry");
-
-const mockContext = makeMockContext({ permissions: {} });
-
-describe("skill tool", () => {
-  it("is registered as non-interactive", () => {
-    const tool = getTool("skill");
-    expect(tool).toBeDefined();
-    expect(tool?.interactive).toBe(false);
+describe("createSkillTool", () => {
+  it("has correct name and parameters", () => {
+    const registry = createSkillRegistry();
+    const tool = createSkillTool(registry);
+    expect(tool.name).toBe("skill");
+    expect(tool.parameters).toHaveProperty("properties");
+    expect(tool.parameters).toHaveProperty("required");
   });
 
-  it("has a dynamic description listing available skills", () => {
-    const tool = getTool("skill");
-    expect(tool?.description).toContain("Available skills:");
-    expect(tool?.description).toContain("commit: Commit changes");
-    expect(tool?.description).toContain("review: (local) Review code");
+  describe("description", () => {
+    it("lists available skills in the description", () => {
+      const registry = createSkillRegistry();
+      registry.register(fakeSkill("commit", "Commit changes", "prompt"));
+      const tool = createSkillTool(registry);
+      expect(tool.description).toContain("commit");
+      expect(tool.description).toContain("Commit changes");
+    });
+
+    it("shows fallback when no skills are available", () => {
+      const registry = createSkillRegistry();
+      const tool = createSkillTool(registry);
+      expect(tool.description).toContain("No skills are currently available");
+    });
   });
 
-  it("returns skill body for a known skill", async () => {
-    const tool = getTool("skill");
-    const result = await tool?.execute(
-      JSON.stringify({ name: "commit" }),
-      mockContext,
-    );
-    expect(result?.output).toBe("Follow conventional commits.\n\nBe concise.");
+  describe("formatCall", () => {
+    it("returns the skill name argument", () => {
+      const registry = createSkillRegistry();
+      const tool = createSkillTool(registry);
+      expect(tool.formatCall({ name: "commit" })).toBe("commit");
+    });
+
+    it("returns empty string when name is missing", () => {
+      const registry = createSkillRegistry();
+      const tool = createSkillTool(registry);
+      expect(tool.formatCall({})).toBe("");
+    });
   });
 
-  it("returns error for unknown skill", async () => {
-    const tool = getTool("skill");
-    const result = await tool?.execute(
-      JSON.stringify({ name: "nonexistent" }),
-      mockContext,
-    );
-    expect(result?.output).toContain('Unknown skill: "nonexistent"');
-    expect(result?.output).toContain("commit");
-    expect(result?.output).toContain("review");
-  });
+  describe("execute", () => {
+    it("returns skill content for a valid skill name", async () => {
+      const registry = createSkillRegistry();
+      registry.register(
+        fakeSkill("commit", "Commit changes", "Run git commit."),
+      );
+      const tool = createSkillTool(registry);
 
-  it("throws for empty name", async () => {
-    const tool = getTool("skill");
-    await expect(
-      tool?.execute(JSON.stringify({ name: "" }), mockContext),
-    ).rejects.toThrow("skill name is required");
+      const result = await tool.execute({ name: "commit" }, mockToolContext());
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("Run git commit.");
+    });
+
+    it("returns error for unknown skill name", async () => {
+      const registry = createSkillRegistry();
+      const tool = createSkillTool(registry);
+
+      const result = await tool.execute({ name: "nope" }, mockToolContext());
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("Unknown skill");
+      expect(result.output).toContain("nope");
+    });
+
+    it("includes available skill names in error hint", async () => {
+      const registry = createSkillRegistry();
+      registry.register(fakeSkill("commit", "Commit", "prompt"));
+      registry.register(fakeSkill("review", "Review", "prompt"));
+      const tool = createSkillTool(registry);
+
+      const result = await tool.execute({ name: "nope" }, mockToolContext());
+      expect(result.output).toContain("commit");
+      expect(result.output).toContain("review");
+    });
+
+    it("omits hint when no skills are available", async () => {
+      const registry = createSkillRegistry();
+      const tool = createSkillTool(registry);
+
+      const result = await tool.execute({ name: "nope" }, mockToolContext());
+      expect(result.output).not.toContain("Available skills");
+    });
   });
 });

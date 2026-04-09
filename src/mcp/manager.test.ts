@@ -1,502 +1,140 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decodeToolName, encodeToolName, McpManager } from "./manager.js";
+import { resolve } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { McpConnection } from "../config/schema";
+import type { McpClient } from "./client";
+import type { McpManager } from "./manager";
+import { createMcpManager } from "./manager";
 
-vi.mock("./client.js", () => ({
-  McpClient: vi.fn(),
-}));
+const STDIO_MOCK = resolve(__dirname, "../../mock-mcps/stdio.mjs");
 
-vi.mock("./stdio-transport.js", () => ({
-  StdioTransport: vi.fn(),
-}));
-
-vi.mock("./http-transport.js", () => ({
-  HttpTransport: vi.fn(),
-}));
-
-import { McpClient } from "./client.js";
-import { HttpTransport } from "./http-transport.js";
-import { StdioTransport } from "./stdio-transport.js";
-
-function createMockClient() {
+/** Builds a stdio connection pointing at the mock server. */
+function mockStdioConnection(): McpConnection {
   return {
-    initialize: vi.fn().mockResolvedValue({
-      protocolVersion: "2025-03-26",
-      capabilities: {},
-      serverInfo: { name: "mock", version: "1.0" },
-    }),
-    listTools: vi.fn().mockResolvedValue([]),
-    callTool: vi.fn().mockResolvedValue({
-      content: [{ type: "text", text: "result" }],
-    }),
-    close: vi.fn(),
-    onNotification: vi.fn(),
-    getServerCapabilities: vi.fn().mockReturnValue({}),
+    transport: "stdio",
+    command: "node",
+    args: [STDIO_MOCK],
+    enabled: true,
   };
 }
 
-describe("encodeToolName", () => {
-  it("encodes server and tool name", () => {
-    expect(encodeToolName("filesystem", "read_file")).toBe(
-      "mcp__filesystem__read_file",
-    );
+describe("createMcpManager", () => {
+  let manager: McpManager | null = null;
+
+  afterEach(async () => {
+    if (manager) {
+      await manager.stopAll();
+      manager = null;
+    }
   });
 
-  it("handles server names with hyphens", () => {
-    expect(encodeToolName("my-server", "search")).toBe(
-      "mcp__my-server__search",
-    );
-  });
-});
-
-describe("decodeToolName", () => {
-  it("decodes a namespaced tool name", () => {
-    expect(decodeToolName("mcp__filesystem__read_file")).toEqual({
-      serverName: "filesystem",
-      toolName: "read_file",
-    });
+  it("starts a single server with start()", async () => {
+    manager = createMcpManager();
+    const result = await manager.start("mock", mockStdioConnection());
+    expect(result.name).toBe("mock");
+    expect(result.tools.map((t) => t.name).sort()).toEqual([
+      "coin_flip",
+      "get_time",
+    ]);
+    expect(manager.listConnected()).toEqual(["mock"]);
   });
 
-  it("returns null for non-MCP tool names", () => {
-    expect(decodeToolName("read_file")).toBeNull();
-    expect(decodeToolName("other__thing")).toBeNull();
+  it("returns the connected client via getClient()", async () => {
+    manager = createMcpManager();
+    await manager.start("mock", mockStdioConnection());
+    const client = manager.getClient("mock");
+    expect(client).toBeDefined();
+    const result = await client?.callTool("coin_flip", {});
+    expect(result?.isError).toBe(false);
   });
 
-  it("returns null for malformed MCP names", () => {
-    expect(decodeToolName("mcp__")).toBeNull();
-    expect(decodeToolName("mcp__serveronly")).toBeNull();
+  it("returns undefined for unknown server name", async () => {
+    manager = createMcpManager();
+    expect(manager.getClient("unknown")).toBeUndefined();
   });
 
-  it("handles tool names containing the separator", () => {
-    const decoded = decodeToolName("mcp__server__tool__with__underscores");
-    expect(decoded).toEqual({
-      serverName: "server",
-      toolName: "tool__with__underscores",
-    });
-  });
-});
-
-describe("McpManager", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-    vi.mocked(McpClient).mockImplementation(function () {
-      return createMockClient();
-    } as never);
-    // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-    vi.mocked(StdioTransport).mockImplementation(function () {
-      return {};
-    } as never);
-    // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-    vi.mocked(HttpTransport).mockImplementation(function () {
-      return {};
-    } as never);
+  it("stops a single server", async () => {
+    manager = createMcpManager();
+    await manager.start("mock", mockStdioConnection());
+    await manager.stop("mock");
+    expect(manager.listConnected()).toEqual([]);
+    expect(manager.getClient("mock")).toBeUndefined();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
+  it("stop is a no-op for unknown server", async () => {
+    manager = createMcpManager();
+    await expect(manager.stop("unknown")).resolves.not.toThrow();
   });
 
-  describe("startAll", () => {
-    it("starts stdio servers", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        filesystem: {
-          transport: "stdio",
-          command: "npx",
-          args: ["-y", "server-fs"],
-        },
-      });
-
-      expect(StdioTransport).toHaveBeenCalledWith(
-        "npx",
-        ["-y", "server-fs"],
-        undefined,
-      );
-      expect(McpClient).toHaveBeenCalled();
+  it("startAll connects multiple servers in parallel", async () => {
+    manager = createMcpManager();
+    const result = await manager.startAll({
+      first: mockStdioConnection(),
+      second: mockStdioConnection(),
     });
-
-    it("starts http servers", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        remote: {
-          transport: "http",
-          url: "https://mcp.example.com",
-          headers: { Authorization: { value: "Bearer token" } },
-        },
-      });
-
-      expect(HttpTransport).toHaveBeenCalledWith("https://mcp.example.com", {
-        Authorization: "Bearer token",
-      });
-      expect(McpClient).toHaveBeenCalled();
-    });
-
-    it("starts multiple servers concurrently", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: {
-          transport: "stdio",
-          command: "server-fs",
-          args: [],
-        },
-        remote: {
-          transport: "http",
-          url: "https://mcp.example.com",
-        },
-      });
-
-      expect(McpClient).toHaveBeenCalledTimes(2);
-    });
-
-    it("initializes each client", async () => {
-      const mockClient = createMockClient();
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      expect(mockClient.initialize).toHaveBeenCalled();
-    });
-
-    it("returns failed server names without blocking others", async () => {
-      let callCount = 0;
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        callCount++;
-        const client = createMockClient();
-        if (callCount === 1) {
-          client.initialize.mockRejectedValue(new Error("connect failed"));
-        }
-        return client;
-      } as never);
-
-      const manager = new McpManager();
-      const failures = await manager.startAll({
-        broken: { transport: "stdio", command: "bad", args: [] },
-        working: { transport: "stdio", command: "good", args: [] },
-      });
-
-      expect(failures).toEqual(["broken"]);
-      expect(manager.getServerNames()).toEqual(["working"]);
-    });
-
-    it("returns empty array when all servers connect", async () => {
-      const manager = new McpManager();
-      const failures = await manager.startAll({
-        fs: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      expect(failures).toEqual([]);
-    });
+    expect(result.failed).toEqual([]);
+    expect(result.started.map((s) => s.name).sort()).toEqual([
+      "first",
+      "second",
+    ]);
+    expect(manager.listConnected().sort()).toEqual(["first", "second"]);
   });
 
-  describe("isServerFailed", () => {
-    it("returns true for servers that failed to connect", async () => {
-      const mockClient = createMockClient();
-      mockClient.initialize.mockRejectedValue(new Error("nope"));
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        broken: { transport: "stdio", command: "bad", args: [] },
-      });
-
-      expect(manager.isServerFailed("broken")).toBe(true);
+  it("startAll skips disabled servers", async () => {
+    manager = createMcpManager();
+    const result = await manager.startAll({
+      enabled: mockStdioConnection(),
+      disabled: { ...mockStdioConnection(), enabled: false },
     });
-
-    it("returns false for connected servers", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        ok: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      expect(manager.isServerFailed("ok")).toBe(false);
-    });
-
-    it("returns false after shutdown", async () => {
-      const mockClient = createMockClient();
-      mockClient.initialize.mockRejectedValue(new Error("nope"));
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        broken: { transport: "stdio", command: "bad", args: [] },
-      });
-      manager.shutdown();
-
-      expect(manager.isServerFailed("broken")).toBe(false);
-    });
+    expect(result.started.map((s) => s.name)).toEqual(["enabled"]);
+    expect(result.failed).toEqual([]);
   });
 
-  describe("getToolDefinitions", () => {
-    it("returns namespaced tool definitions", async () => {
-      const mockClient = createMockClient();
-      mockClient.listTools.mockResolvedValue([
-        {
-          name: "read_file",
-          description: "Read a file",
-          inputSchema: {
-            type: "object",
-            properties: { path: { type: "string" } },
-          },
-        },
-        {
-          name: "search",
-          description: "Search files",
-          inputSchema: { type: "object", properties: {} },
-        },
-      ]);
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        filesystem: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      const definitions = await manager.getToolDefinitions();
-
-      expect(definitions).toHaveLength(2);
-      expect(definitions[0]).toEqual({
-        type: "function",
-        function: {
-          name: "mcp__filesystem__read_file",
-          description: "Read a file",
-          parameters: {
-            type: "object",
-            properties: { path: { type: "string" } },
-          },
-        },
-      });
-      expect(definitions[1].function.name).toBe("mcp__filesystem__search");
+  it("startAll reports failures without throwing", async () => {
+    manager = createMcpManager();
+    const result = await manager.startAll({
+      good: mockStdioConnection(),
+      broken: {
+        transport: "stdio",
+        command: "node",
+        args: ["/path/that/does/not/exist.mjs"],
+        enabled: true,
+      },
     });
-
-    it("aggregates tools from multiple servers", async () => {
-      let callCount = 0;
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        const client = createMockClient();
-        callCount++;
-        if (callCount === 1) {
-          client.listTools.mockResolvedValue([
-            {
-              name: "tool_a",
-              description: "A",
-              inputSchema: { type: "object" },
-            },
-          ]);
-        } else {
-          client.listTools.mockResolvedValue([
-            {
-              name: "tool_b",
-              description: "B",
-              inputSchema: { type: "object" },
-            },
-          ]);
-        }
-        return client;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        server1: { transport: "stdio", command: "cmd1", args: [] },
-        server2: { transport: "stdio", command: "cmd2", args: [] },
-      });
-
-      const definitions = await manager.getToolDefinitions();
-      const names = definitions.map((d) => d.function.name);
-
-      expect(names).toContain("mcp__server1__tool_a");
-      expect(names).toContain("mcp__server2__tool_b");
-    });
-
-    it("uses empty description when tool has none", async () => {
-      const mockClient = createMockClient();
-      mockClient.listTools.mockResolvedValue([
-        {
-          name: "no_desc",
-          inputSchema: { type: "object" },
-        },
-      ]);
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      const definitions = await manager.getToolDefinitions();
-      expect(definitions[0].function.description).toBe("");
-    });
+    expect(result.started.map((s) => s.name)).toEqual(["good"]);
+    expect(result.failed.map((f) => f.name)).toEqual(["broken"]);
+    expect(result.failed[0].error).toBeTruthy();
   });
 
-  describe("callTool", () => {
-    it("routes call to correct server", async () => {
-      const mockClient = createMockClient();
-      mockClient.callTool.mockResolvedValue({
-        content: [{ type: "text", text: "file contents" }],
-      });
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        filesystem: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      const result = await manager.callTool("mcp__filesystem__read_file", {
-        path: "/tmp/test",
-      });
-
-      expect(mockClient.callTool).toHaveBeenCalledWith("read_file", {
-        path: "/tmp/test",
-      });
-      expect(result).toBe("file contents");
+  it("stopAll disconnects every connected server", async () => {
+    manager = createMcpManager();
+    await manager.startAll({
+      a: mockStdioConnection(),
+      b: mockStdioConnection(),
     });
-
-    it("joins multiple content blocks", async () => {
-      const mockClient = createMockClient();
-      mockClient.callTool.mockResolvedValue({
-        content: [
-          { type: "text", text: "line 1" },
-          { type: "text", text: "line 2" },
-        ],
-      });
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      const result = await manager.callTool("mcp__fs__tool", {});
-      expect(result).toBe("line 1\nline 2");
-    });
-
-    it("handles non-text content blocks", async () => {
-      const mockClient = createMockClient();
-      mockClient.callTool.mockResolvedValue({
-        content: [{ type: "image", data: "base64..." }],
-      });
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      const result = await manager.callTool("mcp__fs__tool", {});
-      expect(result).toBe("[image content]");
-    });
-
-    it("throws for non-MCP tool names", async () => {
-      const manager = new McpManager();
-      await expect(manager.callTool("read_file", {})).rejects.toThrow(
-        "Not an MCP tool",
-      );
-    });
-
-    it("throws for unknown server", async () => {
-      const manager = new McpManager();
-      await manager.startAll({});
-      await expect(manager.callTool("mcp__unknown__tool", {})).rejects.toThrow(
-        "MCP server not found: unknown",
-      );
-    });
+    await manager.stopAll();
+    expect(manager.listConnected()).toEqual([]);
   });
 
-  describe("isMcpTool", () => {
-    it("returns true for MCP-namespaced tools", () => {
-      const manager = new McpManager();
-      expect(manager.isMcpTool("mcp__fs__read")).toBe(true);
+  it("coerces non-Error rejections to a string in the failed list", async () => {
+    // Use the client factory injection point to force a connect() that
+    // throws a plain string instead of an Error instance.
+    const fakeClient: McpClient = {
+      connect: vi.fn(async () => {
+        // Intentionally throwing a non-Error to exercise the stringification
+        // path in the manager's startAll error handler.
+        throw "plain string rejection";
+      }),
+      listTools: vi.fn(async () => []),
+      callTool: vi.fn(async () => ({ text: "", isError: false })),
+      disconnect: vi.fn(async () => {}),
+    };
+    manager = createMcpManager(() => fakeClient);
+    const result = await manager.startAll({
+      stringy: mockStdioConnection(),
     });
-
-    it("returns false for non-MCP tools", () => {
-      const manager = new McpManager();
-      expect(manager.isMcpTool("read_file")).toBe(false);
-    });
-  });
-
-  describe("getServerNames", () => {
-    it("returns names of connected servers", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        alpha: { transport: "stdio", command: "cmd1", args: [] },
-        beta: { transport: "stdio", command: "cmd2", args: [] },
-      });
-
-      const names = manager.getServerNames();
-      expect(names).toContain("alpha");
-      expect(names).toContain("beta");
-      expect(names).toHaveLength(2);
-    });
-
-    it("returns empty array when no servers", () => {
-      const manager = new McpManager();
-      expect(manager.getServerNames()).toEqual([]);
-    });
-
-    it("returns empty array after shutdown", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: { transport: "stdio", command: "cmd", args: [] },
-      });
-      manager.shutdown();
-      expect(manager.getServerNames()).toEqual([]);
-    });
-  });
-
-  describe("shutdown", () => {
-    it("closes all clients", async () => {
-      const mockClient = createMockClient();
-      // biome-ignore lint/complexity/useArrowFunction: must use function for constructor mock
-      vi.mocked(McpClient).mockImplementation(function () {
-        return mockClient;
-      } as never);
-
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      manager.shutdown();
-      expect(mockClient.close).toHaveBeenCalled();
-    });
-
-    it("clears client map after shutdown", async () => {
-      const manager = new McpManager();
-      await manager.startAll({
-        fs: { transport: "stdio", command: "cmd", args: [] },
-      });
-
-      manager.shutdown();
-
-      const definitions = await manager.getToolDefinitions();
-      expect(definitions).toHaveLength(0);
-    });
+    expect(result.started).toEqual([]);
+    expect(result.failed).toEqual([
+      { name: "stringy", error: "plain string rejection" },
+    ]);
   });
 });

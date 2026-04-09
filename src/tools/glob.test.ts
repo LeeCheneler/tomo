@@ -1,218 +1,209 @@
-import { execSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTool } from "./registry";
-import { makeMockContext } from "./test-helpers";
+import { execFileSync } from "node:child_process";
+import { globSync } from "node:fs";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { isGitRepo } from "../prompt/git-context";
+import { mockToolContext } from "../test-utils/stub-context";
+import { globTool } from "./glob";
 
-// Import to trigger registration
-import "./glob";
+vi.mock("node:child_process", () => ({
+  execFileSync: vi.fn(),
+}));
 
-const tmpDir = resolve(import.meta.dirname, "../../.test-glob-tmp");
-let mockContext = makeMockContext();
+vi.mock("node:fs", () => ({
+  globSync: vi.fn(),
+}));
 
-/** Initialise a git repo inside tmpDir with a .gitignore and committed + ignored files. */
-function setupGitRepo() {
-  execSync("git init", { cwd: tmpDir, stdio: "pipe" });
-  execSync("git config user.email test@test.com", {
-    cwd: tmpDir,
-    stdio: "pipe",
-  });
-  execSync("git config user.name Test", { cwd: tmpDir, stdio: "pipe" });
-  writeFileSync(resolve(tmpDir, ".gitignore"), "dist/\n");
-  mkdirSync(resolve(tmpDir, "dist"), { recursive: true });
-  writeFileSync(resolve(tmpDir, "dist/bundle.js"), "// built");
-  execSync("git add -A && git commit -m init", { cwd: tmpDir, stdio: "pipe" });
-}
-
-beforeEach(() => {
-  mkdirSync(resolve(tmpDir, "src"), { recursive: true });
-  writeFileSync(resolve(tmpDir, "readme.md"), "# Hello");
-  writeFileSync(resolve(tmpDir, "src/index.ts"), "export {}");
-  writeFileSync(resolve(tmpDir, "src/app.tsx"), "<App />");
-  writeFileSync(resolve(tmpDir, "src/utils.test.ts"), "test()");
-  vi.clearAllMocks();
-  mockContext = makeMockContext();
-});
+vi.mock("../prompt/git-context", () => ({
+  isGitRepo: vi.fn(),
+}));
 
 afterEach(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
+  vi.resetAllMocks();
 });
 
-describe("glob tool", () => {
-  it("is registered as non-interactive", () => {
-    const tool = getTool("glob");
-    expect(tool).toBeDefined();
-    expect(tool?.name).toBe("glob");
-    expect(tool?.interactive).toBe(false);
+describe("globTool", () => {
+  it("has correct name and parameters", () => {
+    expect(globTool.name).toBe("glob");
+    expect(globTool.parameters).toHaveProperty("properties");
+    expect(globTool.parameters).toHaveProperty("required");
   });
 
-  it("matches files by pattern", async () => {
-    const tool = getTool("glob");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.ts", path: tmpDir }),
-      mockContext,
-    );
+  describe("formatCall", () => {
+    it("returns the pattern argument", () => {
+      expect(globTool.formatCall({ pattern: "**/*.ts" })).toBe("**/*.ts");
+    });
 
-    expect(result?.output).toContain("src/index.ts");
-    expect(result?.output).toContain("src/utils.test.ts");
-    expect(result?.output).not.toContain("readme.md");
-    expect(result?.output).not.toContain("app.tsx");
+    it("returns empty string when pattern is missing", () => {
+      expect(globTool.formatCall({})).toBe("");
+    });
   });
 
-  it("matches files with tsx extension", async () => {
-    const tool = getTool("glob");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.tsx", path: tmpDir }),
-      mockContext,
-    );
+  describe("execute", () => {
+    it("uses git ls-files in a git repo with gitignore enabled", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(true);
+      vi.mocked(execFileSync)
+        .mockReturnValueOnce("src/foo.ts\nsrc/bar.ts\n")
+        .mockReturnValueOnce("");
 
-    expect(result?.output).toContain("src/app.tsx");
-    expect(result?.output).not.toContain("index.ts");
-  });
+      const result = await globTool.execute(
+        { pattern: "**/*.ts" },
+        mockToolContext(),
+      );
 
-  it("returns message when no files match", async () => {
-    const tool = getTool("glob");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.go", path: tmpDir }),
-      mockContext,
-    );
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("src/foo.ts\nsrc/bar.ts");
+      expect(execFileSync).toHaveBeenCalledTimes(2);
+    });
 
-    expect(result?.output).toBe("No files matched the pattern.");
-  });
+    it("falls back to globSync outside a git repo", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(globSync).mockReturnValue(["a.ts", "b.ts"] as never);
 
-  it("throws for empty pattern", async () => {
-    const tool = getTool("glob");
-    await expect(
-      tool?.execute(JSON.stringify({ pattern: "" }), mockContext),
-    ).rejects.toThrow("no glob pattern provided");
-  });
+      const result = await globTool.execute(
+        { pattern: "*.ts" },
+        mockToolContext(),
+      );
 
-  it("defaults to cwd when no path provided", async () => {
-    const tool = getTool("glob");
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "package.json" }),
-      mockContext,
-    );
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("a.ts\nb.ts");
+    });
 
-    // Running from project root, should find the project's package.json
-    expect(result?.output).toContain("package.json");
-  });
+    it("falls back to globSync when gitignore is false", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(true);
+      vi.mocked(globSync).mockReturnValue(["a.ts"] as never);
 
-  it("does not prompt when read_file permission is granted and path in cwd", async () => {
-    const tool = getTool("glob");
-    await tool?.execute(
-      JSON.stringify({ pattern: "**/*.ts", path: tmpDir }),
-      mockContext,
-    );
+      const result = await globTool.execute(
+        { pattern: "*.ts", gitignore: false },
+        mockToolContext(),
+      );
 
-    expect(mockContext.renderInteractive).not.toHaveBeenCalled();
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("a.ts");
+      expect(execFileSync).not.toHaveBeenCalled();
+    });
 
-  it("prompts when read_file permission is not granted", async () => {
-    const tool = getTool("glob");
-    const ctx = {
-      ...mockContext,
-      permissions: { read_file: false },
-    };
+    it("returns a message when no files match", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(globSync).mockReturnValue([] as never);
 
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.ts", path: tmpDir }),
-      ctx,
-    );
+      const result = await globTool.execute(
+        { pattern: "*.xyz" },
+        mockToolContext(),
+      );
 
-    expect(ctx.renderInteractive).toHaveBeenCalledTimes(1);
-    expect(result?.output).toContain("src/index.ts");
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toBe("No files matched the pattern.");
+    });
 
-  it("returns denial when user denies search", async () => {
-    const tool = getTool("glob");
-    const ctx = {
-      ...mockContext,
-      renderInteractive: vi.fn().mockResolvedValue("denied"),
-      permissions: { read_file: false },
-    };
+    it("returns error when glob throws", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(globSync).mockImplementation(() => {
+        throw new Error("bad pattern");
+      });
 
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.ts", path: tmpDir }),
-      ctx,
-    );
+      const result = await globTool.execute(
+        { pattern: "[invalid" },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toBe("The user denied this search.");
-  });
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("bad pattern");
+    });
 
-  it("prompts for paths outside cwd even with permission granted", async () => {
-    const tool = getTool("glob");
+    it("searches in a custom path when provided", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(false);
+      vi.mocked(globSync).mockReturnValue(["file.ts"] as never);
 
-    await tool?.execute(
-      JSON.stringify({ pattern: "*.txt", path: "/tmp" }),
-      mockContext,
-    );
+      const result = await globTool.execute(
+        { pattern: "*.ts", path: "/tmp/project" },
+        mockToolContext({
+          permissions: {
+            cwdReadFile: true,
+            cwdWriteFile: false,
+            globalReadFile: true,
+            globalWriteFile: false,
+          },
+        }),
+      );
 
-    expect(mockContext.renderInteractive).toHaveBeenCalledTimes(1);
-  });
+      expect(result.status).toBe("ok");
+      expect(vi.mocked(globSync)).toHaveBeenCalledWith("*.ts", {
+        cwd: "/tmp/project",
+      });
+    });
 
-  it("excludes gitignored files by default", async () => {
-    setupGitRepo();
-    const tool = getTool("glob");
+    it("includes untracked files from git ls-files", async () => {
+      vi.mocked(isGitRepo).mockReturnValue(true);
+      vi.mocked(execFileSync)
+        .mockReturnValueOnce("tracked.ts\n")
+        .mockReturnValueOnce("untracked.ts\n");
 
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.js", path: tmpDir }),
-      mockContext,
-    );
+      const result = await globTool.execute(
+        { pattern: "**/*.ts" },
+        mockToolContext(),
+      );
 
-    expect(result?.output).toBe("No files matched the pattern.");
-  });
+      expect(result.status).toBe("ok");
+      expect(result.output).toContain("tracked.ts");
+      expect(result.output).toContain("untracked.ts");
+    });
 
-  it("excludes gitignored files when gitignore is true", async () => {
-    setupGitRepo();
-    const tool = getTool("glob");
+    describe("permissions", () => {
+      it("searches without confirmation when cwd read permission granted", async () => {
+        vi.mocked(isGitRepo).mockReturnValue(false);
+        vi.mocked(globSync).mockReturnValue(["a.ts"] as never);
+        const confirm = vi.fn();
 
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.js", path: tmpDir, gitignore: true }),
-      mockContext,
-    );
+        const result = await globTool.execute(
+          { pattern: "*.ts" },
+          mockToolContext({ confirm }),
+        );
 
-    expect(result?.output).toBe("No files matched the pattern.");
-  });
+        expect(result.status).toBe("ok");
+        expect(confirm).not.toHaveBeenCalled();
+      });
 
-  it("includes gitignored files when gitignore is false", async () => {
-    setupGitRepo();
-    const tool = getTool("glob");
+      it("prompts for confirmation when read permission not granted", async () => {
+        vi.mocked(isGitRepo).mockReturnValue(false);
+        vi.mocked(globSync).mockReturnValue(["a.ts"] as never);
+        const confirm = vi.fn(async () => true);
 
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.js", path: tmpDir, gitignore: false }),
-      mockContext,
-    );
+        const result = await globTool.execute(
+          { pattern: "*.ts" },
+          mockToolContext({
+            permissions: {
+              cwdReadFile: false,
+              cwdWriteFile: false,
+              globalReadFile: false,
+              globalWriteFile: false,
+            },
+            confirm,
+          }),
+        );
 
-    expect(result?.output).toContain("dist/bundle.js");
-  });
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("ok");
+      });
 
-  it("includes untracked non-ignored files with gitignore on", async () => {
-    setupGitRepo();
-    // Add a new file that isn't committed yet but also isn't ignored
-    writeFileSync(resolve(tmpDir, "src/new.ts"), "// new");
-    const tool = getTool("glob");
+      it("returns denied when user rejects confirmation", async () => {
+        const confirm = vi.fn(async () => false);
 
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.ts", path: tmpDir }),
-      mockContext,
-    );
+        const result = await globTool.execute(
+          { pattern: "*.ts" },
+          mockToolContext({
+            permissions: {
+              cwdReadFile: false,
+              cwdWriteFile: false,
+              globalReadFile: false,
+              globalWriteFile: false,
+            },
+            confirm,
+          }),
+        );
 
-    expect(result?.output).toContain("src/index.ts");
-    expect(result?.output).toContain("src/new.ts");
-  });
-
-  it("falls back to fs.globSync for non-git directories", async () => {
-    // tmpDir is not a git repo (no setupGitRepo call)
-    const tool = getTool("glob");
-
-    const result = await tool?.execute(
-      JSON.stringify({ pattern: "**/*.ts", path: tmpDir }),
-      mockContext,
-    );
-
-    expect(result?.output).toContain("src/index.ts");
-    expect(result?.output).toContain("src/utils.test.ts");
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(result.status).toBe("denied");
+      });
+    });
   });
 });

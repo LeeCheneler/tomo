@@ -1,0 +1,929 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ImageAttachment } from "../images/clipboard";
+import type { AutocompleteItem } from "./autocomplete";
+import { renderInk } from "../test-utils/ink";
+import { keys } from "../test-utils/keys";
+import { splitAtCursor } from "../input/cursor";
+import { ChatInput } from "./chat-input";
+
+// Mock clipboard operations so tests don't call osascript or read the filesystem.
+vi.mock("../images/clipboard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../images/clipboard")>();
+  return {
+    ...actual,
+    readClipboardImage: vi.fn(() => null),
+    detectImagePath: vi.fn(actual.detectImagePath),
+  };
+});
+
+const { readClipboardImage, detectImagePath } = await import(
+  "../images/clipboard"
+);
+
+const COLUMNS = 40;
+
+/** Override process.stdout.columns for test predictability. */
+function setColumns(width: number | undefined) {
+  Object.defineProperty(process.stdout, "columns", {
+    value: width,
+    writable: true,
+    configurable: true,
+  });
+}
+
+describe("ChatInput", () => {
+  afterEach(() => {
+    setColumns(undefined);
+    vi.mocked(readClipboardImage).mockReset();
+    vi.mocked(detectImagePath).mockRestore();
+  });
+
+  /** Test autocomplete items. */
+  const testItems: AutocompleteItem[] = [
+    { key: "ping", name: "ping", description: "Responds with pong" },
+    { key: "pong", name: "pong", description: "Responds with ping" },
+    { key: "help", name: "help", description: "Show help" },
+  ];
+
+  /** Test items exceeding MAX_VISIBLE (5). */
+  const manyItems: AutocompleteItem[] = [
+    { key: "aaa", name: "aaa", description: "First" },
+    { key: "bbb", name: "bbb", description: "Second" },
+    { key: "ccc", name: "ccc", description: "Third" },
+    { key: "ddd", name: "ddd", description: "Fourth" },
+    { key: "eee", name: "eee", description: "Fifth" },
+    { key: "fff", name: "fff", description: "Sixth" },
+    { key: "ggg", name: "ggg", description: "Seventh" },
+  ];
+
+  /** Renders ChatInput with sensible defaults and a fixed terminal width. */
+  function renderInput(
+    overrides: Partial<{
+      onMessage: (message: string, images: ImageAttachment[]) => void;
+      onUp: () => void;
+      onAbort: () => void;
+      onPager: () => void;
+      initialValue: string;
+      hasHistory: boolean;
+      commandAutocompleteItems: readonly AutocompleteItem[];
+      skillAutocompleteItems: readonly AutocompleteItem[];
+    }> = {},
+  ) {
+    setColumns(COLUMNS);
+
+    return renderInk(
+      <ChatInput
+        onMessage={overrides.onMessage ?? (() => {})}
+        onUp={overrides.onUp}
+        onAbort={overrides.onAbort}
+        onPager={overrides.onPager}
+        initialValue={overrides.initialValue}
+        hasHistory={overrides.hasHistory}
+        commandAutocompleteItems={overrides.commandAutocompleteItems ?? []}
+        skillAutocompleteItems={overrides.skillAutocompleteItems}
+      />,
+    );
+  }
+
+  describe("layout", () => {
+    it("renders a top border at full terminal width", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      // paddingTop={1} adds an empty line before the border.
+      expect(lines[1]).toBe("─".repeat(COLUMNS));
+    });
+
+    it("renders the prompt marker", () => {
+      const { lastFrame } = renderInput();
+      expect(lastFrame()).toContain("❯");
+    });
+
+    it("falls back to 80 columns when stdout.columns is undefined", () => {
+      setColumns(undefined);
+
+      const { lastFrame } = renderInk(
+        <ChatInput onMessage={() => {}} commandAutocompleteItems={[]} />,
+      );
+
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      expect(lines[1]).toBe("─".repeat(80));
+    });
+  });
+
+  describe("submit", () => {
+    it("calls onMessage with value on enter", async () => {
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({ onMessage });
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
+      expect(onMessage).toHaveBeenCalledWith("hello", []);
+    });
+
+    it("does not call onMessage when value is empty", async () => {
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({ onMessage });
+      await stdin.write(keys.enter);
+      expect(onMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not call onMessage when value is only whitespace", async () => {
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({ onMessage });
+      await stdin.write("   ");
+      await stdin.write(keys.enter);
+      expect(onMessage).not.toHaveBeenCalled();
+    });
+
+    it("clears input after submit so next submit requires new input", async () => {
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({ onMessage });
+      await stdin.write("hello");
+      await stdin.write(keys.enter);
+      await stdin.write(keys.enter);
+      expect(onMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("onUp", () => {
+    it("calls onUp with current value when up arrow is pressed at cursor start", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      await stdin.write("my draft");
+      await stdin.write(keys.up);
+      // First up moves cursor to start, second up fires onUp.
+      await stdin.write(keys.up);
+      expect(onUp).toHaveBeenCalledWith("my draft");
+    });
+
+    it("calls onUp with empty string when input is empty", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      await stdin.write(keys.up);
+      expect(onUp).toHaveBeenCalledWith("");
+    });
+
+    it("does not call onUp when cursor is not at start", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({ onUp });
+      await stdin.write("hello");
+      await stdin.write(keys.up);
+      expect(onUp).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("initialValue", () => {
+    it("renders with initialValue text", () => {
+      const { lastFrame } = renderInput({ initialValue: "hello world" });
+      expect(lastFrame()).toContain("hello world");
+    });
+
+    it("defaults to empty when no initialValue provided", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      // Only the prompt marker and cursor placeholder should be between borders.
+      expect(frame).not.toContain("hello");
+    });
+  });
+
+  describe("instruction bar", () => {
+    it("shows no instructions by default", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("esc");
+      expect(frame).not.toContain("submit");
+    });
+
+    it("shows esc interrupt when onAbort is provided", () => {
+      const { lastFrame } = renderInput({ onAbort: vi.fn() });
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("interrupt");
+    });
+
+    it("shows esc clear after first escape with text", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("esc");
+      expect(frame).toContain("clear");
+    });
+
+    it("hides esc after second escape clears input", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("esc");
+    });
+  });
+
+  describe("escape highlight", () => {
+    it("highlights text in dim yellow after first escape", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      // Text should still be visible but styled differently.
+      expect(frame).toContain("hello");
+      // Cursor should not be rendered as inverse when escPending.
+      expect(frame).not.toContain("[7m");
+    });
+
+    it("removes highlight after second escape clears input", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("hello");
+    });
+
+    it("removes highlight when user types", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write("x");
+      const frame = lastFrame() ?? "";
+      // Text should be back to normal rendering with inverse cursor.
+      expect(frame).toContain("hellox");
+    });
+
+    it("does not highlight when escape pressed with empty input", async () => {
+      const { stdin, lastFrame } = renderInput();
+      const frameBefore = lastFrame() ?? "";
+      await stdin.write(keys.escape);
+      const frameAfter = lastFrame() ?? "";
+      // escPending stays false on empty input — rendering unchanged.
+      expect(frameAfter).toBe(frameBefore);
+    });
+  });
+
+  describe("abort", () => {
+    it("calls onAbort on escape when provided", async () => {
+      const onAbort = vi.fn();
+      const { stdin } = renderInput({ onAbort });
+      await stdin.write(keys.escape);
+      expect(onAbort).toHaveBeenCalledOnce();
+    });
+
+    it("does not clear input when onAbort is provided", async () => {
+      const onAbort = vi.fn();
+      const { stdin, lastFrame } = renderInput({ onAbort });
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      expect(lastFrame()).toContain("hello");
+    });
+
+    it("falls back to clear behaviour when onAbort is not provided", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("hello");
+    });
+  });
+
+  describe("pager", () => {
+    it("calls onPager when tab is pressed", async () => {
+      const onPager = vi.fn();
+      const { stdin } = renderInput({ onPager });
+      await stdin.write(keys.tab);
+      expect(onPager).toHaveBeenCalledOnce();
+    });
+
+    it("does not call onPager when autocomplete is showing", async () => {
+      const onPager = vi.fn();
+      const { stdin } = renderInput({
+        onPager,
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.tab);
+      expect(onPager).not.toHaveBeenCalled();
+    });
+
+    it("does not insert a tab character into the input", async () => {
+      const onPager = vi.fn();
+      const { stdin, lastFrame } = renderInput({ onPager });
+      await stdin.write("hello");
+      await stdin.write(keys.tab);
+      expect(lastFrame()).toContain("hello");
+      expect(lastFrame()).not.toContain("\t");
+    });
+
+    it("shows a tab pager hint in the instruction bar when onPager is set", () => {
+      const { lastFrame } = renderInput({ onPager: () => {} });
+      expect(lastFrame()).toContain("tab");
+      expect(lastFrame()).toContain("pager");
+    });
+
+    it("does not show the tab hint when onPager is not provided", () => {
+      const { lastFrame } = renderInput();
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("pager");
+    });
+  });
+
+  describe("autocomplete", () => {
+    it("shows autocomplete list when typing /", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("help");
+      expect(frame).toContain("ping");
+      expect(frame).toContain("pong");
+    });
+
+    it("filters autocomplete list as user types", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/pi");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("ping");
+      expect(frame).not.toContain("help");
+    });
+
+    it("hides autocomplete after space", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/ping");
+      await stdin.write(keys.space);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("Responds with pong");
+    });
+
+    it("does not show autocomplete for regular text", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("hello");
+      expect(lastFrame()).not.toContain("Responds with pong");
+    });
+
+    it("does not show autocomplete for // prefix", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("//");
+      expect(lastFrame()).not.toContain("Responds with pong");
+    });
+
+    it("navigates down through autocomplete with up/down", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      // Items are sorted alphabetically: help, ping, pong.
+      // Down from 0 selects index 1 (ping).
+      expect(frame).toContain("ping");
+    });
+
+    it("navigates up through autocomplete", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.down);
+      await stdin.write(keys.up);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("help");
+    });
+
+    it("loops autocomplete selection", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      // Up from index 0 loops to last (pong).
+      await stdin.write(keys.up);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("pong");
+    });
+
+    it("fills input with selected command on enter and appends space", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      // First item alphabetically is help.
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("/help");
+      // Autocomplete should be dismissed (space appended).
+      expect(frame).not.toContain("Show help");
+    });
+
+    it("shows select instead of submit when autocomplete is visible", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("select");
+      expect(frame).not.toContain("submit");
+    });
+
+    it("hides history instruction when autocomplete is visible", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+        hasHistory: true,
+      });
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("history");
+    });
+
+    it("does not call onUp when autocomplete is visible", async () => {
+      const onUp = vi.fn();
+      const { stdin } = renderInput({
+        onUp,
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.up);
+      expect(onUp).not.toHaveBeenCalled();
+    });
+
+    it("does not show autocomplete when no items provided", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("navigate");
+    });
+
+    it("does not show autocomplete when items array is empty", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: [],
+      });
+      await stdin.write("/");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("navigate");
+    });
+
+    it("submits normally when enter pressed with no matching autocomplete items", async () => {
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({
+        onMessage,
+        commandAutocompleteItems: testItems,
+      });
+      // Type a command that matches no items — autocomplete won't show.
+      await stdin.write("/zzz ");
+      await stdin.write(keys.enter);
+      expect(onMessage).toHaveBeenCalledWith("/zzz ", []);
+    });
+
+    it("resets selection when filter changes", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+      });
+      await stdin.write("/");
+      await stdin.write(keys.down);
+      // Type more to change filter — selection should reset.
+      await stdin.write("h");
+      const frame = lastFrame() ?? "";
+      // help is the only match and should be at index 0.
+      expect(frame).toContain("help");
+    });
+
+    it("scrolls through all items with sliding window when more than 5 exist", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: manyItems,
+      });
+      await stdin.write("/");
+      // 7 items: aaa-ggg. Down 5 times reaches fff (index 5).
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      // Window should slide to show fff.
+      expect(frame).toContain("fff");
+    });
+
+    it("loops back to first item after scrolling past last", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: manyItems,
+      });
+      await stdin.write("/");
+      // 7 items. Down 7 times loops back to aaa (index 0).
+      for (let i = 0; i < 7; i++) {
+        await stdin.write(keys.down);
+      }
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("aaa");
+    });
+
+    it("does nothing on down arrow when autocomplete is not visible", async () => {
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("hello");
+      // Down at end of input — no autocomplete, should be a no-op.
+      await stdin.write(keys.down);
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("hello");
+      expect(frame).not.toContain("navigate");
+    });
+  });
+
+  describe("skill autocomplete", () => {
+    /** Test skill autocomplete items. */
+    const skillItems: AutocompleteItem[] = [
+      {
+        key: "review:global",
+        name: "review",
+        description: "Review code",
+      },
+      {
+        key: "review:local",
+        name: "review",
+        description: "Review code",
+        tag: "(local)",
+      },
+      {
+        key: "deploy:global",
+        name: "deploy",
+        description: "Deploy app",
+      },
+    ];
+
+    it("shows skill autocomplete list when typing //", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("deploy");
+      expect(frame).toContain("review");
+    });
+
+    it("filters skill autocomplete as user types", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//dep");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("deploy");
+      expect(frame).not.toContain("review");
+    });
+
+    it("fills input with //name on enter", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//dep");
+      await stdin.write(keys.enter);
+      const frame = lastFrame() ?? "";
+      // Input text should contain //deploy (user typed it)
+      expect(frame).toContain("//deploy");
+      // Autocomplete dismissed after selection
+      expect(frame).not.toContain("Deploy app");
+    });
+
+    it("shows tag for local skills", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//");
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("(local)");
+    });
+
+    it("does not show command autocomplete for // prefix", async () => {
+      const { stdin, lastFrame } = renderInput({
+        commandAutocompleteItems: testItems,
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//");
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("Responds with pong");
+      expect(frame).toContain("deploy");
+    });
+
+    it("hides skill autocomplete after space", async () => {
+      const { stdin, lastFrame } = renderInput({
+        skillAutocompleteItems: skillItems,
+      });
+      await stdin.write("//deploy");
+      await stdin.write(keys.space);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("Deploy app");
+    });
+  });
+
+  describe("images", () => {
+    /** Fake image attachment for testing. */
+    const fakeImage: ImageAttachment = {
+      name: "screenshot.png",
+      dataUri: "data:image/png;base64,abc",
+    };
+
+    it("adds image on Ctrl+V when clipboard has an image", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      expect(lastFrame()).toContain("[screenshot.png]");
+    });
+
+    it("does nothing on Ctrl+V when clipboard has no image", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(null);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      expect(lastFrame()).not.toContain("[");
+    });
+
+    it("submits images with the message", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({ onMessage });
+      await stdin.write(keys.ctrlV);
+      await stdin.write("describe this");
+      await stdin.write(keys.enter);
+      expect(onMessage).toHaveBeenCalledWith("describe this", [fakeImage]);
+    });
+
+    it("allows submit with only images and empty text", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const onMessage = vi.fn();
+      const { stdin } = renderInput({ onMessage });
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.enter);
+      expect(onMessage).toHaveBeenCalledWith("", [fakeImage]);
+    });
+
+    it("clears images after submit", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput({ onMessage: vi.fn() });
+      await stdin.write(keys.ctrlV);
+      expect(lastFrame()).toContain("[screenshot.png]");
+      await stdin.write("msg");
+      await stdin.write(keys.enter);
+      expect(lastFrame()).not.toContain("[screenshot.png]");
+    });
+
+    it("shows down images hint when images are attached", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("down");
+      expect(frame).toContain("images");
+    });
+
+    it("enters image nav on down arrow at end of input", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write("text");
+      // Down at end of input enters image nav.
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("remove");
+      expect(frame).toContain("back to input");
+    });
+
+    it("does not enter image nav when cursor is mid-text on multi-line", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write("line1");
+      await stdin.write(keys.shiftEnter);
+      await stdin.write("line2");
+      // Move cursor to first line.
+      await stdin.write(keys.up);
+      // Down should move to second line, not enter image nav.
+      await stdin.write(keys.down);
+      const frame = lastFrame() ?? "";
+      expect(frame).not.toContain("remove");
+    });
+
+    it("removes image with backspace in image nav", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      await stdin.write(keys.backspace);
+      expect(lastFrame()).not.toContain("[screenshot.png]");
+    });
+
+    it("exits image nav on up arrow", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      expect(lastFrame()).toContain("remove");
+      await stdin.write(keys.up);
+      expect(lastFrame()).not.toContain("remove");
+    });
+
+    it("exits image nav on escape", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("remove");
+    });
+
+    it("navigates between multiple images", async () => {
+      const img1: ImageAttachment = {
+        name: "first.png",
+        dataUri: "data:image/png;base64,aaa",
+      };
+      const img2: ImageAttachment = {
+        name: "second.png",
+        dataUri: "data:image/png;base64,bbb",
+      };
+      vi.mocked(readClipboardImage)
+        .mockReturnValueOnce(img1)
+        .mockReturnValueOnce(img2);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[first.png]");
+      expect(frame).toContain("[second.png]");
+    });
+
+    it("exits image nav when last image is removed", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      await stdin.write(keys.backspace);
+      const frame = lastFrame() ?? "";
+      // Should be back in text input mode, no image nav instructions.
+      expect(frame).not.toContain("remove");
+      expect(frame).not.toContain("[screenshot.png]");
+    });
+
+    it("clears images on double-escape", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write("hello");
+      expect(lastFrame()).toContain("[screenshot.png]");
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("[screenshot.png]");
+      expect(lastFrame()).not.toContain("hello");
+    });
+
+    it("triggers esc pending when only images are attached", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      // First esc triggers pending, second clears.
+      await stdin.write(keys.escape);
+      await stdin.write(keys.escape);
+      expect(lastFrame()).not.toContain("[screenshot.png]");
+    });
+
+    it("navigates left in image nav and clamps at first image", async () => {
+      const img1: ImageAttachment = {
+        name: "first.png",
+        dataUri: "data:image/png;base64,aaa",
+      };
+      const img2: ImageAttachment = {
+        name: "second.png",
+        dataUri: "data:image/png;base64,bbb",
+      };
+      vi.mocked(readClipboardImage)
+        .mockReturnValueOnce(img1)
+        .mockReturnValueOnce(img2);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      // Move right to second, then back left, then left again (clamps at 0).
+      await stdin.write(keys.right);
+      await stdin.write(keys.left);
+      await stdin.write(keys.left);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[first.png]");
+      expect(frame).toContain("[second.png]");
+      expect(frame).toContain("remove");
+    });
+
+    it("clamps right arrow to last image in image nav", async () => {
+      const img1: ImageAttachment = {
+        name: "first.png",
+        dataUri: "data:image/png;base64,aaa",
+      };
+      const img2: ImageAttachment = {
+        name: "second.png",
+        dataUri: "data:image/png;base64,bbb",
+      };
+      vi.mocked(readClipboardImage)
+        .mockReturnValueOnce(img1)
+        .mockReturnValueOnce(img2);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      // Move right past the last image — should clamp.
+      await stdin.write(keys.right);
+      await stdin.write(keys.right);
+      await stdin.write(keys.right);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[first.png]");
+      expect(frame).toContain("[second.png]");
+    });
+
+    it("clamps image nav index when deleting a non-last image", async () => {
+      const img1: ImageAttachment = {
+        name: "first.png",
+        dataUri: "data:image/png;base64,aaa",
+      };
+      const img2: ImageAttachment = {
+        name: "second.png",
+        dataUri: "data:image/png;base64,bbb",
+      };
+      const img3: ImageAttachment = {
+        name: "third.png",
+        dataUri: "data:image/png;base64,ccc",
+      };
+      vi.mocked(readClipboardImage)
+        .mockReturnValueOnce(img1)
+        .mockReturnValueOnce(img2)
+        .mockReturnValueOnce(img3);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      // Navigate to the last image (index 2).
+      await stdin.write(keys.right);
+      await stdin.write(keys.right);
+      // Delete it — index should clamp to 1.
+      await stdin.write(keys.backspace);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("[first.png]");
+      expect(frame).toContain("[second.png]");
+      expect(frame).not.toContain("[third.png]");
+      expect(frame).toContain("remove");
+    });
+
+    it("detects image paths in typed text and converts to attachments", async () => {
+      const detected = {
+        pathStart: 5,
+        attachment: {
+          name: "photo.png",
+          dataUri: "data:image/png;base64,xyz",
+        },
+      };
+      vi.mocked(detectImagePath).mockReturnValue(detected);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write("look /tmp/photo.png");
+      const frame = lastFrame() ?? "";
+      // Path should be removed and image added as attachment.
+      expect(frame).toContain("[photo.png]");
+    });
+
+    it("ignores unhandled keys in image nav mode", async () => {
+      vi.mocked(readClipboardImage).mockReturnValue(fakeImage);
+      const { stdin, lastFrame } = renderInput();
+      await stdin.write(keys.ctrlV);
+      await stdin.write(keys.down);
+      // Type a character — should be ignored in image nav.
+      await stdin.write("x");
+      expect(lastFrame()).toContain("remove");
+    });
+  });
+});
+
+describe("splitAtCursor", () => {
+  it("splits at a normal character", () => {
+    const result = splitAtCursor("hello", 2);
+    expect(result).toEqual({ before: "he", at: "l", after: "lo" });
+  });
+
+  it("shows space placeholder at end of value", () => {
+    const result = splitAtCursor("hello", 5);
+    expect(result).toEqual({ before: "hello", at: " ", after: "" });
+  });
+
+  it("shows space placeholder on newline and preserves it in after", () => {
+    const result = splitAtCursor("abc\ndef", 3);
+    expect(result).toEqual({ before: "abc", at: " ", after: "\ndef" });
+  });
+
+  it("handles cursor at start", () => {
+    const result = splitAtCursor("hello", 0);
+    expect(result).toEqual({ before: "", at: "h", after: "ello" });
+  });
+
+  it("handles empty value", () => {
+    const result = splitAtCursor("", 0);
+    expect(result).toEqual({ before: "", at: " ", after: "" });
+  });
+});

@@ -1,40 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
-import { getCommand } from "./registry";
-import type { Command } from "./types";
-import "./new";
+import type { CommandContext } from "./registry";
+import { createCommandRegistry } from "./registry";
+import { newCommand } from "./new";
 
-describe("/new command", () => {
-  it("is registered", () => {
-    expect(getCommand("new")).toBeDefined();
+describe("newCommand", () => {
+  it("is named new", () => {
+    expect(newCommand.name).toBe("new");
   });
 
-  it("calls clearMessages and returns confirmation", () => {
-    const command = getCommand("new") as Command;
-    const clearMessages = vi.fn();
-    const callbacks = {
-      onComplete: vi.fn(),
-      onCancel: vi.fn(),
-      clearMessages,
-      switchSession: vi.fn((_id: string): string | null => null),
-      setActiveModel: vi.fn(),
-      setActiveProvider: vi.fn(() => null),
-      reloadProviders: vi.fn(),
-      providerBaseUrl: "http://localhost:11434",
-      activeModel: "qwen3:8b",
-      activeProvider: "ollama",
-      providers: [
-        { name: "ollama", baseUrl: "http://localhost:11434", type: "ollama" },
-      ],
+  it("has a description", () => {
+    expect(newCommand.description).toBeTruthy();
+  });
+
+  it("calls resetSession and returns confirmation", async () => {
+    const resetSession = vi.fn();
+    const registry = createCommandRegistry();
+    registry.register(newCommand);
+    const context: CommandContext = {
+      usage: null,
       contextWindow: 8192,
-      maxTokens: 8192,
-      tokenUsage: null,
-      messageCount: 0,
-      mcpFailedServers: [],
+      resetSession,
+      loadSession: () => {},
     };
-
-    const result = command.execute("", callbacks);
-
-    expect(clearMessages).toHaveBeenCalled();
-    expect(result).toEqual({ output: "Conversation cleared.", status: "ok" });
+    const result = await registry.invoke("/new", context);
+    expect(resetSession).toHaveBeenCalledOnce();
+    expect(result.type).toBe("inline");
+    if (result.type === "inline") {
+      expect(result.output).toContain("new session");
+    }
   });
 });
