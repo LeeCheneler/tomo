@@ -1,4 +1,4 @@
-import { Box, Text } from "ink";
+import { Box } from "ink";
 import {
   useCallback,
   useEffect,
@@ -108,10 +108,6 @@ function useChat(props: UseChatProps) {
   allowedCommandsRef.current = config.allowedCommands;
   const webSearchApiKeyRef = useRef(config.tools.webSearch.apiKey);
   webSearchApiKeyRef.current = config.tools.webSearch.apiKey;
-  const providerRef = useRef(provider);
-  providerRef.current = provider;
-  const modelRef = useRef(model);
-  modelRef.current = model;
   const contextWindowRef = useRef(contextWindow);
   contextWindowRef.current = contextWindow;
   const [liveToolCalls, setLiveToolCalls] = useState<ToolCallInfo[]>([]);
@@ -187,6 +183,18 @@ function useChat(props: UseChatProps) {
 
     if (completion.state === "complete") {
       if (completion.toolCalls.length > 0) {
+        // A `complete` state with tool calls only fires after a successful
+        // request, which means provider and model must have been set when
+        // the request went out. If they've been cleared since (via a settings
+        // change mid-flight), treat it as a soft error and stop.
+        if (!provider || !model) {
+          appendMessage({
+            id: crypto.randomUUID(),
+            role: "error",
+            content: "Provider or model is no longer configured.",
+          });
+          return;
+        }
         // Execute tool calls and send results back for another completion round.
         // Reset handled state and empty retry counter so the next transition is processed.
         handledStateRef.current = null;
@@ -202,8 +210,8 @@ function useChat(props: UseChatProps) {
               queue.enqueueConfirm(message, options),
             ask: (question, options) => queue.enqueueAsk(question, options),
             signal: new AbortController().signal,
-            provider: providerRef.current!,
-            model: modelRef.current!,
+            provider,
+            model,
             contextWindow: contextWindowRef.current,
             depth: 0,
           };
@@ -337,6 +345,8 @@ function useChat(props: UseChatProps) {
     completion.send,
     appendMessage,
     props.toolRegistry,
+    provider,
+    model,
   ]);
 
   /** Builds the current command context for handler and takeover commands. */
@@ -592,19 +602,20 @@ export function Chat(props: ChatProps) {
       />
       {isStreaming && <LiveAssistantMessage content={streamingContent} />}
       {isStreaming && <LoadingIndicator text="Thinking" />}
-      {liveToolCalls.map((tc) => (
-        <Box key={tc.id} flexDirection="column">
-          <Indent>
-            <LoadingIndicator
-              text={[tc.displayName, tc.summary].filter(Boolean).join(" ")}
-              color={theme.tool}
-            />
-          </Indent>
-          {liveToolOutputs.has(tc.id) && (
-            <LiveToolOutput output={liveToolOutputs.get(tc.id)!} />
-          )}
-        </Box>
-      ))}
+      {liveToolCalls.map((tc) => {
+        const output = liveToolOutputs.get(tc.id);
+        return (
+          <Box key={tc.id} flexDirection="column">
+            <Indent>
+              <LoadingIndicator
+                text={[tc.displayName, tc.summary].filter(Boolean).join(" ")}
+                color={theme.tool}
+              />
+            </Indent>
+            {output !== undefined && <LiveToolOutput output={output} />}
+          </Box>
+        );
+      })}
       {mode.kind === "takeover" &&
         mode.render(handleTakeoverDone, buildCommandContext())}
       {mode.kind === "history" && (

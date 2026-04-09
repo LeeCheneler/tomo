@@ -42,6 +42,8 @@ export interface InkRenderResult {
   fsState: MockFsState;
   /** Returns the current config from the React context. Useful for asserting reload() was called. */
   getConfig: () => Config;
+  /** Triggers a config reload from the mock filesystem. Use after mutating `fsState`. */
+  reloadConfig: () => Promise<void>;
 }
 
 /**
@@ -68,14 +70,16 @@ export function renderInk(
     ...(config.local && { local: config.local }),
   });
 
-  // Captures the live config value from context on every render.
+  // Captures the live config value and reload function from context on every render.
   // Initialized synchronously by ConfigCapture during inkRender, so always set before return.
   let capturedConfig: Config;
+  let capturedReload: () => void;
 
-  /** Invisible component that captures the current context config. */
+  /** Invisible component that captures the current context config and reload fn. */
   function ConfigCapture() {
-    const { config: currentConfig } = useConfig();
+    const { config: currentConfig, reload } = useConfig();
     capturedConfig = currentConfig;
+    capturedReload = reload;
     return null;
   }
 
@@ -101,6 +105,10 @@ export function renderInk(
     cleanup: result.cleanup,
     fsState,
     getConfig: () => capturedConfig,
+    async reloadConfig() {
+      capturedReload();
+      await flushInkFrames();
+    },
     stdin: {
       async write(data: string) {
         originalWrite(data);

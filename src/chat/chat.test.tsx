@@ -1,5 +1,6 @@
 import { createElement, useEffect } from "react";
 import { Text, useInput } from "ink";
+import { stringify } from "yaml";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandRegistry, TakeoverDone } from "../commands/registry";
 import { createCommandRegistry } from "../commands/registry";
@@ -12,7 +13,9 @@ import type { ToolContext } from "../tools/types";
 import { renderInk } from "../test-utils/ink";
 import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
+import { GLOBAL_CONFIG_PATH } from "../config/file";
 import { useConfig } from "../config/hook";
+import { writeFile } from "../utils/fs";
 import { Chat } from "./chat";
 
 vi.mock("node:os", async (importOriginal) => ({
@@ -1758,6 +1761,116 @@ describe("Chat", () => {
       );
       expect(toolResultMsg).toBeDefined();
       expect((toolResultMsg as { content: string }).content).toBe("was denied");
+    });
+  });
+
+  describe("provider cleared mid-stream", () => {
+    const mswServer = setupMsw(ollamaShowHandler);
+
+    const PROVIDER = {
+      name: "test-ollama",
+      type: "ollama" as const,
+      baseUrl: "http://localhost:11434",
+    };
+
+    /** Builds an SSE response body from data objects. */
+    function sseBody(chunks: unknown[]): string {
+      return (
+        chunks.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n") +
+        "\n\ndata: [DONE]\n\n"
+      );
+    }
+
+    it("appends an error when provider is cleared before tool calls return", async () => {
+      // Hold the completion stream open so the test can clear the provider
+      // between sending the message and the tool calls arriving.
+      const cleanup: { resolve: (() => void) | null } = { resolve: null };
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", () => {
+          const body = new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              cleanup.resolve = () => {
+                controller.enqueue(
+                  encoder.encode(
+                    sseBody([
+                      {
+                        choices: [
+                          {
+                            delta: {
+                              tool_calls: [
+                                {
+                                  index: 0,
+                                  id: "call_1",
+                                  function: {
+                                    name: "stranded_tool",
+                                    arguments: "{}",
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    ]),
+                  ),
+                );
+                controller.close();
+              };
+            },
+          });
+          return new HttpResponse(body, {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }),
+      );
+
+      const toolRegistry = createToolRegistry();
+      const strandedExecute = vi.fn(async () => ok("should not run"));
+      toolRegistry.register({
+        name: "stranded_tool",
+        displayName: "Stranded Tool",
+        description: "A tool that will be orphaned by a provider clear",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({}),
+        formatCall: () => "",
+        execute: strandedExecute,
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame, reloadConfig } = renderInk(
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      // Kick off the completion — stream is held open by the MSW handler.
+      await stdin.write("use the tool");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Clear the provider from the config file and reload the context.
+      // From the component's perspective the active provider no longer exists.
+      writeFile(
+        GLOBAL_CONFIG_PATH,
+        stringify({ providers: [], activeProvider: null, activeModel: null }),
+      );
+      await reloadConfig();
+
+      // Release the stream. Tool calls now flow in with provider=null.
+      cleanup.resolve?.();
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(lastFrame()).toContain(
+        "Provider or model is no longer configured",
+      );
+      expect(strandedExecute).not.toHaveBeenCalled();
     });
   });
 

@@ -1,6 +1,6 @@
 import type { ChatMessage as DisplayMessage } from "../chat/message";
 import { stripAnsi } from "../utils/strip-ansi";
-import type { ChatMessage as ProviderMessage } from "./client";
+import type { ChatMessage as ProviderMessage, ToolCall } from "./client";
 
 /**
  * Builds the provider message array from display messages.
@@ -17,13 +17,16 @@ export function buildProviderMessages(
   systemPrompt: string,
 ): ProviderMessage[] {
   const result: ProviderMessage[] = [{ role: "system", content: systemPrompt }];
-  // Tracks the current assistant message accumulating tool calls from
-  // interleaved [call, result, call, result] display message pairs.
-  let pendingAssistantToolCall: ProviderMessage | null = null;
+  // Tracks the tool_calls array of the current pending assistant message, so
+  // interleaved [call, result, call, result] display message pairs can be
+  // merged into one assistant turn. Holding the array directly means we push
+  // into the same reference already attached to the message in `result`,
+  // avoiding an optional-field null check on every append.
+  let pendingToolCalls: ToolCall[] | null = null;
   for (const msg of messages) {
     // Reset accumulator when we see a non-tool-call/tool-result message.
     if (msg.role !== "tool-call" && msg.role !== "tool-result") {
-      pendingAssistantToolCall = null;
+      pendingToolCalls = null;
     }
     if (msg.role === "user" && msg.images && msg.images.length > 0) {
       result.push({
@@ -52,15 +55,15 @@ export function buildProviderMessages(
       // message. Display messages interleave [call, result, call, result] for
       // paired rendering, but the provider API needs one assistant turn with
       // all tool_calls followed by all tool results.
-      if (pendingAssistantToolCall) {
-        pendingAssistantToolCall.tool_calls!.push(...newToolCalls);
+      if (pendingToolCalls) {
+        pendingToolCalls.push(...newToolCalls);
       } else {
-        pendingAssistantToolCall = {
+        pendingToolCalls = [...newToolCalls];
+        result.push({
           role: "assistant",
           content: msg.content,
-          tool_calls: newToolCalls,
-        };
-        result.push(pendingAssistantToolCall);
+          tool_calls: pendingToolCalls,
+        });
       }
     }
     if (msg.role === "tool-result") {
