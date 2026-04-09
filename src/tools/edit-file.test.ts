@@ -12,8 +12,26 @@ describe("editFileTool", () => {
   });
 
   describe("formatCall", () => {
-    it("returns the path argument", () => {
-      expect(editFileTool.formatCall({ path: "./baz.ts" })).toBe("./baz.ts");
+    it("returns the path argument when there is a single edit", () => {
+      expect(
+        editFileTool.formatCall({
+          path: "./baz.ts",
+          edits: [{ oldString: "a", newString: "b" }],
+        }),
+      ).toBe("./baz.ts");
+    });
+
+    it("appends the count when there are multiple edits", () => {
+      expect(
+        editFileTool.formatCall({
+          path: "./baz.ts",
+          edits: [
+            { oldString: "a", newString: "b" },
+            { oldString: "c", newString: "d" },
+            { oldString: "e", newString: "f" },
+          ],
+        }),
+      ).toBe("./baz.ts (3 edits)");
     });
 
     it("returns empty string when path is missing", () => {
@@ -33,7 +51,10 @@ describe("editFileTool", () => {
       fs = mockFs({ [filePath]: "hello world\n" });
 
       const result = await editFileTool.execute(
-        { path: "test.txt", oldString: "world", newString: "earth" },
+        {
+          path: "test.txt",
+          edits: [{ oldString: "world", newString: "earth" }],
+        },
         mockToolContext(),
       );
 
@@ -51,8 +72,12 @@ describe("editFileTool", () => {
       const result = await editFileTool.execute(
         {
           path: "multi.txt",
-          oldString: "line two\nline three",
-          newString: "replaced",
+          edits: [
+            {
+              oldString: "line two\nline three",
+              newString: "replaced",
+            },
+          ],
         },
         mockToolContext(),
       );
@@ -61,30 +86,109 @@ describe("editFileTool", () => {
       expect(fs.getFile(filePath)).toBe("line one\nreplaced\n");
     });
 
+    it("applies multiple edits sequentially in order", async () => {
+      const filePath = resolve("seq.txt");
+      fs = mockFs({ [filePath]: "alpha beta gamma\n" });
+
+      const result = await editFileTool.execute(
+        {
+          path: "seq.txt",
+          edits: [
+            { oldString: "alpha", newString: "one" },
+            { oldString: "beta", newString: "two" },
+            { oldString: "gamma", newString: "three" },
+          ],
+        },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(fs.getFile(filePath)).toBe("one two three\n");
+    });
+
+    it("applies edits to the result of previous edits, not the original", async () => {
+      const filePath = resolve("chain.txt");
+      fs = mockFs({ [filePath]: "foo\n" });
+
+      const result = await editFileTool.execute(
+        {
+          path: "chain.txt",
+          edits: [
+            { oldString: "foo", newString: "bar" },
+            { oldString: "bar", newString: "baz" },
+          ],
+        },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(fs.getFile(filePath)).toBe("baz\n");
+    });
+
+    it("replaces every occurrence when replaceAll is true", async () => {
+      const filePath = resolve("rename.txt");
+      fs = mockFs({ [filePath]: "foo foo foo\n" });
+
+      const result = await editFileTool.execute(
+        {
+          path: "rename.txt",
+          edits: [{ oldString: "foo", newString: "bar", replaceAll: true }],
+        },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(fs.getFile(filePath)).toBe("bar bar bar\n");
+    });
+
+    it("succeeds with replaceAll true even when only one occurrence exists", async () => {
+      const filePath = resolve("single.txt");
+      fs = mockFs({ [filePath]: "hello world\n" });
+
+      const result = await editFileTool.execute(
+        {
+          path: "single.txt",
+          edits: [{ oldString: "world", newString: "earth", replaceAll: true }],
+        },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("ok");
+      expect(fs.getFile(filePath)).toBe("hello earth\n");
+    });
+
     it("returns error when oldString is not found", async () => {
       const filePath = resolve("test.txt");
       fs = mockFs({ [filePath]: "hello world\n" });
 
       const result = await editFileTool.execute(
-        { path: "test.txt", oldString: "missing", newString: "new" },
+        {
+          path: "test.txt",
+          edits: [{ oldString: "missing", newString: "new" }],
+        },
         mockToolContext(),
       );
 
       expect(result.status).toBe("error");
       expect(result.output).toContain("not found in file");
+      expect(result.output).toContain("edit 1");
     });
 
-    it("returns error when oldString appears multiple times", async () => {
+    it("returns error when oldString appears multiple times without replaceAll", async () => {
       const filePath = resolve("test.txt");
       fs = mockFs({ [filePath]: "foo bar foo\n" });
 
       const result = await editFileTool.execute(
-        { path: "test.txt", oldString: "foo", newString: "baz" },
+        {
+          path: "test.txt",
+          edits: [{ oldString: "foo", newString: "baz" }],
+        },
         mockToolContext(),
       );
 
       expect(result.status).toBe("error");
       expect(result.output).toContain("2 times");
+      expect(result.output).toContain("replaceAll");
     });
 
     it("returns error when oldString and newString are identical", async () => {
@@ -92,7 +196,10 @@ describe("editFileTool", () => {
       fs = mockFs({ [filePath]: "hello\n" });
 
       const result = await editFileTool.execute(
-        { path: "test.txt", oldString: "hello", newString: "hello" },
+        {
+          path: "test.txt",
+          edits: [{ oldString: "hello", newString: "hello" }],
+        },
         mockToolContext(),
       );
 
@@ -100,11 +207,57 @@ describe("editFileTool", () => {
       expect(result.output).toContain("identical");
     });
 
+    it("fails atomically and does not modify the file when one edit in the batch fails", async () => {
+      const filePath = resolve("atomic.txt");
+      fs = mockFs({ [filePath]: "alpha beta\n" });
+
+      const result = await editFileTool.execute(
+        {
+          path: "atomic.txt",
+          edits: [
+            { oldString: "alpha", newString: "one" },
+            { oldString: "missing", newString: "x" },
+            { oldString: "beta", newString: "two" },
+          ],
+        },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("edit 2");
+      expect(result.output).toContain("not found");
+      expect(fs.getFile(filePath)).toBe("alpha beta\n");
+    });
+
+    it("identifies the failing edit by 1-based index", async () => {
+      const filePath = resolve("indexed.txt");
+      fs = mockFs({ [filePath]: "a b c\n" });
+
+      const result = await editFileTool.execute(
+        {
+          path: "indexed.txt",
+          edits: [
+            { oldString: "a", newString: "x" },
+            { oldString: "b", newString: "y" },
+            { oldString: "nope", newString: "z" },
+          ],
+        },
+        mockToolContext(),
+      );
+
+      expect(result.status).toBe("error");
+      expect(result.output).toContain("edit 3");
+      expect(fs.getFile(filePath)).toBe("a b c\n");
+    });
+
     it("returns error for missing file", async () => {
       fs = mockFs();
 
       const result = await editFileTool.execute(
-        { path: "nope.txt", oldString: "a", newString: "b" },
+        {
+          path: "nope.txt",
+          edits: [{ oldString: "a", newString: "b" }],
+        },
         mockToolContext(),
       );
 
@@ -117,7 +270,10 @@ describe("editFileTool", () => {
       fs = mockFs({ [`${dirPath}/foo.ts`]: "content" });
 
       const result = await editFileTool.execute(
-        { path: "src", oldString: "a", newString: "b" },
+        {
+          path: "src",
+          edits: [{ oldString: "a", newString: "b" }],
+        },
         mockToolContext(),
       );
 
@@ -141,7 +297,10 @@ describe("editFileTool", () => {
         });
 
         const result = await editFileTool.execute(
-          { path: "allowed.txt", oldString: "old", newString: "new" },
+          {
+            path: "allowed.txt",
+            edits: [{ oldString: "old", newString: "new" }],
+          },
           ctx,
         );
 
@@ -149,9 +308,9 @@ describe("editFileTool", () => {
         expect(confirm).not.toHaveBeenCalled();
       });
 
-      it("prompts for confirmation with diff when write permission not granted", async () => {
+      it("prompts once with a combined diff when write permission not granted", async () => {
         const filePath = resolve("restricted.txt");
-        fs = mockFs({ [filePath]: "old content\n" });
+        fs = mockFs({ [filePath]: "alpha beta\n" });
         const confirm = vi.fn(async () => true);
         const ctx = mockToolContext({
           permissions: {
@@ -164,7 +323,13 @@ describe("editFileTool", () => {
         });
 
         const result = await editFileTool.execute(
-          { path: "restricted.txt", oldString: "old", newString: "new" },
+          {
+            path: "restricted.txt",
+            edits: [
+              { oldString: "alpha", newString: "one" },
+              { oldString: "beta", newString: "two" },
+            ],
+          },
           ctx,
         );
 
@@ -175,6 +340,9 @@ describe("editFileTool", () => {
           diff: expect.any(String),
         });
         expect(result.status).toBe("ok");
+        expect(result.output).toContain("-alpha beta");
+        expect(result.output).toContain("+one two");
+        expect(fs.getFile(filePath)).toBe("one two\n");
       });
 
       it("returns denied and does not write when user rejects confirmation", async () => {
@@ -192,7 +360,10 @@ describe("editFileTool", () => {
         });
 
         const result = await editFileTool.execute(
-          { path: "restricted.txt", oldString: "old", newString: "new" },
+          {
+            path: "restricted.txt",
+            edits: [{ oldString: "old", newString: "new" }],
+          },
           ctx,
         );
 
