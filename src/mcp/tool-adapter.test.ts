@@ -196,7 +196,8 @@ describe("createMcpTool", () => {
 
   it("stringifies non-Error throws from the underlying call", async () => {
     const callTool = vi.fn(async () => {
-      // biome-ignore lint/suspicious/useErrorMessage: intentionally throwing a non-Error to exercise the stringification path
+      // Intentionally throwing a non-Error to exercise the stringification
+      // path in the tool adapter's catch handler.
       throw "plain string rejection";
     });
     const manager = fakeManager("mock", { callTool });

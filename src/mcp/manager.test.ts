@@ -120,7 +120,8 @@ describe("createMcpManager", () => {
     // throws a plain string instead of an Error instance.
     const fakeClient: McpClient = {
       connect: vi.fn(async () => {
-        // biome-ignore lint/suspicious/useErrorMessage: intentionally throwing a non-Error to exercise the stringification path
+        // Intentionally throwing a non-Error to exercise the stringification
+        // path in the manager's startAll error handler.
         throw "plain string rejection";
       }),
       listTools: vi.fn(async () => []),
