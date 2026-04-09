@@ -1368,6 +1368,96 @@ describe("Chat", () => {
       expect(lastFrame()).not.toContain("streaming output");
     });
 
+    it("renders the tool summary alongside the display name in the live tool view", async () => {
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", async () => {
+          requestCount++;
+          if (requestCount === 1) {
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_summary",
+                            function: {
+                              name: "summary_tool",
+                              arguments: '{"path":"/tmp/file.txt"}',
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          }
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "Done" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      // Gate that holds tool execution open so we can inspect the live frame
+      let releaseTool: () => void = () => {};
+      const toolGate = new Promise<void>((resolve) => {
+        releaseTool = resolve;
+      });
+
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "summary_tool",
+        displayName: "Summary Tool",
+        description: "A tool with a non-empty formatCall summary",
+        parameters: {
+          type: "object",
+          properties: { path: { type: "string" } },
+          required: ["path"],
+        },
+        argsSchema: z.object({ path: z.string() }),
+        formatCall: (args) => String(args.path),
+        async execute() {
+          await toolGate;
+          return ok("done");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      await stdin.write("run summary tool");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Tool is still executing — both displayName and summary should be
+      // visible in the live tool view (the truthy summary branch).
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Summary Tool");
+      expect(frame).toContain("/tmp/file.txt");
+
+      releaseTool();
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(requestCount).toBe(2);
+    });
+
     it("shows ask prompt and returns user answer", async () => {
       let requestCount = 0;
 
