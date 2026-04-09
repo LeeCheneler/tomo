@@ -93,7 +93,7 @@ describe("askTool", () => {
       ).rejects.toThrow(/single line/);
     });
 
-    it("accepts an option label at the 80 character boundary", async () => {
+    it("accepts an option label at the 80 character hard limit", async () => {
       const ask = vi.fn(async () => "x".repeat(80));
       await expect(
         askTool.execute(
@@ -103,13 +103,15 @@ describe("askTool", () => {
       ).resolves.toMatchObject({ status: "ok" });
     });
 
-    it("rejects an option label longer than 80 characters", async () => {
+    it("rejects an option label longer than the 80 character hard limit", async () => {
+      // Error references the soft target (60) shown to the LLM, even though
+      // the hard validator limit is 80.
       await expect(
         askTool.execute(
           { question: "Pick one", options: ["x".repeat(81)] },
           mockToolContext({}),
         ),
-      ).rejects.toThrow(/80 characters/);
+      ).rejects.toThrow(/60 characters/);
     });
   });
 });

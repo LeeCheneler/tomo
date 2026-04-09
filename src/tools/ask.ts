@@ -2,17 +2,23 @@ import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { err, ok } from "./types";
 
-// LLMs are imprecise at counting characters, so we tell the model the limit
-// is 175 (in the tool description, JSON schema, and rejection error message)
-// but accept up to 200 in the zod validator. The 25-char buffer prevents
-// spurious rejections when the model lands slightly over its target while
-// still keeping prompts tight in practice. This discrepancy is intentional.
-/** Soft target shown to the LLM in the description, schema, and errors. */
+// LLMs are imprecise at counting characters, so each length cap has a soft
+// target (shown to the model in the description, JSON schema, and rejection
+// error messages) and a larger hard limit enforced by the zod validator. The
+// gap prevents spurious rejections when the model lands slightly over its
+// target while still keeping prompts tight in practice. The option soft
+// target is pulled lower than necessary on purpose: option labels render in
+// the SelectList and stop being scannable past ~60 chars, so the soft target
+// nudges the model toward compact, choice-like labels rather than sentences.
+// This discrepancy is intentional.
+/** Soft target for the question shown to the LLM. */
 const QUESTION_SOFT_LIMIT = 175;
-/** Hard limit enforced by the zod validator. */
+/** Hard limit for the question enforced by the zod validator. */
 const QUESTION_HARD_LIMIT = 200;
-/** Maximum length of each option label. */
-const OPTION_MAX_LENGTH = 80;
+/** Soft target for option labels shown to the LLM. */
+const OPTION_SOFT_LIMIT = 60;
+/** Hard limit for option labels enforced by the zod validator. */
+const OPTION_HARD_LIMIT = 80;
 
 /** Zod schema for ask arguments. */
 const argsSchema = z.object({
@@ -32,8 +38,8 @@ const argsSchema = z.object({
       z
         .string()
         .max(
-          OPTION_MAX_LENGTH,
-          `option labels must be ${OPTION_MAX_LENGTH} characters or fewer.`,
+          OPTION_HARD_LIMIT,
+          `option labels must be ${OPTION_SOFT_LIMIT} characters or fewer.`,
         ),
     )
     .optional(),
@@ -51,7 +57,7 @@ Two modes:
 
 Length & format:
 - The question must be a single line, no newlines, max ${QUESTION_SOFT_LIMIT} characters.
-- Each option label must be max ${OPTION_MAX_LENGTH} characters.
+- Each option label must be max ${OPTION_SOFT_LIMIT} characters.
 
 If you need to show a draft, code snippet, summary, or other long content for approval, write it as your normal assistant message first, then call this tool with a brief question. Do NOT stuff the content into the question itself — the prompt is rendered in a small bordered panel and long content makes it unreadable.
 
@@ -78,7 +84,7 @@ Guidelines:
       },
       options: {
         type: "array",
-        items: { type: "string", maxLength: OPTION_MAX_LENGTH },
+        items: { type: "string", maxLength: OPTION_SOFT_LIMIT },
         description:
           "Predefined choices. Omit entirely for a free-text-only input.",
       },
