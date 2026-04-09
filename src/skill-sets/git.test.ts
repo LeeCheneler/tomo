@@ -75,14 +75,17 @@ describe("cloneSource", () => {
   beforeEach(() => {
     bareRepo = join(tmpdir(), `tomo-test-bare-${Date.now()}`);
     mkdirSync(bareRepo, { recursive: true });
-    execFileSync("git", ["init", "--bare", bareRepo], { stdio: "pipe" });
+    // --initial-branch=main is required so the bare repo's HEAD points at
+    // main; otherwise CI runners (whose default branch is master) end up with
+    // a dangling HEAD and clones check out nothing.
+    execFileSync("git", ["init", "--bare", "--initial-branch=main", bareRepo], {
+      stdio: "pipe",
+    });
 
     // Create a temporary working repo, commit a file, and push to the bare repo.
     const workDir = join(tmpdir(), `tomo-test-work-${Date.now()}`);
     mkdirSync(workDir, { recursive: true });
-    execFileSync("git", ["init", workDir], { stdio: "pipe" });
-    execFileSync("git", ["checkout", "-b", "main"], {
-      cwd: workDir,
+    execFileSync("git", ["init", "--initial-branch=main", workDir], {
       stdio: "pipe",
     });
     writeFileSync(join(workDir, "README.md"), "hello");
@@ -156,13 +159,13 @@ describe("pullSource", () => {
   beforeEach(() => {
     bareRepo = join(tmpdir(), `tomo-test-bare-${Date.now()}`);
     mkdirSync(bareRepo, { recursive: true });
-    execFileSync("git", ["init", "--bare", bareRepo], { stdio: "pipe" });
+    execFileSync("git", ["init", "--bare", "--initial-branch=main", bareRepo], {
+      stdio: "pipe",
+    });
 
     const workDir = join(tmpdir(), `tomo-test-work-${Date.now()}`);
     mkdirSync(workDir, { recursive: true });
-    execFileSync("git", ["init", workDir], { stdio: "pipe" });
-    execFileSync("git", ["checkout", "-b", "main"], {
-      cwd: workDir,
+    execFileSync("git", ["init", "--initial-branch=main", workDir], {
       stdio: "pipe",
     });
     writeFileSync(join(workDir, "README.md"), "v1");
