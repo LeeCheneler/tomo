@@ -1,5 +1,6 @@
 import { Chat } from "./chat/chat";
 import { contextCommand } from "./commands/context";
+import { createHelpCommand } from "./commands/help";
 import { modelCommand } from "./commands/model";
 import { newCommand } from "./commands/new";
 import { createCommandRegistry } from "./commands/registry";
@@ -30,6 +31,8 @@ function buildCommandRegistry() {
   registry.register(newCommand);
   registry.register(sessionCommand);
   registry.register(settingsCommand);
+  // Registered last so /help lists every other command (and itself).
+  registry.register(createHelpCommand(registry));
   return registry;
 }
 
