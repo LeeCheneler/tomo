@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { loadConfig } from "../config/file";
 import type { CompletionStream, ProviderClient } from "../provider/client";
+import { createOpenAICompatibleClient } from "../provider/openai-compatible";
 import { mockToolContext } from "../test-utils/stub-context";
 import { createToolRegistry } from "./registry";
 import { ok } from "./types";
@@ -114,9 +116,6 @@ describe("createAgentTool", () => {
   });
 
   it("executes successfully and returns sub-agent content", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
     vi.mocked(createOpenAICompatibleClient).mockReturnValue(
       mockClient(["research findings"]),
     );
@@ -135,9 +134,6 @@ describe("createAgentTool", () => {
   });
 
   it("returns fallback message when sub-agent produces no output", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
     vi.mocked(createOpenAICompatibleClient).mockReturnValue(mockClient([]));
 
     const registry = createToolRegistry();
@@ -153,9 +149,6 @@ describe("createAgentTool", () => {
   });
 
   it("streams content via onProgress", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
     vi.mocked(createOpenAICompatibleClient).mockReturnValue(
       mockClient(["streaming", " content"]),
     );
@@ -174,10 +167,6 @@ describe("createAgentTool", () => {
   });
 
   it("returns error on timeout", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
-
     const hangingClient: ProviderClient = {
       fetchModels: vi.fn(async () => []),
       fetchContextWindow: vi.fn(async () => 8192),
@@ -192,7 +181,6 @@ describe("createAgentTool", () => {
     };
     vi.mocked(createOpenAICompatibleClient).mockReturnValue(hangingClient);
 
-    const { loadConfig } = await import("../config/file");
     vi.mocked(loadConfig).mockReturnValue({
       agents: {
         maxDepth: 1,
@@ -216,10 +204,6 @@ describe("createAgentTool", () => {
   });
 
   it("propagates parent abort as a thrown error", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
-
     const parentController = new AbortController();
     const hangingClient: ProviderClient = {
       fetchModels: vi.fn(async () => []),
@@ -249,10 +233,6 @@ describe("createAgentTool", () => {
   });
 
   it("builds sub-agent tool registry from config allowlist", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
-    const { loadConfig } = await import("../config/file");
     vi.mocked(loadConfig).mockReturnValue({
       agents: {
         maxDepth: 1,
@@ -306,12 +286,60 @@ describe("createAgentTool", () => {
     expect(toolNames).not.toContain("agent");
   });
 
-  it("includes agent tool in sub-agent registry when below max depth", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
-    const { loadConfig } = await import("../config/file");
+  it("auto-includes MCP tools in sub-agent registry regardless of allowlist", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      agents: {
+        maxDepth: 1,
+        maxConcurrent: 3,
+        maxTimeoutSeconds: 300,
+        tools: ["read_file"],
+      },
+    } as unknown as ReturnType<typeof loadConfig>);
 
+    let capturedTools: unknown;
+    const capturingClient: ProviderClient = {
+      fetchModels: vi.fn(async () => []),
+      fetchContextWindow: vi.fn(async () => 8192),
+      streamCompletion: vi.fn(async (opts) => {
+        capturedTools = opts.tools;
+        return mockStream(["done"]);
+      }),
+    };
+    vi.mocked(createOpenAICompatibleClient).mockReturnValue(capturingClient);
+
+    const registry = createToolRegistry();
+    registry.register({
+      name: "read_file",
+      displayName: "Read File",
+      description: "reads files",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => ok("content"),
+    });
+    registry.register({
+      name: "mcp__mock__get_time",
+      displayName: "mock/get_time",
+      description: "Returns the time",
+      parameters: { type: "object", properties: {} },
+      argsSchema: z.object({}),
+      formatCall: () => "",
+      execute: async () => ok("12:00"),
+    });
+
+    const tool = createAgentTool(registry);
+    await tool.execute(
+      { name: "scoped-agent", prompt: "check time" },
+      mockToolContext(),
+    );
+
+    const toolDefs = capturedTools as Array<{ function: { name: string } }>;
+    const toolNames = toolDefs.map((t) => t.function.name);
+    expect(toolNames).toContain("read_file");
+    expect(toolNames).toContain("mcp__mock__get_time");
+  });
+
+  it("includes agent tool in sub-agent registry when below max depth", async () => {
     vi.mocked(loadConfig).mockReturnValue({
       agents: {
         maxDepth: 2,
@@ -356,11 +384,6 @@ describe("createAgentTool", () => {
   });
 
   it("wraps sub-agent confirm calls with agent name label", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
-    const { loadConfig } = await import("../config/file");
-
     vi.mocked(loadConfig).mockReturnValue({
       agents: {
         maxDepth: 1,
@@ -429,10 +452,6 @@ describe("createAgentTool", () => {
   });
 
   it("returns error for non-abort exceptions", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
-
     const failingClient: ProviderClient = {
       fetchModels: vi.fn(async () => []),
       fetchContextWindow: vi.fn(async () => 8192),
@@ -456,11 +475,6 @@ describe("createAgentTool", () => {
   });
 
   it("queues agents when concurrency limit is reached", async () => {
-    const { createOpenAICompatibleClient } = await import(
-      "../provider/openai-compatible"
-    );
-    const { loadConfig } = await import("../config/file");
-
     vi.mocked(loadConfig).mockReturnValue({
       agents: {
         maxDepth: 1,

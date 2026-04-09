@@ -28,8 +28,9 @@ function parseRow(row: string): { key: string; value: string } | null {
   if (!trimmed) return null;
   const idx = trimmed.indexOf("=");
   if (idx <= 0) return null;
+  // After trim + idx > 0, trimmed.slice(0, idx) always starts with the
+  // first non-whitespace character, so its .trim() cannot be empty.
   const key = trimmed.slice(0, idx).trim();
-  if (!key) return null;
   const value = trimmed.slice(idx + 1);
   return { key, value };
 }

@@ -570,6 +570,18 @@ describe("updateMcpConnection", () => {
     ]);
   });
 
+  it("adds the entry when called with a missing original name", () => {
+    state = mockConfig({ global: { mcp: { connections: {} } } });
+    updateMcpConnection("ghost", "ghost", {
+      transport: "stdio",
+      command: "node",
+      args: [],
+      enabled: true,
+    });
+    const config = loadConfig();
+    expect(Object.keys(config.mcp.connections)).toEqual(["ghost"]);
+  });
+
   it("supports rename across transport types", () => {
     state = mockConfig({
       global: {

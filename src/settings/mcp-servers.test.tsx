@@ -331,6 +331,49 @@ describe("McpServersScreen", () => {
       const config = loadConfig();
       expect(Object.keys(config.mcp.connections)).toEqual(["old-renamed"]);
     });
+
+    it("preserves order and leaves untouched siblings alone when renaming", async () => {
+      const { stdin } = renderScreen({
+        mcp: {
+          connections: {
+            first: {
+              transport: "stdio",
+              command: "a",
+              args: [],
+              enabled: true,
+            },
+            middle: {
+              transport: "stdio",
+              command: "b",
+              args: [],
+              enabled: true,
+            },
+            last: {
+              transport: "stdio",
+              command: "c",
+              args: [],
+              enabled: true,
+            },
+          },
+        },
+      });
+      // Navigate up three times to reach "first" (index 0), then rename it.
+      // Cursor starts on the add row (index 3). Going up lands on "last" (2),
+      // then "middle" (1), then "first" (0).
+      await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      await stdin.write("-renamed");
+      await stdin.write(keys.enter);
+      const config = loadConfig();
+      // "first" becomes "first-renamed", middle and last are untouched
+      // and the list order is preserved.
+      expect(Object.keys(config.mcp.connections)).toEqual([
+        "first-renamed",
+        "middle",
+        "last",
+      ]);
+    });
   });
 
   describe("cancelling", () => {

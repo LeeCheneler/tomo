@@ -9,6 +9,7 @@ import {
 } from "react";
 import { isCommand } from "../commands/is-command";
 import type { ImageAttachment } from "../images/clipboard";
+import { useMcp } from "../mcp/use-mcp";
 import { isSkill, parseSkillInput } from "../skills/utils";
 import type { SkillRegistry } from "../skills/registry";
 import type {
@@ -132,6 +133,24 @@ function useChat(props: UseChatProps) {
     setMessages((prev) => [...prev, msg]);
     appendSessionMessage(sessionPath.current, msg);
   }, []);
+
+  // Owns the MCP server lifecycle for the chat session. Surfaces connection
+  // failures as inline error messages so the user knows when a configured
+  // server didn't come up.
+  const handleMcpConnectionError = useCallback(
+    (serverName: string, error: string) => {
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "error",
+        content: `MCP server "${serverName}" failed to connect: ${error}`,
+      });
+    },
+    [appendMessage],
+  );
+  useMcp({
+    toolRegistry: props.toolRegistry,
+    onConnectionError: handleMcpConnectionError,
+  });
 
   /** Handles an invoke result — either enters takeover mode or appends an inline message. */
   function handleInvokeResult(result: InvokeResult) {

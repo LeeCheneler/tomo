@@ -273,12 +273,17 @@ function useMcpServersScreen(props: McpServersScreenProps) {
     setStep("kv-editor");
   }
 
-  /** Merges the kv editor's result into the form stash and remounts the form. */
-  function handleKvExit(entries: Record<string, string>) {
-    setFormValues((prev) =>
-      /* v8 ignore next -- prev is always set when in kv-editor step */
-      prev && kvFieldKey ? { ...prev, [kvFieldKey]: entries } : prev,
-    );
+  /**
+   * Merges the kv editor's result into the form stash and remounts the form.
+   * Takes the stashed form values and field key as parameters so the render
+   * site can pass the non-null values it has already narrowed.
+   */
+  function handleKvExit(
+    baseValues: FormValues,
+    fieldKey: string,
+    entries: Record<string, string>,
+  ) {
+    setFormValues({ ...baseValues, [fieldKey]: entries });
     setKvFieldKey(null);
     setFormMountKey((k) => k + 1);
     setStep("options");
@@ -364,10 +369,12 @@ export function McpServersScreen(props: McpServersScreenProps) {
   }
 
   if (step === "kv-editor" && formValues && kvFieldKey) {
-    const entries = recordValueSchema.parse(formValues[kvFieldKey]);
-    const label = kvFieldKey === "env" ? "Env" : "Headers";
+    const stashedValues = formValues;
+    const stashedKey = kvFieldKey;
+    const entries = recordValueSchema.parse(stashedValues[stashedKey]);
+    const label = stashedKey === "env" ? "Env" : "Headers";
     const placeholder =
-      kvFieldKey === "env" ? "KEY=value" : "Header-Name=value";
+      stashedKey === "env" ? "KEY=value" : "Header-Name=value";
     return (
       <Box flexDirection="column" paddingTop={1}>
         <Border color={theme.settings} />
@@ -383,7 +390,7 @@ export function McpServersScreen(props: McpServersScreenProps) {
         </Indent>
         <KvEditor
           entries={entries}
-          onExit={handleKvExit}
+          onExit={(updated) => handleKvExit(stashedValues, stashedKey, updated)}
           color={theme.settings}
           placeholder={placeholder}
         />

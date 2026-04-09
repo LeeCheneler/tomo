@@ -160,6 +160,72 @@ describe("KvEditor", () => {
       const fooLine = frame.split("\n").find((l) => l.includes("FOO=bar"));
       expect(fooLine).toContain("❯");
     });
+
+    it("navigates from an existing row down to the add row", async () => {
+      const { stdin, lastFrame } = renderKvEditor({ FOO: "bar" });
+      // Up to FOO
+      await stdin.write(keys.up);
+      // Down back to the add row — exercises focusRow at index === rows.length
+      await stdin.write(keys.down);
+      const addLine = (lastFrame() ?? "")
+        .split("\n")
+        .find((l) => l.includes("Add entry..."));
+      expect(addLine).toContain("❯");
+    });
+
+    it("wraps down from the add row to row 0", async () => {
+      const { stdin, lastFrame } = renderKvEditor({ FOO: "bar" });
+      // Cursor starts on the add row (index 1). Down wraps to row 0.
+      await stdin.write(keys.down);
+      const fooLine = (lastFrame() ?? "")
+        .split("\n")
+        .find((l) => l.includes("FOO=bar"));
+      expect(fooLine).toContain("❯");
+    });
+  });
+
+  describe("ignored keys", () => {
+    it("leaves state unchanged for keys that processTextEdit does not handle", async () => {
+      const { stdin, onExit } = renderKvEditor({ FOO: "bar" });
+      // ctrl+a falls through all of kv-editor's handled keys and reaches
+      // processTextEdit, which returns null for ctrl-prefixed keys.
+      await stdin.write(keys.ctrlA);
+      await stdin.write(keys.escape);
+      expect(onExit).toHaveBeenCalledWith({ FOO: "bar" });
+    });
+  });
+
+  describe("deleting non-last rows", () => {
+    it("slides the next row up when deleting a non-last row", async () => {
+      const { stdin, onExit } = renderKvEditor({ FOO: "1", BAR: "2" });
+      // Cursor starts on the add row (index 2). Navigate up twice to FOO (index 0).
+      await stdin.write(keys.up);
+      await stdin.write(keys.up);
+      // Clear the draft ("FOO=1" is 5 chars)
+      for (let i = 0; i < "FOO=1".length; i++) {
+        await stdin.write(keys.delete);
+      }
+      // Enter removes FOO; BAR slides up into index 0 and the draft loads its value.
+      await stdin.write(keys.enter);
+      await stdin.write(keys.escape);
+      expect(onExit).toHaveBeenCalledWith({ BAR: "2" });
+    });
+  });
+
+  describe("exiting with an empty draft on an existing row", () => {
+    it("drops the row from the result", async () => {
+      const { stdin, onExit } = renderKvEditor({ FOO: "bar" });
+      // Up to FOO
+      await stdin.write(keys.up);
+      // Clear the draft ("FOO=bar" is 7 chars)
+      for (let i = 0; i < "FOO=bar".length; i++) {
+        await stdin.write(keys.delete);
+      }
+      // Escape without pressing enter — the unsaved empty draft is applied
+      // to the row on exit, and buildRecord drops it because it won't parse.
+      await stdin.write(keys.escape);
+      expect(onExit).toHaveBeenCalledWith({});
+    });
   });
 
   describe("exiting", () => {

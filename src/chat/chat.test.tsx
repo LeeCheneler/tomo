@@ -1760,4 +1760,40 @@ describe("Chat", () => {
       expect((toolResultMsg as { content: string }).content).toBe("was denied");
     });
   });
+
+  describe("mcp connection errors", () => {
+    it("appends an error message when a configured MCP server fails to connect", async () => {
+      setColumns(COLUMNS);
+      const { lastFrame } = renderInk(
+        <Chat
+          skillRegistry={emptySkillRegistry}
+          toolRegistry={createToolRegistry()}
+        />,
+        {
+          global: {
+            mcp: {
+              connections: {
+                broken: {
+                  transport: "stdio",
+                  command: "node",
+                  args: ["/path/that/definitely/does/not/exist.mjs"],
+                  enabled: true,
+                },
+              },
+            },
+          },
+        },
+      );
+
+      // Poll — under load the subprocess spawn/fail path can take a while,
+      // and a fixed sleep is too flaky in the full-suite run.
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline) {
+        if ((lastFrame() ?? "").includes("failed to connect")) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      expect(lastFrame()).toContain('MCP server "broken" failed to connect');
+    });
+  });
 });

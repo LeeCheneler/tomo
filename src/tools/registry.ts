@@ -5,6 +5,8 @@ import type { Tool } from "./types";
 export interface ToolRegistry {
   /** Registers a tool. Overwrites if the name already exists. */
   register: (tool: Tool) => void;
+  /** Removes a tool by name. No-op if the tool isn't registered. */
+  unregister: (name: string) => void;
   /** Returns a tool by name, or undefined if not found. */
   get: (name: string) => Tool | undefined;
   /** Returns all registered tools. */
@@ -20,6 +22,9 @@ export function createToolRegistry(): ToolRegistry {
   return {
     register(tool: Tool) {
       tools.set(tool.name, tool);
+    },
+    unregister(name: string) {
+      tools.delete(name);
     },
     get(name: string) {
       return tools.get(name);

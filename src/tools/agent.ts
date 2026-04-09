@@ -46,6 +46,8 @@ function releaseSlot(): void {
 /**
  * Builds a scoped tool registry for a sub-agent from the config allowlist.
  * Includes the agent tool itself when the sub-agent hasn't reached max depth.
+ * MCP tools (names prefixed with `mcp__`) are auto-included so sub-agents
+ * inherit any MCP servers the user has connected.
  */
 function buildSubAgentToolRegistry(
   parentRegistry: ToolRegistry,
@@ -56,6 +58,14 @@ function buildSubAgentToolRegistry(
   for (const name of agentsConfig.tools) {
     const tool = parentRegistry.get(name);
     if (tool) registry.register(tool);
+  }
+  // Auto-include all MCP tools — if the user enabled an MCP server, they want
+  // it usable from sub-agents too, without having to remember to add each tool
+  // name to the agents allowlist.
+  for (const tool of parentRegistry.list()) {
+    if (tool.name.startsWith("mcp__")) {
+      registry.register(tool);
+    }
   }
   // Allow nested agents if the next depth is still below max.
   // The agent tool may not be in the registry if it was disabled.

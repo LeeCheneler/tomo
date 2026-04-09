@@ -47,6 +47,22 @@ describe("createToolRegistry", () => {
     expect(registry.get("a")?.description).toBe("replaced");
   });
 
+  it("removes a tool with unregister", () => {
+    const registry = createToolRegistry();
+    registry.register(stubTool("a"));
+    registry.register(stubTool("b"));
+    registry.unregister("a");
+    expect(registry.get("a")).toBeUndefined();
+    expect(registry.list().map((t) => t.name)).toEqual(["b"]);
+  });
+
+  it("unregister is a no-op for unknown names", () => {
+    const registry = createToolRegistry();
+    registry.register(stubTool("a"));
+    registry.unregister("nonexistent");
+    expect(registry.list()).toHaveLength(1);
+  });
+
   it("returns OpenAI-compatible tool definitions", () => {
     const registry = createToolRegistry();
     registry.register(stubTool("read_file"));
