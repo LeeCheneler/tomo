@@ -1,6 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp";
+// `.js` extensions are required for these subpath imports because the SDK's
+// package.json `exports` map uses a literal `./*` → `./dist/esm/*` rule.
+// esbuild's resolver will not resolve them without the explicit extension.
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport";
 import { z } from "zod";
 import type { McpConnection } from "../config/schema";

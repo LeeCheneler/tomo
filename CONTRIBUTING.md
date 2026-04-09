@@ -69,7 +69,7 @@ src/
 - Strict mode. No `any` unless absolutely unavoidable — and if you must, add a comment explaining why.
 - Prefer `interface` over `type` for object shapes. Use `type` for unions, intersections, and mapped types.
 - Use explicit return types on exported functions. Inferred return types are fine for non-exported helpers.
-- Never use `.js` extensions in imports — use extensionless paths.
+- Never use `.js` extensions in **internal/relative** imports — use extensionless paths. (Some external packages with strict subpath `exports` maps require `.js`; that's fine and unavoidable.)
 - Never use namespace imports (`import * as X`). Always named imports.
 - Never use type casts (`as`). Use zod schemas or runtime checks to narrow `unknown`.
 
