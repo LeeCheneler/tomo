@@ -1,4 +1,4 @@
-import { Box } from "ink";
+import { Box, Text } from "ink";
 import {
   useCallback,
   useEffect,
@@ -616,10 +616,8 @@ export function Chat(props: ChatProps) {
         return (
           <Box key={tc.id} flexDirection="column">
             <Indent>
-              <LoadingIndicator
-                text={[tc.displayName, tc.summary].filter(Boolean).join(" ")}
-                color={theme.tool}
-              />
+              <LoadingIndicator text={tc.displayName} color={theme.tool} />
+              {tc.summary ? <Text dimColor> {tc.summary}</Text> : null}
             </Indent>
             {output !== undefined && <LiveToolOutput output={output} />}
           </Box>
