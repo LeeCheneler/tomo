@@ -1,7 +1,28 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Provider } from "../config/schema";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
 import { createOpenAICompatibleClient } from "./openai-compatible";
+
+/**
+ * Builds a fake HF hub cache containing a single snapshot for the given
+ * model id and writes the supplied config.json body. Returns the cache
+ * root so tests can point HF_HUB_CACHE at it.
+ */
+function makeHfCache(modelId: string, config: unknown): string {
+  const cacheRoot = mkdtempSync(join(tmpdir(), "tomo-hf-"));
+  const snapshotDir = join(
+    cacheRoot,
+    `models--${modelId.replace(/\//g, "--")}`,
+    "snapshots",
+    "abc123",
+  );
+  mkdirSync(snapshotDir, { recursive: true });
+  writeFileSync(join(snapshotDir, "config.json"), JSON.stringify(config));
+  return cacheRoot;
+}
 
 /** Creates a minimal provider config for testing. */
 function makeProvider(overrides: Partial<Provider> = {}): Provider {
@@ -332,40 +353,251 @@ describe("createOpenAICompatibleClient", () => {
       expect(result).toBe(8192);
     });
 
-    it("fetches context window from /v1/models for mlx", async () => {
-      server.use(
-        http.get("http://127.0.0.1:8080/v1/models", () =>
-          HttpResponse.json({
-            data: [{ id: "mlx-community/llama", context_length: 32768 }],
-          }),
-        ),
-      );
-
-      const client = createOpenAICompatibleClient(
-        makeProvider({
-          type: "mlx",
-          baseUrl: "http://127.0.0.1:8080",
-        }),
-      );
-      const result = await client.fetchContextWindow("mlx-community/llama");
-      expect(result).toBe(32768);
+    it("reads mlx context window from HF cache max_position_embeddings", async () => {
+      const cacheRoot = makeHfCache("mlx-community/llama", {
+        max_position_embeddings: 131072,
+      });
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(131072);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
     });
 
-    it("falls back to default for mlx when context_length is missing", async () => {
-      server.use(
-        http.get("http://127.0.0.1:8080/v1/models", () =>
-          HttpResponse.json({ data: [{ id: "mlx-community/llama" }] }),
-        ),
-      );
+    it.each([
+      ["max_sequence_length", 40960],
+      ["seq_length", 16384],
+      ["n_positions", 2048],
+      ["sliding_window", 4096],
+    ])("reads mlx context window from %s", async (field, value) => {
+      const cacheRoot = makeHfCache("mlx-community/llama", { [field]: value });
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(value);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
 
-      const client = createOpenAICompatibleClient(
-        makeProvider({
-          type: "mlx",
-          baseUrl: "http://127.0.0.1:8080",
-        }),
+    it("prefers max_position_embeddings over later fields", async () => {
+      const cacheRoot = makeHfCache("mlx-community/llama", {
+        max_position_embeddings: 131072,
+        sliding_window: 4096,
+      });
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(131072);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("reads mlx context window from nested text_config for multimodal models", async () => {
+      const cacheRoot = makeHfCache("mlx-community/gemma", {
+        text_config: { max_position_embeddings: 65536 },
+      });
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/gemma");
+        expect(result).toBe(65536);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to default when mlx HF cache entry is missing", async () => {
+      const cacheRoot = mkdtempSync(join(tmpdir(), "tomo-hf-"));
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(8192);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to default when mlx HF cache snapshots dir is empty", async () => {
+      const cacheRoot = mkdtempSync(join(tmpdir(), "tomo-hf-"));
+      mkdirSync(join(cacheRoot, "models--mlx-community--llama", "snapshots"), {
+        recursive: true,
+      });
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(8192);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to default when mlx HF config.json is malformed", async () => {
+      const cacheRoot = mkdtempSync(join(tmpdir(), "tomo-hf-"));
+      const snapshotDir = join(
+        cacheRoot,
+        "models--mlx-community--llama",
+        "snapshots",
+        "abc123",
       );
-      const result = await client.fetchContextWindow("mlx-community/llama");
+      mkdirSync(snapshotDir, { recursive: true });
+      writeFileSync(join(snapshotDir, "config.json"), "{ not json");
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(8192);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to default when mlx HF config has no context fields", async () => {
+      const cacheRoot = makeHfCache("mlx-community/llama", {
+        hidden_size: 4096,
+      });
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(8192);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("uses HF_HOME/hub when HF_HUB_CACHE is unset", async () => {
+      const hfHome = mkdtempSync(join(tmpdir(), "tomo-hf-home-"));
+      const snapshotDir = join(
+        hfHome,
+        "hub",
+        "models--mlx-community--llama",
+        "snapshots",
+        "abc123",
+      );
+      mkdirSync(snapshotDir, { recursive: true });
+      writeFileSync(
+        join(snapshotDir, "config.json"),
+        JSON.stringify({ max_position_embeddings: 8000 }),
+      );
+      vi.stubEnv("HF_HUB_CACHE", "");
+      vi.stubEnv("HF_HOME", hfHome);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(8000);
+      } finally {
+        rmSync(hfHome, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to ~/.cache/huggingface/hub when no HF env vars are set", async () => {
+      vi.stubEnv("HF_HUB_CACHE", "");
+      vi.stubEnv("HF_HOME", "");
+      const client = createOpenAICompatibleClient(
+        makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+      );
+      // Unique id guarantees no collision with a real cache entry; the path
+      // won't exist, so this exercises the default-dir branch and returns 8192.
+      const result = await client.fetchContextWindow(
+        `tomo-test-nonexistent/model-${Date.now()}`,
+      );
       expect(result).toBe(8192);
+    });
+
+    it("falls back to default when absolute mlx path has no config.json", async () => {
+      const modelDir = mkdtempSync(join(tmpdir(), "tomo-mlx-empty-"));
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow(modelDir);
+        expect(result).toBe(8192);
+      } finally {
+        rmSync(modelDir, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to default when mlx HF config.json is a JSON scalar", async () => {
+      // z.record requires an object; null/strings/numbers fail the top-level schema.
+      const cacheRoot = mkdtempSync(join(tmpdir(), "tomo-hf-"));
+      const snapshotDir = join(
+        cacheRoot,
+        "models--mlx-community--llama",
+        "snapshots",
+        "abc123",
+      );
+      mkdirSync(snapshotDir, { recursive: true });
+      writeFileSync(join(snapshotDir, "config.json"), "null");
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(8192);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to default when text_config has no context fields", async () => {
+      const cacheRoot = makeHfCache("mlx-community/llama", {
+        text_config: { hidden_size: 4096 },
+      });
+      vi.stubEnv("HF_HUB_CACHE", cacheRoot);
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow("mlx-community/llama");
+        expect(result).toBe(8192);
+      } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("reads mlx context window from an absolute local model path", async () => {
+      const modelDir = mkdtempSync(join(tmpdir(), "tomo-mlx-model-"));
+      writeFileSync(
+        join(modelDir, "config.json"),
+        JSON.stringify({ max_position_embeddings: 16384 }),
+      );
+      try {
+        const client = createOpenAICompatibleClient(
+          makeProvider({ type: "mlx", baseUrl: "http://127.0.0.1:8080" }),
+        );
+        const result = await client.fetchContextWindow(modelDir);
+        expect(result).toBe(16384);
+      } finally {
+        rmSync(modelDir, { recursive: true, force: true });
+      }
     });
 
     it("fetches context window from /v1/models for openrouter", async () => {

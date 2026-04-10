@@ -1,3 +1,6 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { isAbsolute, join } from "node:path";
 import { z } from "zod";
 import type { Provider } from "../config/schema";
 import type {
@@ -98,6 +101,92 @@ async function fetchOllamaContextWindow(
   return DEFAULT_CONTEXT_WINDOW;
 }
 
+/**
+ * Candidate fields for the context length, in priority order. Different
+ * architectures use different names: Llama/Gemma/Mistral/Qwen use
+ * max_position_embeddings, GPT-2 uses n_positions, some Mistral variants
+ * expose only sliding_window, etc.
+ */
+const CONTEXT_LENGTH_FIELDS = [
+  "max_position_embeddings",
+  "max_sequence_length",
+  "seq_length",
+  "n_positions",
+  "sliding_window",
+] as const;
+
+/** Loose schema for a HuggingFace config.json — we inspect specific keys by hand. */
+const hfConfigSchema = z.record(z.string(), z.unknown());
+
+/** Returns the first numeric CONTEXT_LENGTH_FIELDS value found in a config object. */
+function extractContextLength(
+  config: Record<string, unknown>,
+): number | undefined {
+  for (const field of CONTEXT_LENGTH_FIELDS) {
+    const value = config[field];
+    if (typeof value === "number") return value;
+  }
+  return undefined;
+}
+
+/** Resolves the HuggingFace hub cache directory, honouring env overrides. */
+function hfHubCacheDir(): string {
+  if (process.env.HF_HUB_CACHE) return process.env.HF_HUB_CACHE;
+  if (process.env.HF_HOME) return join(process.env.HF_HOME, "hub");
+  return join(homedir(), ".cache", "huggingface", "hub");
+}
+
+/**
+ * Reads the context window from a HuggingFace model config.json on disk.
+ * mlx_lm.server downloads HF models into the local cache before serving,
+ * so the config is always available locally. For absolute local paths
+ * (mlx_lm.server accepts these as model ids), reads config.json from the
+ * model directory directly. Checks top-level first, then falls back to
+ * `text_config` for multimodal models (e.g. gemma-3) that nest the text
+ * model fields under that key.
+ */
+function fetchMlxContextWindow(modelId: string): number {
+  let configPath: string;
+
+  if (isAbsolute(modelId)) {
+    configPath = join(modelId, "config.json");
+  } else {
+    // HF cache layout: models--<org>--<repo>/snapshots/<hash>/config.json
+    const repoDir = join(
+      hfHubCacheDir(),
+      `models--${modelId.replace(/\//g, "--")}`,
+      "snapshots",
+    );
+    if (!existsSync(repoDir)) return DEFAULT_CONTEXT_WINDOW;
+    const snapshots = readdirSync(repoDir);
+    if (snapshots.length === 0) return DEFAULT_CONTEXT_WINDOW;
+    configPath = join(repoDir, snapshots[0], "config.json");
+  }
+
+  if (!existsSync(configPath)) return DEFAULT_CONTEXT_WINDOW;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(configPath, "utf-8"));
+  } catch {
+    return DEFAULT_CONTEXT_WINDOW;
+  }
+
+  const result = hfConfigSchema.safeParse(parsed);
+  if (!result.success) return DEFAULT_CONTEXT_WINDOW;
+
+  const topLevel = extractContextLength(result.data);
+  if (topLevel !== undefined) return topLevel;
+
+  const textConfig = hfConfigSchema.safeParse(result.data.text_config);
+  if (textConfig.success) {
+    const nested = extractContextLength(textConfig.data);
+    if (nested !== undefined) return nested;
+  }
+
+  return DEFAULT_CONTEXT_WINDOW;
+}
+
 /** Schema for a model entry with optional context_length. */
 const modelEntrySchema = z.object({
   id: z.string(),
@@ -175,13 +264,18 @@ export function createOpenAICompatibleClient(
   /**
    * Fetches the context window size for a model.
    * Ollama exposes this via its native /api/show endpoint. OpenRouter and
-   * OpenCode Zen include context_length in the /v1/models metadata.
-   * Falls back to DEFAULT_CONTEXT_WINDOW if detection fails.
+   * OpenCode Zen include context_length in the /v1/models metadata. MLX
+   * doesn't expose it over HTTP at all, so we read max_position_embeddings
+   * from the HuggingFace cache on disk. Falls back to DEFAULT_CONTEXT_WINDOW
+   * if detection fails.
    */
   async function fetchContextWindow(model: string): Promise<number> {
     try {
       if (provider.type === "ollama") {
         return await fetchOllamaContextWindow(baseUrl, model);
+      }
+      if (provider.type === "mlx") {
+        return fetchMlxContextWindow(model);
       }
       return await fetchModelsContextWindow(baseUrl, model, apiKey);
     } catch {
