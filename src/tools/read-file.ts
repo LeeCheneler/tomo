@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { z } from "zod";
 import { fileExists, isDirectory, readFile } from "../utils/fs";
-import { checkFilePermission } from "./permissions";
+import { checkPathPermission } from "./permissions";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { denied, err, ok } from "./types";
 
@@ -96,7 +96,7 @@ export const readFileTool: Tool = {
     const parsed = argsSchema.parse(args);
     const filePath = resolve(parsed.path);
 
-    const permission = checkFilePermission(
+    const permission = checkPathPermission(
       filePath,
       "read",
       context.permissions,

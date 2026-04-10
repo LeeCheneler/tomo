@@ -45,9 +45,11 @@ describe("PermissionsScreen", () => {
       expect(frame).toContain("Read files (current directory)");
       expect(frame).toContain("Write files (current directory)");
       expect(frame).toContain("Remove files (current directory)");
+      expect(frame).toContain("Remove directories (current directory)");
       expect(frame).toContain("Read files (global)");
       expect(frame).toContain("Write files (global)");
       expect(frame).toContain("Remove files (global)");
+      expect(frame).toContain("Remove directories (global)");
     });
 
     it("shows key instructions", () => {
@@ -82,9 +84,11 @@ describe("PermissionsScreen", () => {
       // Optional permissions default to off
       expect(frame).toContain("[ ] Write files (current directory)");
       expect(frame).toContain("[ ] Remove files (current directory)");
+      expect(frame).toContain("[ ] Remove directories (current directory)");
       expect(frame).toContain("[ ] Read files (global)");
       expect(frame).toContain("[ ] Write files (global)");
       expect(frame).toContain("[ ] Remove files (global)");
+      expect(frame).toContain("[ ] Remove directories (global)");
     });
   });
 

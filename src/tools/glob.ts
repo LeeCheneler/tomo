@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import { isGitRepo } from "../prompt/git-context";
 import { getErrorMessage } from "../utils/error";
-import { checkFilePermission } from "./permissions";
+import { checkPathPermission } from "./permissions";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { denied, err, ok } from "./types";
 
@@ -93,7 +93,7 @@ Use this tool instead of shell commands like find or ls. For searching file *con
     const parsed = argsSchema.parse(args);
     const searchDir = parsed.path ? resolve(parsed.path) : process.cwd();
 
-    const permission = checkFilePermission(
+    const permission = checkPathPermission(
       searchDir,
       "read",
       context.permissions,

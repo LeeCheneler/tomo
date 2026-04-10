@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { z } from "zod";
 import { fileExists, isDirectory, removeFile } from "../utils/fs";
-import { checkFilePermission } from "./permissions";
+import { checkPathPermission } from "./permissions";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { denied, err, ok } from "./types";
 
@@ -45,7 +45,7 @@ export const removeFileTool: Tool = {
       return err(`${filePath} does not exist`);
     }
 
-    const permission = checkFilePermission(
+    const permission = checkPathPermission(
       filePath,
       "remove",
       context.permissions,

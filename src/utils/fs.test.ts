@@ -4,6 +4,8 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
+  rmdirSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -16,6 +18,7 @@ import {
   isDirectory,
   listDir,
   readFile,
+  removeDir,
   removeFile,
   writeFile,
 } from "./fs";
@@ -29,6 +32,8 @@ vi.mock("node:fs", () => ({
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
   unlinkSync: vi.fn(),
+  rmSync: vi.fn(),
+  rmdirSync: vi.fn(),
 }));
 
 describe("fileExists", () => {
@@ -105,5 +110,17 @@ describe("removeFile", () => {
   it("delegates to unlinkSync with the path", () => {
     removeFile("/my/file");
     expect(unlinkSync).toHaveBeenCalledWith("/my/file");
+  });
+});
+
+describe("removeDir", () => {
+  it("delegates to rmdirSync for non-recursive removal", () => {
+    removeDir("/my/dir", false);
+    expect(rmdirSync).toHaveBeenCalledWith("/my/dir");
+  });
+
+  it("delegates to rmSync with recursive option for recursive removal", () => {
+    removeDir("/my/dir", true);
+    expect(rmSync).toHaveBeenCalledWith("/my/dir", { recursive: true });
   });
 });

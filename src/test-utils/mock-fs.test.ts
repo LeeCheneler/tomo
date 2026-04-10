@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   ensureDir,
   fileExists,
+  isDirectory,
   readFile,
+  removeDir,
   removeFile,
   writeFile,
 } from "../utils/fs";
@@ -49,9 +51,17 @@ describe("mockFs", () => {
     expect(readFile("/test/new.txt")).toBe("content");
   });
 
-  it("ensureDir is a no-op", () => {
+  it("ensureDir tracks the directory so isDirectory reports true", () => {
     state = mockFs({});
-    expect(() => ensureDir("/test/dir")).not.toThrow();
+    ensureDir("/test/empty");
+    expect(isDirectory("/test/empty")).toBe(true);
+    expect(state.getDirs()).toContain("/test/empty");
+  });
+
+  it("accepts initial empty directories via the second argument", () => {
+    state = mockFs({}, ["/test/empty"]);
+    expect(isDirectory("/test/empty")).toBe(true);
+    expect(state.getDirs()).toContain("/test/empty");
   });
 
   it("removeFile deletes a file from the virtual fs", () => {
@@ -64,5 +74,46 @@ describe("mockFs", () => {
   it("removeFile throws ENOENT for missing paths", () => {
     state = mockFs({});
     expect(() => removeFile("/missing.txt")).toThrow("ENOENT");
+  });
+
+  describe("removeDir", () => {
+    it("removes an empty directory non-recursively", () => {
+      state = mockFs({}, ["/test/empty"]);
+      removeDir("/test/empty", false);
+      expect(state.getDirs()).not.toContain("/test/empty");
+    });
+
+    it("throws ENOTEMPTY for non-empty directory when not recursive", () => {
+      state = mockFs({ "/test/dir/a.txt": "hi" });
+      expect(() => removeDir("/test/dir", false)).toThrow("ENOTEMPTY");
+    });
+
+    it("throws ENOENT for missing path", () => {
+      state = mockFs({});
+      expect(() => removeDir("/missing", false)).toThrow("ENOENT");
+    });
+
+    it("recursively removes files and sub-directories, leaving siblings intact", () => {
+      state = mockFs(
+        {
+          "/test/tree/a.txt": "a",
+          "/test/tree/sub/b.txt": "b",
+          "/test/other/c.txt": "c",
+        },
+        ["/test/tree/empty-sub", "/test/other/empty"],
+      );
+      removeDir("/test/tree", true);
+      expect(state.getFile("/test/tree/a.txt")).toBeUndefined();
+      expect(state.getFile("/test/tree/sub/b.txt")).toBeUndefined();
+      expect(state.getDirs()).not.toContain("/test/tree/empty-sub");
+      // Siblings outside the removed tree are untouched
+      expect(state.getFile("/test/other/c.txt")).toBe("c");
+      expect(state.getDirs()).toContain("/test/other/empty");
+    });
+
+    it("throws ENOENT for missing path in recursive mode", () => {
+      state = mockFs({});
+      expect(() => removeDir("/missing", true)).toThrow("ENOENT");
+    });
   });
 });

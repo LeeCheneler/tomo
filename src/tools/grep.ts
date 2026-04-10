@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { isGitRepo } from "../prompt/git-context";
 import { getErrorMessage } from "../utils/error";
-import { checkFilePermission } from "./permissions";
+import { checkPathPermission } from "./permissions";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { denied, err, ok } from "./types";
 
@@ -125,7 +125,7 @@ Effective search patterns:
     const searchDir = isFile ? dirname(resolved) : resolved;
     const searchTarget = isFile ? resolved : undefined;
 
-    const permission = checkFilePermission(
+    const permission = checkPathPermission(
       searchDir,
       "read",
       context.permissions,
