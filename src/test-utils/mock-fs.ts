@@ -78,6 +78,19 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
     .spyOn(fsUtils, "ensureDir")
     .mockImplementation(() => {});
 
+  const removeFileSpy = vi
+    .spyOn(fsUtils, "removeFile")
+    .mockImplementation((path) => {
+      if (!files.has(path)) {
+        const err = new Error(
+          `ENOENT: no such file or directory, unlink '${path}'`,
+        );
+        (err as NodeJS.ErrnoException).code = "ENOENT";
+        throw err;
+      }
+      files.delete(path);
+    });
+
   return {
     getFile(path: string) {
       return files.get(path);
@@ -93,6 +106,7 @@ export function mockFs(initialFiles: Record<string, string> = {}): MockFsState {
       listDirSpy.mockRestore();
       isDirectorySpy.mockRestore();
       ensureDirSpy.mockRestore();
+      removeFileSpy.mockRestore();
     },
   };
 }

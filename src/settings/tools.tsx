@@ -28,6 +28,7 @@ const TOOL_ITEMS: readonly {
   { key: "glob", label: "Glob", hasOptions: false },
   { key: "grep", label: "Grep", hasOptions: false },
   { key: "readFile", label: "Read File", hasOptions: false },
+  { key: "removeFile", label: "Remove File", hasOptions: false },
   { key: "runCommand", label: "Run Command", hasOptions: false },
   { key: "skill", label: "Skill", hasOptions: false },
   { key: "webSearch", label: "Web Search", hasOptions: true },

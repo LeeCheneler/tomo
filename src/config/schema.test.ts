@@ -78,21 +78,27 @@ describe("permissionsSchema", () => {
     const result = permissionsSchema.parse({});
     expect(result.cwdReadFile).toBe(true);
     expect(result.cwdWriteFile).toBeUndefined();
+    expect(result.cwdRemoveFile).toBeUndefined();
     expect(result.globalReadFile).toBeUndefined();
     expect(result.globalWriteFile).toBeUndefined();
+    expect(result.globalRemoveFile).toBeUndefined();
   });
 
   it("parses explicit values", () => {
     const result = permissionsSchema.parse({
       cwdReadFile: false,
       cwdWriteFile: true,
+      cwdRemoveFile: true,
       globalReadFile: true,
       globalWriteFile: false,
+      globalRemoveFile: true,
     });
     expect(result.cwdReadFile).toBe(false);
     expect(result.cwdWriteFile).toBe(true);
+    expect(result.cwdRemoveFile).toBe(true);
     expect(result.globalReadFile).toBe(true);
     expect(result.globalWriteFile).toBe(false);
+    expect(result.globalRemoveFile).toBe(true);
   });
 });
 
@@ -105,6 +111,7 @@ describe("toolsSchema", () => {
       glob: { enabled: true },
       grep: { enabled: true },
       readFile: { enabled: true },
+      removeFile: { enabled: true },
       runCommand: { enabled: true },
       skill: { enabled: true },
       webSearch: { enabled: false },
@@ -122,6 +129,7 @@ describe("toolsSchema", () => {
       glob: { enabled: true },
       grep: { enabled: true },
       readFile: { enabled: true },
+      removeFile: { enabled: true },
       runCommand: { enabled: true },
       skill: { enabled: true },
       webSearch: { enabled: true, apiKey: "tvly-123" },
@@ -135,8 +143,19 @@ describe("toolsSchema", () => {
     expect(result.tools.webSearch.apiKey).toBeUndefined();
   });
 
-  it("rejects missing tools", () => {
-    expect(() => toolsSchema.parse({})).toThrow();
+  it("fills missing tool entries with their defaults", () => {
+    const result = toolsSchema.parse({});
+    expect(result.agent.enabled).toBe(true);
+    expect(result.ask.enabled).toBe(true);
+    expect(result.editFile.enabled).toBe(true);
+    expect(result.glob.enabled).toBe(true);
+    expect(result.grep.enabled).toBe(true);
+    expect(result.readFile.enabled).toBe(true);
+    expect(result.removeFile.enabled).toBe(true);
+    expect(result.runCommand.enabled).toBe(true);
+    expect(result.skill.enabled).toBe(true);
+    expect(result.webSearch.enabled).toBe(false);
+    expect(result.writeFile.enabled).toBe(true);
   });
 });
 

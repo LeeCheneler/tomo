@@ -9,8 +9,10 @@ export function mockToolContext(
     permissions: {
       cwdReadFile: true,
       cwdWriteFile: true,
+      cwdRemoveFile: true,
       globalReadFile: false,
       globalWriteFile: false,
+      globalRemoveFile: false,
     },
     allowedCommands: [],
     confirm: vi.fn(async () => false),

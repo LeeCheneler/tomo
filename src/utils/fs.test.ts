@@ -5,6 +5,7 @@ import {
   readFileSync,
   readdirSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
@@ -15,6 +16,7 @@ import {
   isDirectory,
   listDir,
   readFile,
+  removeFile,
   writeFile,
 } from "./fs";
 
@@ -26,6 +28,7 @@ vi.mock("node:fs", () => ({
   statSync: vi.fn(),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
+  unlinkSync: vi.fn(),
 }));
 
 describe("fileExists", () => {
@@ -95,5 +98,12 @@ describe("ensureDir", () => {
   it("delegates to mkdirSync with recursive option", () => {
     ensureDir("/my/dir");
     expect(mkdirSync).toHaveBeenCalledWith("/my/dir", { recursive: true });
+  });
+});
+
+describe("removeFile", () => {
+  it("delegates to unlinkSync with the path", () => {
+    removeFile("/my/file");
+    expect(unlinkSync).toHaveBeenCalledWith("/my/file");
   });
 });

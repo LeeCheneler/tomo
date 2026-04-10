@@ -57,6 +57,7 @@ The model can call tools to read files, run commands, and more. Tools are enable
 | Read File    | Read file contents with line numbers               | Enabled  |
 | Write File   | Create or overwrite a file                         | Enabled  |
 | Edit File    | Apply string replacements to a file                | Enabled  |
+| Remove File  | Delete a file                                      | Enabled  |
 | Glob         | Find files by glob pattern (respects `.gitignore`) | Enabled  |
 | Grep         | Search file contents by regex                      | Enabled  |
 | Run Command  | Run a shell command                                | Enabled  |
@@ -71,14 +72,16 @@ The model can call tools to read files, run commands, and more. Tools are enable
 
 ## Permissions
 
-Write and edit operations prompt for confirmation by default. Read File is auto-allowed inside the current working directory. Manage permissions in `/settings → Permissions`, or in your config file:
+Write, edit, and remove operations prompt for confirmation by default. Read File is auto-allowed inside the current working directory. Manage permissions in `/settings → Permissions`, or in your config file:
 
 ```yaml
 permissions:
   cwdReadFile: true # auto-allow reads inside cwd (default: true)
   cwdWriteFile: true # auto-allow writes inside cwd
+  cwdRemoveFile: true # auto-allow removes inside cwd
   globalReadFile: true # auto-allow reads outside cwd
   globalWriteFile: true # auto-allow writes outside cwd
+  globalRemoveFile: true # auto-allow removes outside cwd
 ```
 
 File operations outside the current working directory require the `global*` permissions even when the matching `cwd*` permission is enabled.
