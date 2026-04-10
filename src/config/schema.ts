@@ -5,6 +5,7 @@ export const providerTypeSchema = z.enum([
   "ollama",
   "opencode-zen",
   "openrouter",
+  "mlx",
 ]);
 
 /** Schema for a single provider connection. */

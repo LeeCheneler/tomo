@@ -537,9 +537,10 @@ describe("Chat", () => {
       await stdin.write(keys.enter);
       await new Promise((r) => setTimeout(r, 50));
 
-      // Should show live streaming content and loading indicator
+      // Should show live streaming content and loading indicator.
+      // Match any spinner frame since it cycles on a timer.
       expect(lastFrame()).toContain("streaming...");
-      expect(lastFrame()).toContain("⠋");
+      expect(lastFrame()).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
 
       cleanup.resolve?.();
     });

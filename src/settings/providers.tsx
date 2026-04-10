@@ -25,6 +25,7 @@ const PROVIDER_TYPES: readonly ProviderType[] = [
   "ollama",
   "opencode-zen",
   "openrouter",
+  "mlx",
 ];
 
 /** Key instructions for the provider options form. */

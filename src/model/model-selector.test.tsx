@@ -139,7 +139,7 @@ describe("ModelSelector", () => {
         global: { providers: [OLLAMA_PROVIDER] },
       });
       await stdin.write(keys.enter);
-      expect(lastFrame()).toContain("⠋");
+      expect(lastFrame()).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
       expect(lastFrame()).toContain("Select Model — my-ollama");
     });
 

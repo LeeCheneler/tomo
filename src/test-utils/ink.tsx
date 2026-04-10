@@ -15,7 +15,7 @@ import { mockConfig } from "./mock-config";
  * to complete so `lastFrame()` reflects the post-escape state.
  */
 export async function flushInkFrames(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 25));
+  await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
 /** Stdin wrapper that auto-flushes after each write. */
