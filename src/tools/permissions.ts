@@ -5,7 +5,7 @@ import type { Permissions } from "../config/schema";
 export type PermissionResult = "allowed" | "needs-confirmation";
 
 /** Path operation type for permission lookups. Covers files and directories. */
-export type PathOperation = "read" | "write" | "remove";
+export type PathOperation = "read" | "write" | "remove" | "removeDir";
 
 /** Maps a path operation to its cwd and global permission keys. */
 const PERMISSION_KEYS: Record<
@@ -15,6 +15,7 @@ const PERMISSION_KEYS: Record<
   read: { cwd: "cwdReadFile", global: "globalReadFile" },
   write: { cwd: "cwdWriteFile", global: "globalWriteFile" },
   remove: { cwd: "cwdRemoveFile", global: "globalRemoveFile" },
+  removeDir: { cwd: "cwdRemoveDir", global: "globalRemoveDir" },
 };
 
 /** Returns true if the resolved path is within the current working directory. */

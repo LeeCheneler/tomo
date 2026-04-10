@@ -18,6 +18,7 @@ import { globTool } from "./tools/glob";
 import { grepTool } from "./tools/grep";
 import { readFileTool } from "./tools/read-file";
 import { createToolRegistry } from "./tools/registry";
+import { removeDirTool } from "./tools/remove-dir";
 import { removeFileTool } from "./tools/remove-file";
 import { runCommandTool } from "./tools/run-command";
 import { createSkillTool } from "./tools/skill";
@@ -73,6 +74,7 @@ function buildToolRegistry(skillRegistry: SkillRegistry) {
   registry.register(writeFileTool);
   registry.register(editFileTool);
   registry.register(removeFileTool);
+  registry.register(removeDirTool);
   registry.register(globTool);
   registry.register(grepTool);
   registry.register(runCommandTool);

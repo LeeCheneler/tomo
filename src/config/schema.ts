@@ -21,9 +21,11 @@ export const permissionsSchema = z.object({
   cwdReadFile: z.boolean().default(true),
   cwdWriteFile: z.boolean().optional(),
   cwdRemoveFile: z.boolean().optional(),
+  cwdRemoveDir: z.boolean().optional(),
   globalReadFile: z.boolean().optional(),
   globalWriteFile: z.boolean().optional(),
   globalRemoveFile: z.boolean().optional(),
+  globalRemoveDir: z.boolean().optional(),
 });
 
 /** Schema for a single tool's config. */
@@ -44,6 +46,7 @@ export const toolsSchema = z.object({
   glob: toolConfigSchema.default({ enabled: true }),
   grep: toolConfigSchema.default({ enabled: true }),
   readFile: toolConfigSchema.default({ enabled: true }),
+  removeDir: toolConfigSchema.default({ enabled: true }),
   removeFile: toolConfigSchema.default({ enabled: true }),
   runCommand: toolConfigSchema.default({ enabled: true }),
   skill: toolConfigSchema.default({ enabled: true }),

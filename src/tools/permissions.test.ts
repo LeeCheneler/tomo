@@ -33,9 +33,11 @@ describe("checkPathPermission", () => {
       cwdReadFile: false,
       cwdWriteFile: false,
       cwdRemoveFile: false,
+      cwdRemoveDir: false,
       globalReadFile: false,
       globalWriteFile: false,
       globalRemoveFile: false,
+      globalRemoveDir: false,
       ...overrides,
     };
   }
@@ -154,6 +156,50 @@ describe("checkPathPermission", () => {
     });
   });
 
+  describe("cwd removeDir", () => {
+    it("returns allowed when cwdRemoveDir is true", () => {
+      expect(
+        checkPathPermission(
+          cwdFile,
+          "removeDir",
+          perms({ cwdRemoveDir: true }),
+        ),
+      ).toBe("allowed");
+    });
+
+    it("returns needs-confirmation when cwdRemoveDir is false", () => {
+      expect(
+        checkPathPermission(
+          cwdFile,
+          "removeDir",
+          perms({ cwdRemoveDir: false }),
+        ),
+      ).toBe("needs-confirmation");
+    });
+  });
+
+  describe("global removeDir", () => {
+    it("returns allowed when globalRemoveDir is true", () => {
+      expect(
+        checkPathPermission(
+          globalFile,
+          "removeDir",
+          perms({ globalRemoveDir: true }),
+        ),
+      ).toBe("allowed");
+    });
+
+    it("returns needs-confirmation when globalRemoveDir is false", () => {
+      expect(
+        checkPathPermission(
+          globalFile,
+          "removeDir",
+          perms({ globalRemoveDir: false }),
+        ),
+      ).toBe("needs-confirmation");
+    });
+  });
+
   describe("undefined permissions", () => {
     it("treats undefined cwdWriteFile as needs-confirmation", () => {
       const p = { cwdReadFile: true } as Permissions;
@@ -179,6 +225,20 @@ describe("checkPathPermission", () => {
     it("treats undefined globalRemoveFile as needs-confirmation", () => {
       const p = { cwdReadFile: true } as Permissions;
       expect(checkPathPermission(globalFile, "remove", p)).toBe(
+        "needs-confirmation",
+      );
+    });
+
+    it("treats undefined cwdRemoveDir as needs-confirmation", () => {
+      const p = { cwdReadFile: true } as Permissions;
+      expect(checkPathPermission(cwdFile, "removeDir", p)).toBe(
+        "needs-confirmation",
+      );
+    });
+
+    it("treats undefined globalRemoveDir as needs-confirmation", () => {
+      const p = { cwdReadFile: true } as Permissions;
+      expect(checkPathPermission(globalFile, "removeDir", p)).toBe(
         "needs-confirmation",
       );
     });

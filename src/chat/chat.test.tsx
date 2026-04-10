@@ -1259,6 +1259,7 @@ describe("Chat", () => {
               glob: { enabled: true },
               grep: { enabled: true },
               readFile: { enabled: true },
+              removeDir: { enabled: true },
               removeFile: { enabled: true },
               runCommand: { enabled: true },
               skill: { enabled: true },

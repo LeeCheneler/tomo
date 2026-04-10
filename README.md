@@ -52,19 +52,20 @@ The pager defaults to `less`. Set `PAGER` to override (allow-listed: `less`, `mo
 
 The model can call tools to read files, run commands, and more. Tools are enabled by default; toggle them in `/settings → Tools`.
 
-| Tool         | Description                                        | Default  |
-| ------------ | -------------------------------------------------- | -------- |
-| Read File    | Read file contents with line numbers               | Enabled  |
-| Write File   | Create or overwrite a file                         | Enabled  |
-| Edit File    | Apply string replacements to a file                | Enabled  |
-| Remove File  | Delete a file                                      | Enabled  |
-| Glob         | Find files by glob pattern (respects `.gitignore`) | Enabled  |
-| Grep         | Search file contents by regex                      | Enabled  |
-| Run Command  | Run a shell command                                | Enabled  |
-| Ask          | Ask the user a question                            | Enabled  |
-| Skill        | Load specialised task instructions                 | Enabled  |
-| Agent        | Spawn sub-agents for parallel research             | Enabled  |
-| Web Search   | Search the web via Tavily API                      | Disabled |
+| Tool             | Description                                          | Default  |
+| ---------------- | ---------------------------------------------------- | -------- |
+| Read File        | Read file contents with line numbers                 | Enabled  |
+| Write File       | Create or overwrite a file                           | Enabled  |
+| Edit File        | Apply string replacements to a file                  | Enabled  |
+| Remove File      | Delete a file                                        | Enabled  |
+| Remove Directory | Delete a directory (recursive mode always prompts)   | Enabled  |
+| Glob             | Find files by glob pattern (respects `.gitignore`)   | Enabled  |
+| Grep             | Search file contents by regex                        | Enabled  |
+| Run Command      | Run a shell command                                  | Enabled  |
+| Ask              | Ask the user a question                              | Enabled  |
+| Skill            | Load specialised task instructions                   | Enabled  |
+| Agent            | Spawn sub-agents for parallel research               | Enabled  |
+| Web Search       | Search the web via Tavily API                        | Disabled |
 
 **Web Search** requires a [Tavily](https://tavily.com) API key. Set `TAVILY_API_KEY` in your environment and enable the tool in `/settings → Tools`.
 
@@ -78,13 +79,17 @@ Write, edit, and remove operations prompt for confirmation by default. Read File
 permissions:
   cwdReadFile: true # auto-allow reads inside cwd (default: true)
   cwdWriteFile: true # auto-allow writes inside cwd
-  cwdRemoveFile: true # auto-allow removes inside cwd
+  cwdRemoveFile: true # auto-allow file removes inside cwd
+  cwdRemoveDir: true # auto-allow empty-directory removes inside cwd
   globalReadFile: true # auto-allow reads outside cwd
   globalWriteFile: true # auto-allow writes outside cwd
-  globalRemoveFile: true # auto-allow removes outside cwd
+  globalRemoveFile: true # auto-allow file removes outside cwd
+  globalRemoveDir: true # auto-allow empty-directory removes outside cwd
 ```
 
 File operations outside the current working directory require the `global*` permissions even when the matching `cwd*` permission is enabled.
+
+**Recursive directory removes always prompt for confirmation**, regardless of permission state. The `cwdRemoveDir` and `globalRemoveDir` flags only gate the safe single-empty-directory case — they are not authorisation for arbitrary tree removal.
 
 Run Command prompts by default. Auto-approve commands with an allow list under `/settings → Allowed Commands`, or in config:
 

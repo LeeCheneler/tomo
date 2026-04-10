@@ -79,9 +79,11 @@ describe("permissionsSchema", () => {
     expect(result.cwdReadFile).toBe(true);
     expect(result.cwdWriteFile).toBeUndefined();
     expect(result.cwdRemoveFile).toBeUndefined();
+    expect(result.cwdRemoveDir).toBeUndefined();
     expect(result.globalReadFile).toBeUndefined();
     expect(result.globalWriteFile).toBeUndefined();
     expect(result.globalRemoveFile).toBeUndefined();
+    expect(result.globalRemoveDir).toBeUndefined();
   });
 
   it("parses explicit values", () => {
@@ -89,16 +91,20 @@ describe("permissionsSchema", () => {
       cwdReadFile: false,
       cwdWriteFile: true,
       cwdRemoveFile: true,
+      cwdRemoveDir: true,
       globalReadFile: true,
       globalWriteFile: false,
       globalRemoveFile: true,
+      globalRemoveDir: true,
     });
     expect(result.cwdReadFile).toBe(false);
     expect(result.cwdWriteFile).toBe(true);
     expect(result.cwdRemoveFile).toBe(true);
+    expect(result.cwdRemoveDir).toBe(true);
     expect(result.globalReadFile).toBe(true);
     expect(result.globalWriteFile).toBe(false);
     expect(result.globalRemoveFile).toBe(true);
+    expect(result.globalRemoveDir).toBe(true);
   });
 });
 
@@ -111,6 +117,7 @@ describe("toolsSchema", () => {
       glob: { enabled: true },
       grep: { enabled: true },
       readFile: { enabled: true },
+      removeDir: { enabled: true },
       removeFile: { enabled: true },
       runCommand: { enabled: true },
       skill: { enabled: true },
@@ -129,6 +136,7 @@ describe("toolsSchema", () => {
       glob: { enabled: true },
       grep: { enabled: true },
       readFile: { enabled: true },
+      removeDir: { enabled: true },
       removeFile: { enabled: true },
       runCommand: { enabled: true },
       skill: { enabled: true },
@@ -151,6 +159,7 @@ describe("toolsSchema", () => {
     expect(result.glob.enabled).toBe(true);
     expect(result.grep.enabled).toBe(true);
     expect(result.readFile.enabled).toBe(true);
+    expect(result.removeDir.enabled).toBe(true);
     expect(result.removeFile.enabled).toBe(true);
     expect(result.runCommand.enabled).toBe(true);
     expect(result.skill.enabled).toBe(true);

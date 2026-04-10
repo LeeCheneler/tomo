@@ -4,6 +4,8 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
+  rmdirSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -49,4 +51,16 @@ export function ensureDir(path: string): void {
 /** Removes a file at the given path. Throws if the path does not exist or is a directory. */
 export function removeFile(path: string): void {
   unlinkSync(path);
+}
+
+/**
+ * Removes a directory at the given path.
+ * Non-recursive mode throws if the directory is not empty; recursive mode removes the entire tree.
+ */
+export function removeDir(path: string, recursive: boolean): void {
+  if (recursive) {
+    rmSync(path, { recursive: true });
+  } else {
+    rmdirSync(path);
+  }
 }

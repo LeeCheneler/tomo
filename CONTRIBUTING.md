@@ -43,7 +43,7 @@ src/
 ├── settings/     # /settings menu and submenus (providers, tools, MCP, etc)
 ├── session/      # session persistence and the session browser
 ├── model/        # model selector
-├── tools/        # built-in tools (read, write, edit, remove, glob, grep, run, agent, ...)
+├── tools/        # built-in tools (read, write, edit, remove-file, remove-dir, glob, grep, run, agent, ...)
 ├── mcp/          # MCP client, transports, manager
 ├── skills/       # skill loading + registry
 ├── skill-sets/   # git-backed skill set discovery

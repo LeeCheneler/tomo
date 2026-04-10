@@ -19,9 +19,11 @@ const PERMISSION_ITEMS: readonly { key: PermissionKey; label: string }[] = [
   { key: "cwdReadFile", label: "Read files (current directory)" },
   { key: "cwdWriteFile", label: "Write files (current directory)" },
   { key: "cwdRemoveFile", label: "Remove files (current directory)" },
+  { key: "cwdRemoveDir", label: "Remove directories (current directory)" },
   { key: "globalReadFile", label: "Read files (global)" },
   { key: "globalWriteFile", label: "Write files (global)" },
   { key: "globalRemoveFile", label: "Remove files (global)" },
+  { key: "globalRemoveDir", label: "Remove directories (global)" },
 ];
 
 /** Key instructions for the permissions screen. */
