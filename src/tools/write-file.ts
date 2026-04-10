@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "../utils/fs";
 import { newFileDiff, unifiedDiff } from "./diff";
-import { checkFilePermission } from "./permissions";
+import { checkPathPermission } from "./permissions";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { denied, err, okDiff } from "./types";
 
@@ -60,7 +60,7 @@ export const writeFileTool: Tool = {
       ? unifiedDiff(filePath, oldContent, parsed.content)
       : newFileDiff(parsed.content);
 
-    const permission = checkFilePermission(
+    const permission = checkPathPermission(
       filePath,
       "write",
       context.permissions,

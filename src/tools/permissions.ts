@@ -4,12 +4,12 @@ import type { Permissions } from "../config/schema";
 /** Result of a permission check. */
 export type PermissionResult = "allowed" | "needs-confirmation";
 
-/** File operation type for permission lookups. */
-export type FileOperation = "read" | "write" | "remove";
+/** Path operation type for permission lookups. Covers files and directories. */
+export type PathOperation = "read" | "write" | "remove";
 
-/** Maps a file operation to its cwd and global permission keys. */
+/** Maps a path operation to its cwd and global permission keys. */
 const PERMISSION_KEYS: Record<
-  FileOperation,
+  PathOperation,
   { cwd: keyof Permissions; global: keyof Permissions }
 > = {
   read: { cwd: "cwdReadFile", global: "globalReadFile" },
@@ -17,7 +17,7 @@ const PERMISSION_KEYS: Record<
   remove: { cwd: "cwdRemoveFile", global: "globalRemoveFile" },
 };
 
-/** Returns true if the resolved file path is within the current working directory. */
+/** Returns true if the resolved path is within the current working directory. */
 export function isPathWithinCwd(filePath: string): boolean {
   const resolved = resolve(filePath);
   const cwd = process.cwd();
@@ -25,12 +25,12 @@ export function isPathWithinCwd(filePath: string): boolean {
 }
 
 /**
- * Checks file access permission based on the operation type and file location.
+ * Checks access permission for a path based on the operation type and path location.
  * Returns "allowed" if the config permits access, "needs-confirmation" otherwise.
  */
-export function checkFilePermission(
+export function checkPathPermission(
   filePath: string,
-  operation: FileOperation,
+  operation: PathOperation,
   permissions: Permissions,
 ): PermissionResult {
   const inCwd = isPathWithinCwd(filePath);

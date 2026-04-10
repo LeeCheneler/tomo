@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import { fileExists, isDirectory, readFile, writeFile } from "../utils/fs";
 import { unifiedDiff } from "./diff";
-import { checkFilePermission } from "./permissions";
+import { checkPathPermission } from "./permissions";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { denied, err, okDiff } from "./types";
 
@@ -144,7 +144,7 @@ export const editFileTool: Tool = {
 
     const diff = unifiedDiff(filePath, original, result.content);
 
-    const permission = checkFilePermission(
+    const permission = checkPathPermission(
       filePath,
       "write",
       context.permissions,

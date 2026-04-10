@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Permissions } from "../config/schema";
-import { checkFilePermission, isPathWithinCwd } from "./permissions";
+import { checkPathPermission, isPathWithinCwd } from "./permissions";
 
 describe("isPathWithinCwd", () => {
   it("returns true for a file inside cwd", () => {
@@ -26,7 +26,7 @@ describe("isPathWithinCwd", () => {
   });
 });
 
-describe("checkFilePermission", () => {
+describe("checkPathPermission", () => {
   /** Builds a Permissions object with all fields defaulted to false. */
   function perms(overrides: Partial<Permissions> = {}): Permissions {
     return {
@@ -49,13 +49,13 @@ describe("checkFilePermission", () => {
   describe("cwd read", () => {
     it("returns allowed when cwdReadFile is true", () => {
       expect(
-        checkFilePermission(cwdFile, "read", perms({ cwdReadFile: true })),
+        checkPathPermission(cwdFile, "read", perms({ cwdReadFile: true })),
       ).toBe("allowed");
     });
 
     it("returns needs-confirmation when cwdReadFile is false", () => {
       expect(
-        checkFilePermission(cwdFile, "read", perms({ cwdReadFile: false })),
+        checkPathPermission(cwdFile, "read", perms({ cwdReadFile: false })),
       ).toBe("needs-confirmation");
     });
   });
@@ -63,13 +63,13 @@ describe("checkFilePermission", () => {
   describe("cwd write", () => {
     it("returns allowed when cwdWriteFile is true", () => {
       expect(
-        checkFilePermission(cwdFile, "write", perms({ cwdWriteFile: true })),
+        checkPathPermission(cwdFile, "write", perms({ cwdWriteFile: true })),
       ).toBe("allowed");
     });
 
     it("returns needs-confirmation when cwdWriteFile is false", () => {
       expect(
-        checkFilePermission(cwdFile, "write", perms({ cwdWriteFile: false })),
+        checkPathPermission(cwdFile, "write", perms({ cwdWriteFile: false })),
       ).toBe("needs-confirmation");
     });
   });
@@ -77,7 +77,7 @@ describe("checkFilePermission", () => {
   describe("global read", () => {
     it("returns allowed when globalReadFile is true", () => {
       expect(
-        checkFilePermission(
+        checkPathPermission(
           globalFile,
           "read",
           perms({ globalReadFile: true }),
@@ -87,7 +87,7 @@ describe("checkFilePermission", () => {
 
     it("returns needs-confirmation when globalReadFile is false", () => {
       expect(
-        checkFilePermission(
+        checkPathPermission(
           globalFile,
           "read",
           perms({ globalReadFile: false }),
@@ -99,7 +99,7 @@ describe("checkFilePermission", () => {
   describe("global write", () => {
     it("returns allowed when globalWriteFile is true", () => {
       expect(
-        checkFilePermission(
+        checkPathPermission(
           globalFile,
           "write",
           perms({ globalWriteFile: true }),
@@ -109,7 +109,7 @@ describe("checkFilePermission", () => {
 
     it("returns needs-confirmation when globalWriteFile is false", () => {
       expect(
-        checkFilePermission(
+        checkPathPermission(
           globalFile,
           "write",
           perms({ globalWriteFile: false }),
@@ -121,13 +121,13 @@ describe("checkFilePermission", () => {
   describe("cwd remove", () => {
     it("returns allowed when cwdRemoveFile is true", () => {
       expect(
-        checkFilePermission(cwdFile, "remove", perms({ cwdRemoveFile: true })),
+        checkPathPermission(cwdFile, "remove", perms({ cwdRemoveFile: true })),
       ).toBe("allowed");
     });
 
     it("returns needs-confirmation when cwdRemoveFile is false", () => {
       expect(
-        checkFilePermission(cwdFile, "remove", perms({ cwdRemoveFile: false })),
+        checkPathPermission(cwdFile, "remove", perms({ cwdRemoveFile: false })),
       ).toBe("needs-confirmation");
     });
   });
@@ -135,7 +135,7 @@ describe("checkFilePermission", () => {
   describe("global remove", () => {
     it("returns allowed when globalRemoveFile is true", () => {
       expect(
-        checkFilePermission(
+        checkPathPermission(
           globalFile,
           "remove",
           perms({ globalRemoveFile: true }),
@@ -145,7 +145,7 @@ describe("checkFilePermission", () => {
 
     it("returns needs-confirmation when globalRemoveFile is false", () => {
       expect(
-        checkFilePermission(
+        checkPathPermission(
           globalFile,
           "remove",
           perms({ globalRemoveFile: false }),
@@ -157,28 +157,28 @@ describe("checkFilePermission", () => {
   describe("undefined permissions", () => {
     it("treats undefined cwdWriteFile as needs-confirmation", () => {
       const p = { cwdReadFile: true } as Permissions;
-      expect(checkFilePermission(cwdFile, "write", p)).toBe(
+      expect(checkPathPermission(cwdFile, "write", p)).toBe(
         "needs-confirmation",
       );
     });
 
     it("treats undefined globalReadFile as needs-confirmation", () => {
       const p = { cwdReadFile: true } as Permissions;
-      expect(checkFilePermission(globalFile, "read", p)).toBe(
+      expect(checkPathPermission(globalFile, "read", p)).toBe(
         "needs-confirmation",
       );
     });
 
     it("treats undefined cwdRemoveFile as needs-confirmation", () => {
       const p = { cwdReadFile: true } as Permissions;
-      expect(checkFilePermission(cwdFile, "remove", p)).toBe(
+      expect(checkPathPermission(cwdFile, "remove", p)).toBe(
         "needs-confirmation",
       );
     });
 
     it("treats undefined globalRemoveFile as needs-confirmation", () => {
       const p = { cwdReadFile: true } as Permissions;
-      expect(checkFilePermission(globalFile, "remove", p)).toBe(
+      expect(checkPathPermission(globalFile, "remove", p)).toBe(
         "needs-confirmation",
       );
     });
