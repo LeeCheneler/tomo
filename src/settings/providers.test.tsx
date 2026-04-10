@@ -396,8 +396,9 @@ describe("ProvidersScreen", () => {
       await stdin.write(keys.up);
       await stdin.write(keys.tab);
       await stdin.write(keys.enter);
-      // Spinner frame indicates loading state (text is shimmer-styled with escape codes)
-      expect(lastFrame()).toContain("⠋");
+      // Spinner frame indicates loading state (text is shimmer-styled with escape codes).
+      // Match any frame since it cycles on a timer.
+      expect(lastFrame()).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
     });
 
     it("shows connected after successful model fetch", async () => {
