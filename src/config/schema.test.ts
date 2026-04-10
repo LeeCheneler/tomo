@@ -22,6 +22,16 @@ describe("providerSchema", () => {
     expect(result.apiKey).toBeUndefined();
   });
 
+  it("parses an mlx provider", () => {
+    const result = providerSchema.parse({
+      name: "mlx",
+      type: "mlx",
+      baseUrl: "http://127.0.0.1:8080",
+    });
+    expect(result.type).toBe("mlx");
+    expect(result.baseUrl).toBe("http://127.0.0.1:8080");
+  });
+
   it("parses a provider with apiKey", () => {
     const result = providerSchema.parse({
       name: "openrouter",

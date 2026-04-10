@@ -88,6 +88,7 @@ export const PROVIDER_DEFAULT_URLS: Record<ProviderType, string> = {
   ollama: "http://localhost:11434",
   "opencode-zen": "https://opencode.ai/zen",
   openrouter: "https://openrouter.ai/api",
+  mlx: "http://127.0.0.1:8080",
 };
 
 /** Environment variable names for provider API keys. */
@@ -95,6 +96,7 @@ export const API_KEY_ENV_VARS: Record<ProviderType, string> = {
   ollama: "OLLAMA_API_KEY",
   "opencode-zen": "OPENCODE_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
+  mlx: "MLX_API_KEY",
 };
 
 /**

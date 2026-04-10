@@ -34,6 +34,27 @@ describe("createOpenAICompatibleClient", () => {
       expect(models).toEqual([{ id: "llama3" }, { id: "mistral" }]);
     });
 
+    it("uses /v1/models for mlx", async () => {
+      let requestUrl = "";
+      server.use(
+        http.get("http://127.0.0.1:8080/v1/models", (info) => {
+          requestUrl = info.request.url;
+          return HttpResponse.json({ data: [{ id: "mlx-community/llama" }] });
+        }),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "mlx",
+          baseUrl: "http://127.0.0.1:8080",
+        }),
+      );
+      const models = await client.fetchModels();
+
+      expect(requestUrl).toBe("http://127.0.0.1:8080/v1/models");
+      expect(models).toEqual([{ id: "mlx-community/llama" }]);
+    });
+
     it("uses /v1/models/user for openrouter with api key", async () => {
       let requestUrl = "";
       server.use(
@@ -308,6 +329,42 @@ describe("createOpenAICompatibleClient", () => {
 
       const client = createOpenAICompatibleClient(makeProvider());
       const result = await client.fetchContextWindow("llama3");
+      expect(result).toBe(8192);
+    });
+
+    it("fetches context window from /v1/models for mlx", async () => {
+      server.use(
+        http.get("http://127.0.0.1:8080/v1/models", () =>
+          HttpResponse.json({
+            data: [{ id: "mlx-community/llama", context_length: 32768 }],
+          }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "mlx",
+          baseUrl: "http://127.0.0.1:8080",
+        }),
+      );
+      const result = await client.fetchContextWindow("mlx-community/llama");
+      expect(result).toBe(32768);
+    });
+
+    it("falls back to default for mlx when context_length is missing", async () => {
+      server.use(
+        http.get("http://127.0.0.1:8080/v1/models", () =>
+          HttpResponse.json({ data: [{ id: "mlx-community/llama" }] }),
+        ),
+      );
+
+      const client = createOpenAICompatibleClient(
+        makeProvider({
+          type: "mlx",
+          baseUrl: "http://127.0.0.1:8080",
+        }),
+      );
+      const result = await client.fetchContextWindow("mlx-community/llama");
       expect(result).toBe(8192);
     });
 

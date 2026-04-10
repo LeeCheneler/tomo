@@ -33,6 +33,11 @@ describe("resolveApiKey", () => {
     expect(resolveApiKey("openrouter")).toBe("sk-env");
   });
 
+  it("falls back to MLX_API_KEY env var for mlx", () => {
+    vi.stubEnv("MLX_API_KEY", "sk-env");
+    expect(resolveApiKey("mlx")).toBe("sk-env");
+  });
+
   it("prefers config key over env var", () => {
     vi.stubEnv("OPENCODE_API_KEY", "sk-env");
     expect(resolveApiKey("opencode-zen", "sk-config")).toBe("sk-config");
@@ -57,6 +62,10 @@ describe("PROVIDER_DEFAULT_URLS", () => {
 
   it("has default URL for openrouter", () => {
     expect(PROVIDER_DEFAULT_URLS.openrouter).toBe("https://openrouter.ai/api");
+  });
+
+  it("has default URL for mlx", () => {
+    expect(PROVIDER_DEFAULT_URLS.mlx).toBe("http://127.0.0.1:8080");
   });
 });
 
