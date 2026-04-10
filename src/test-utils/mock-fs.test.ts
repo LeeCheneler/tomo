@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { ensureDir, fileExists, readFile, writeFile } from "../utils/fs";
+import {
+  ensureDir,
+  fileExists,
+  readFile,
+  removeFile,
+  writeFile,
+} from "../utils/fs";
 import { mockFs } from "./mock-fs";
 
 describe("mockFs", () => {
@@ -46,5 +52,17 @@ describe("mockFs", () => {
   it("ensureDir is a no-op", () => {
     state = mockFs({});
     expect(() => ensureDir("/test/dir")).not.toThrow();
+  });
+
+  it("removeFile deletes a file from the virtual fs", () => {
+    state = mockFs({ "/test/file.txt": "bye" });
+    removeFile("/test/file.txt");
+    expect(state.getFile("/test/file.txt")).toBeUndefined();
+    expect(fileExists("/test/file.txt")).toBe(false);
+  });
+
+  it("removeFile throws ENOENT for missing paths", () => {
+    state = mockFs({});
+    expect(() => removeFile("/missing.txt")).toThrow("ENOENT");
   });
 });

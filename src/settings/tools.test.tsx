@@ -45,6 +45,7 @@ describe("ToolsScreen", () => {
       expect(frame).toContain("Glob");
       expect(frame).toContain("Grep");
       expect(frame).toContain("Read File");
+      expect(frame).toContain("Remove File");
       expect(frame).toContain("Run Command");
       expect(frame).toContain("Skill");
       expect(frame).toContain("Web Search");
@@ -105,6 +106,7 @@ describe("ToolsScreen", () => {
             glob: { enabled: true },
             grep: { enabled: true },
             readFile: { enabled: true },
+            removeFile: { enabled: true },
             runCommand: { enabled: true },
             skill: { enabled: true },
             webSearch: { enabled: true, apiKey: "tvly-123" },
@@ -112,8 +114,8 @@ describe("ToolsScreen", () => {
           },
         },
       });
-      // Navigate to Web Search (9th item) and toggle
-      for (let i = 0; i < 8; i++) {
+      // Navigate to Web Search (10th item) and toggle
+      for (let i = 0; i < 9; i++) {
         await stdin.write(keys.down);
       }
       await stdin.write(keys.space);
@@ -136,7 +138,7 @@ describe("ToolsScreen", () => {
     async function openWebSearchOptions(stdin: {
       write: (s: string) => Promise<void>;
     }) {
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 9; i++) {
         await stdin.write(keys.down);
       }
       await stdin.write(keys.tab);

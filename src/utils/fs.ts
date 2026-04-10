@@ -5,6 +5,7 @@ import {
   readFileSync,
   readdirSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 
@@ -43,4 +44,9 @@ export function isDirectory(path: string): boolean {
 /** Creates a directory and any missing parents. */
 export function ensureDir(path: string): void {
   mkdirSync(path, { recursive: true });
+}
+
+/** Removes a file at the given path. Throws if the path does not exist or is a directory. */
+export function removeFile(path: string): void {
+  unlinkSync(path);
 }

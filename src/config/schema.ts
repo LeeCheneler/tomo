@@ -20,8 +20,10 @@ export const providerSchema = z.object({
 export const permissionsSchema = z.object({
   cwdReadFile: z.boolean().default(true),
   cwdWriteFile: z.boolean().optional(),
+  cwdRemoveFile: z.boolean().optional(),
   globalReadFile: z.boolean().optional(),
   globalWriteFile: z.boolean().optional(),
+  globalRemoveFile: z.boolean().optional(),
 });
 
 /** Schema for a single tool's config. */
@@ -36,16 +38,17 @@ export const webSearchToolConfigSchema = toolConfigSchema.extend({
 
 /** Schema for first-party tool configuration. */
 export const toolsSchema = z.object({
-  agent: toolConfigSchema,
-  ask: toolConfigSchema,
-  editFile: toolConfigSchema,
-  glob: toolConfigSchema,
-  grep: toolConfigSchema,
-  readFile: toolConfigSchema,
-  runCommand: toolConfigSchema,
-  skill: toolConfigSchema,
-  webSearch: webSearchToolConfigSchema,
-  writeFile: toolConfigSchema,
+  agent: toolConfigSchema.default({ enabled: true }),
+  ask: toolConfigSchema.default({ enabled: true }),
+  editFile: toolConfigSchema.default({ enabled: true }),
+  glob: toolConfigSchema.default({ enabled: true }),
+  grep: toolConfigSchema.default({ enabled: true }),
+  readFile: toolConfigSchema.default({ enabled: true }),
+  removeFile: toolConfigSchema.default({ enabled: true }),
+  runCommand: toolConfigSchema.default({ enabled: true }),
+  skill: toolConfigSchema.default({ enabled: true }),
+  webSearch: webSearchToolConfigSchema.default({ enabled: false }),
+  writeFile: toolConfigSchema.default({ enabled: true }),
 });
 
 /** Schema for agent spawning configuration. */
@@ -120,18 +123,7 @@ export const configSchema = z.object({
   }),
   mcp: mcpSchema.default({ connections: {} }),
   skillSets: skillSetsSchema.default({ sources: [] }),
-  tools: toolsSchema.default({
-    agent: { enabled: true },
-    ask: { enabled: true },
-    editFile: { enabled: true },
-    glob: { enabled: true },
-    grep: { enabled: true },
-    readFile: { enabled: true },
-    runCommand: { enabled: true },
-    skill: { enabled: true },
-    webSearch: { enabled: false },
-    writeFile: { enabled: true },
-  }),
+  tools: toolsSchema.prefault({}),
 });
 
 /** A single provider connection. */

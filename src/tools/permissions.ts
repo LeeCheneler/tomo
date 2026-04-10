@@ -5,7 +5,17 @@ import type { Permissions } from "../config/schema";
 export type PermissionResult = "allowed" | "needs-confirmation";
 
 /** File operation type for permission lookups. */
-export type FileOperation = "read" | "write";
+export type FileOperation = "read" | "write" | "remove";
+
+/** Maps a file operation to its cwd and global permission keys. */
+const PERMISSION_KEYS: Record<
+  FileOperation,
+  { cwd: keyof Permissions; global: keyof Permissions }
+> = {
+  read: { cwd: "cwdReadFile", global: "globalReadFile" },
+  write: { cwd: "cwdWriteFile", global: "globalWriteFile" },
+  remove: { cwd: "cwdRemoveFile", global: "globalRemoveFile" },
+};
 
 /** Returns true if the resolved file path is within the current working directory. */
 export function isPathWithinCwd(filePath: string): boolean {
@@ -24,12 +34,8 @@ export function checkFilePermission(
   permissions: Permissions,
 ): PermissionResult {
   const inCwd = isPathWithinCwd(filePath);
-
-  if (inCwd) {
-    const key = operation === "read" ? "cwdReadFile" : "cwdWriteFile";
-    return permissions[key] ? "allowed" : "needs-confirmation";
-  }
-
-  const key = operation === "read" ? "globalReadFile" : "globalWriteFile";
+  const key = inCwd
+    ? PERMISSION_KEYS[operation].cwd
+    : PERMISSION_KEYS[operation].global;
   return permissions[key] ? "allowed" : "needs-confirmation";
 }

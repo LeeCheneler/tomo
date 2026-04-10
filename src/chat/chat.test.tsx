@@ -1259,6 +1259,7 @@ describe("Chat", () => {
               glob: { enabled: true },
               grep: { enabled: true },
               readFile: { enabled: true },
+              removeFile: { enabled: true },
               runCommand: { enabled: true },
               skill: { enabled: true },
               webSearch: { enabled: true, apiKey: "tavily-test-key" },

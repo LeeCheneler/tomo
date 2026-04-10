@@ -30,6 +30,7 @@ vi.mock("../config/file", () => ({
       glob: { enabled: true },
       grep: { enabled: true },
       readFile: { enabled: true },
+      removeFile: { enabled: true },
       runCommand: { enabled: true },
       skill: { enabled: true },
       webSearch: { enabled: false },
