@@ -9,12 +9,13 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport";
 import { z } from "zod";
 import { MCP_OAUTH_DIR } from "../config/file";
 import type { McpConnection } from "../config/schema";
+import { openUrl } from "../utils/open-url";
 import { withAuthRetry } from "./auth-retry";
 import { createHttpAuthFlow } from "./http-auth-flow";
+import type { McpAuthStore } from "./mcp-auth-store";
 import { createLoopbackCatcher } from "./oauth-loopback";
 import { type McpOAuthConfig, createMcpOAuthProvider } from "./oauth-provider";
 import { readOAuthState, writeOAuthState } from "./oauth-storage";
-import { openUrl } from "../utils/open-url";
 
 /** A discovered tool exposed by an MCP server. */
 export interface McpToolDefinition {
@@ -75,6 +76,47 @@ export function flattenContent(content: readonly unknown[]): string {
 
 /** Identity retry wrapper — invokes the operation directly with no auth handling. */
 const directInvoke = <T>(op: () => Promise<T>): Promise<T> => op();
+
+/**
+ * Builds a UI-aware `onRedirect` that pushes an entry onto an auth store
+ * and races the loopback catcher against the store's pending promise, so
+ * Esc cancels and loopback wins both settle the retry wrapper cleanly.
+ * Extracted from `createHttpMcpClient` so the race + dismiss cleanup is
+ * unit-testable with fake dependencies.
+ */
+export function buildUiAwareOnRedirect(
+  flow: Pick<import("./http-auth-flow").HttpAuthFlow, "beginFlow">,
+  catcher: Pick<import("./oauth-loopback").LoopbackCatcher, "waitForCode">,
+  authUi: McpAuthStore,
+  serverName: string,
+): (authorizationUrl: URL) => Promise<void> {
+  return async (authorizationUrl) => {
+    const expectedState = authorizationUrl.searchParams.get("state") ?? "";
+    const abort = new AbortController();
+    const loopbackCode = catcher.waitForCode({
+      expectedState,
+      signal: abort.signal,
+    });
+    const uiHandle = authUi.push({
+      serverName,
+      authUrl: authorizationUrl.toString(),
+    });
+
+    // Race the loopback code against a user-pasted code from the modal.
+    // Whichever settles first drives the flow; the loser is discarded.
+    const raced = Promise.race([loopbackCode, uiHandle.pending]);
+
+    // Whenever the race settles, remove the modal entry. Errors swallowed
+    // here — the `raced` promise itself is what withAuthRetry awaits.
+    void raced.then(
+      () => authUi.dismiss(uiHandle.id),
+      () => authUi.dismiss(uiHandle.id),
+    );
+
+    flow.beginFlow(abort, raced);
+    await openUrl(authorizationUrl.toString());
+  };
+}
 
 /**
  * Wraps an SDK transport in an `McpClient`, handling the protocol-layer calls
@@ -157,6 +199,11 @@ export interface CreateHttpMcpClientOptions {
   auth?: McpOAuthConfig;
   /** Overrides the default OAuth state directory. Tests use this to write under a tmp dir. */
   authDataDir?: string;
+  /**
+   * When provided, the OAuth flow pushes an entry onto this store so the
+   * chat UI can render an auth-in-progress modal and surface cancellation.
+   */
+  authUi?: McpAuthStore;
 }
 
 /**
@@ -214,7 +261,18 @@ export async function createHttpMcpClient(
     dataDir,
     config: options.auth,
     redirectUri: catcher.redirectUri,
-    onRedirect: authFlow.onRedirect,
+    // When there is no UI store the flow is loopback-only. When one is
+    // provided, we instead push a modal entry and race the loopback code
+    // against the UI's pending promise so Esc-to-cancel and loopback-win
+    // both settle the retry wrapper.
+    onRedirect: options.authUi
+      ? buildUiAwareOnRedirect(
+          authFlow,
+          catcher,
+          options.authUi,
+          options.serverName,
+        )
+      : authFlow.onRedirect,
   });
 
   /** Builds a fresh transport+client pair wired to the shared provider. */
@@ -309,6 +367,8 @@ export async function createHttpMcpClient(
 export interface McpClientContext {
   /** Overrides the default OAuth state directory. */
   authDataDir?: string;
+  /** Auth store used to render an in-progress modal for HTTP connections. */
+  authUi?: McpAuthStore;
 }
 
 /** Builds an MCP client from a connection config, dispatching on transport type. */
@@ -330,5 +390,6 @@ export async function createMcpClient(
     headers: connection.headers,
     auth: connection.auth,
     authDataDir: context.authDataDir,
+    authUi: context.authUi,
   });
 }

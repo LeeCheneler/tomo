@@ -131,6 +131,26 @@ describe("createHttpAuthFlow", () => {
     });
   });
 
+  describe("beginFlow", () => {
+    it("registers the supplied code promise as pending", async () => {
+      const flow = createHttpAuthFlow(makeInputs());
+      const abort = new AbortController();
+      flow.beginFlow(abort, Promise.resolve("direct-code"));
+      await expect(flow.retryContext.pendingCode()).resolves.toBe(
+        "direct-code",
+      );
+    });
+
+    it("abortIfActive cancels the controller registered via beginFlow", () => {
+      const flow = createHttpAuthFlow(makeInputs());
+      const abort = new AbortController();
+      flow.beginFlow(abort, Promise.resolve("code"));
+      flow.abortIfActive();
+      expect(abort.signal.aborted).toBe(true);
+      expect(flow.retryContext.pendingCode()).toBeNull();
+    });
+  });
+
   describe("abortIfActive", () => {
     it("is a no-op when no flow is active", () => {
       const flow = createHttpAuthFlow(makeInputs());

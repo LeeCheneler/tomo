@@ -24,11 +24,18 @@ export interface HttpAuthFlow {
   /** Retry context to pass into `withAuthRetry` around transport operations. */
   retryContext: AuthRetryContext;
   /**
-   * Provider hook invoked when the SDK wants to drive the user to an
-   * authorization URL. Registers a pending code promise against the loopback
-   * catcher and opens the browser, then resolves.
+   * Provider hook that spins up a loopback-only flow: registers the abort
+   * controller + waitForCode pending promise, then opens the browser.
+   * Callers that need a different code source (e.g. racing loopback against
+   * a UI paste) should use `beginFlow` directly instead.
    */
   onRedirect: (authorizationUrl: URL) => Promise<void>;
+  /**
+   * Registers a new flow's abort controller and code-source promise. The
+   * retry context's `pendingCode` returns `codePromise` until the flow
+   * settles or `abortIfActive` is called.
+   */
+  beginFlow: (abort: AbortController, codePromise: Promise<string>) => void;
   /**
    * Cancels any in-flight auth flow. Called from `disconnect` so a mid-flow
    * tear-down unblocks the loopback waiter.
@@ -67,6 +74,11 @@ export function createHttpAuthFlow(inputs: HttpAuthFlowInputs): HttpAuthFlow {
         signal: controller.signal,
       });
       await inputs.openUrl(authorizationUrl.toString());
+    },
+
+    beginFlow(controller, codePromise) {
+      abort = controller;
+      code = codePromise;
     },
 
     abortIfActive() {

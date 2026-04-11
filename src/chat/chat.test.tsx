@@ -37,6 +37,31 @@ vi.mock("./open-pager", () => ({
   openPager: vi.fn(),
 }));
 
+// Share a single McpAuthStore instance across all useMcp calls in the test
+// so the tests can push/inspect entries via the same reference the Chat
+// component subscribes to.
+vi.mock("../mcp/mcp-auth-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../mcp/mcp-auth-store")>();
+  let shared: ReturnType<typeof actual.createMcpAuthStore> | null = null;
+  return {
+    ...actual,
+    createMcpAuthStore: () => {
+      if (!shared) shared = actual.createMcpAuthStore();
+      return shared;
+    },
+    /** Test-only hook to reset the shared instance between tests. */
+    __resetAuthStoreForTests: () => {
+      shared = null;
+    },
+  };
+});
+
+const { createMcpAuthStore, __resetAuthStoreForTests } = (await import(
+  "../mcp/mcp-auth-store"
+)) as typeof import("../mcp/mcp-auth-store") & {
+  __resetAuthStoreForTests: () => void;
+};
+
 const { openPager } = await import("./open-pager");
 
 const COLUMNS = 40;
@@ -58,6 +83,7 @@ const ollamaShowHandler = http.post("http://localhost:11434/api/show", () =>
 describe("Chat", () => {
   afterEach(() => {
     setColumns(undefined);
+    __resetAuthStoreForTests();
   });
 
   /** Empty tool registry for tests that don't need tools. */
@@ -2100,6 +2126,39 @@ describe("Chat", () => {
         "Provider or model is no longer configured",
       );
       expect(strandedExecute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("mcp auth modal", () => {
+    it("renders the auth modal when the store has a pending entry", async () => {
+      const authStore = createMcpAuthStore();
+      authStore.push({
+        serverName: "github",
+        authUrl: "https://auth.example.com/authorize?state=abc",
+      });
+      const { lastFrame } = renderChat();
+      // Give React a tick to subscribe + render.
+      await new Promise((r) => setTimeout(r, 50));
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Authorize MCP server: github");
+      expect(frame).toContain("https://auth.example.com/authorize?state=abc");
+    });
+
+    it("cancels the pending auth via Esc, settling the store entry", async () => {
+      const authStore = createMcpAuthStore();
+      const handle = authStore.push({
+        serverName: "github",
+        authUrl: "https://auth.example.com/authorize?state=abc",
+      });
+      const caught = handle.pending.catch((err) => err);
+      const { stdin } = renderChat();
+      await new Promise((r) => setTimeout(r, 50));
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(authStore.peek()).toBeNull();
+      const err = await caught;
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toMatch(/authorization cancelled/);
     });
   });
 
