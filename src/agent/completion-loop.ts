@@ -10,6 +10,7 @@ import {
   executeToolCalls,
 } from "../tools/execute-tool-calls";
 import type { ToolRegistry } from "../tools/registry";
+import { formatToolResultForLlm } from "../tools/tool-result-format";
 import type { ToolContext } from "../tools/types";
 
 /** Maximum number of nudge retries when the model returns an empty response. */
@@ -153,12 +154,14 @@ export async function runCompletionLoop(
     };
     currentMessages.push(assistantMessage);
 
-    // Convert display tool-result messages to provider format.
+    // Convert display tool-result messages to provider format. The status
+    // and format fields are collapsed into explicit markers in the content
+    // string so the LLM is not left inferring success/failure from prose.
     for (const msg of displayMessages) {
       if (msg.role === "tool-result") {
         currentMessages.push({
           role: "tool",
-          content: msg.output,
+          content: formatToolResultForLlm(msg.output, msg.status, msg.format),
           tool_call_id: msg.toolCallId,
         });
       }
