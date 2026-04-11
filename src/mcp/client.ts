@@ -245,16 +245,18 @@ export async function createHttpMcpClient(
   let liveTransport: StreamableHTTPClientTransport | null = null;
   let liveClient: Client | null = null;
 
-  /* v8 ignore start -- finishAuth closure is reached only on a real SDK-driven 401, covered end-to-end in M7 */
   const authFlow = createHttpAuthFlow({
     catcher,
     openUrl,
     finishAuth: async (code) => {
+      // withAuthRetry only calls this after `listTools`/`callTool` has
+      // already guarded against a null `liveClient`, so `liveTransport`
+      // is set by invariant. The runtime check is belt-and-braces.
+      /* v8 ignore next -- invariant — liveTransport is set once connect succeeds */
       if (!liveTransport) throw new Error("no transport to finish auth on");
       await liveTransport.finishAuth(code);
     },
   });
-  /* v8 ignore stop */
 
   const provider = createMcpOAuthProvider({
     serverName: options.serverName,
@@ -299,9 +301,9 @@ export async function createHttpMcpClient(
         liveClient = first.client;
         return;
       } catch (error) {
-        /* v8 ignore start -- reauth flow is covered end-to-end in M7 */
         if (!(error instanceof UnauthorizedError)) throw error;
         const pending = authFlow.retryContext.pendingCode();
+        /* v8 ignore next -- invariant: onRedirect runs before the SDK throws UnauthorizedError, so pending is always set here */
         if (!pending) throw error;
 
         const code = await pending;
@@ -317,7 +319,6 @@ export async function createHttpMcpClient(
         liveTransport = second.transport;
         await second.client.connect(second.transport);
         liveClient = second.client;
-        /* v8 ignore stop */
       }
     },
 
