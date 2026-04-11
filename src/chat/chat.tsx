@@ -9,6 +9,8 @@ import {
 } from "react";
 import { isCommand } from "../commands/is-command";
 import type { ImageAttachment } from "../images/clipboard";
+import { McpAuthModal } from "../mcp/mcp-auth-modal";
+import type { McpAuthStore } from "../mcp/mcp-auth-store";
 import { useMcp } from "../mcp/use-mcp";
 import { isSkill, parseSkillInput } from "../skills/utils";
 import type { SkillRegistry } from "../skills/registry";
@@ -74,6 +76,8 @@ interface UseChatProps {
   commandRegistry?: CommandRegistry;
   skillRegistry: SkillRegistry;
   toolRegistry: ToolRegistry;
+  /** Optional pre-built MCP auth store — injected by tests so they can push entries that the rendered modal subscribes to. */
+  authStore?: McpAuthStore;
 }
 
 /** Manages mode switching between input, history, and takeover screens. */
@@ -145,9 +149,10 @@ function useChat(props: UseChatProps) {
     },
     [appendMessage],
   );
-  useMcp({
+  const { authStore } = useMcp({
     toolRegistry: props.toolRegistry,
     onConnectionError: handleMcpConnectionError,
+    authStore: props.authStore,
   });
 
   /** Handles an invoke result — either enters takeover mode or appends an inline message. */
@@ -559,6 +564,7 @@ function useChat(props: UseChatProps) {
     handleConfirmResult,
     handleAskResult,
     handlePager,
+    authStore,
   };
 }
 
@@ -567,6 +573,8 @@ interface ChatProps {
   commandRegistry?: CommandRegistry;
   skillRegistry: SkillRegistry;
   toolRegistry: ToolRegistry;
+  /** Optional pre-built MCP auth store — injected by tests. */
+  authStore?: McpAuthStore;
 }
 
 /** Chat router — renders ChatInput, MessageHistory, or takeover content based on mode. */
@@ -594,11 +602,19 @@ export function Chat(props: ChatProps) {
     handleConfirmResult,
     handleAskResult,
     handlePager,
+    authStore,
   } = useChat({
     commandRegistry: props.commandRegistry,
     skillRegistry: props.skillRegistry,
     toolRegistry: props.toolRegistry,
+    authStore: props.authStore,
   });
+
+  const pendingAuth = useSyncExternalStore(
+    authStore.subscribe,
+    authStore.peek,
+    authStore.peek,
+  );
 
   return (
     <>
@@ -636,32 +652,44 @@ export function Chat(props: ChatProps) {
           onExit={handleExit}
         />
       )}
-      {mode.kind === "input" && currentPrompt?.kind === "confirm" && (
-        <>
-          {currentPrompt.diff && (
-            <Box paddingBottom={1}>
-              <Indent>
-                <DiffView output={currentPrompt.diff} />
-              </Indent>
-            </Box>
-          )}
-          <ConfirmPrompt
-            key={currentPrompt.id}
-            onResult={handleConfirmResult}
-            label={currentPrompt.label ?? currentPrompt.message}
-            detail={currentPrompt.detail}
-          />
-        </>
-      )}
-      {mode.kind === "input" && currentPrompt?.kind === "ask" && (
-        <AskPrompt
-          key={currentPrompt.id}
-          question={currentPrompt.question}
-          options={currentPrompt.options}
-          onResult={handleAskResult}
+      {mode.kind === "input" && pendingAuth && (
+        <McpAuthModal
+          key={pendingAuth.id}
+          serverName={pendingAuth.serverName}
+          authUrl={pendingAuth.authUrl}
+          onCancel={() => authStore.cancel(pendingAuth.id)}
         />
       )}
-      {mode.kind === "input" && !currentPrompt && (
+      {mode.kind === "input" &&
+        !pendingAuth &&
+        currentPrompt?.kind === "confirm" && (
+          <>
+            {currentPrompt.diff && (
+              <Box paddingBottom={1}>
+                <Indent>
+                  <DiffView output={currentPrompt.diff} />
+                </Indent>
+              </Box>
+            )}
+            <ConfirmPrompt
+              key={currentPrompt.id}
+              onResult={handleConfirmResult}
+              label={currentPrompt.label ?? currentPrompt.message}
+              detail={currentPrompt.detail}
+            />
+          </>
+        )}
+      {mode.kind === "input" &&
+        !pendingAuth &&
+        currentPrompt?.kind === "ask" && (
+          <AskPrompt
+            key={currentPrompt.id}
+            question={currentPrompt.question}
+            options={currentPrompt.options}
+            onResult={handleAskResult}
+          />
+        )}
+      {mode.kind === "input" && !pendingAuth && !currentPrompt && (
         <ChatInput
           onMessage={handleMessage}
           onUp={handleUp}

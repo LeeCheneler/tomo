@@ -81,11 +81,24 @@ export const mcpStdioConnectionSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
+/** Schema for OAuth configuration on an HTTP MCP connection. */
+export const mcpHttpAuthSchema = z
+  .object({
+    clientId: z.string().min(1).optional(),
+    clientSecret: z.string().min(1).optional(),
+    scope: z.string().min(1).optional(),
+  })
+  .refine((v) => !(v.clientSecret && !v.clientId), {
+    message: "clientSecret requires clientId",
+    path: ["clientSecret"],
+  });
+
 /** Schema for an MCP HTTP connection. */
 export const mcpHttpConnectionSchema = z.object({
   transport: z.literal("http"),
   url: z.url("url must be a valid URL"),
   headers: z.record(z.string(), z.string()).optional(),
+  auth: mcpHttpAuthSchema.optional(),
   enabled: z.boolean().default(true),
 });
 
@@ -149,6 +162,9 @@ export type Tools = z.infer<typeof toolsSchema>;
 
 /** Agent spawning configuration. */
 export type Agents = z.infer<typeof agentsSchema>;
+
+/** OAuth configuration for an HTTP MCP connection. */
+export type McpHttpAuth = z.infer<typeof mcpHttpAuthSchema>;
 
 /** An MCP connection (stdio or HTTP). */
 export type McpConnection = z.infer<typeof mcpConnectionSchema>;

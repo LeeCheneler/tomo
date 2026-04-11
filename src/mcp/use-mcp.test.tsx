@@ -4,6 +4,7 @@ import type { ToolRegistry } from "../tools/registry";
 import { renderInk } from "../test-utils/ink";
 import type { McpClient, McpToolDefinition } from "./client";
 import type { McpManager, StartAllResult } from "./manager";
+import { type McpAuthStore, createMcpAuthStore } from "./mcp-auth-store";
 import { useMcp } from "./use-mcp";
 
 vi.mock("./manager", async () => {
@@ -52,11 +53,15 @@ const sampleTool: McpToolDefinition = {
 function Harness(props: {
   toolRegistry: ToolRegistry;
   onConnectionError: (name: string, error: string) => void;
+  authStore?: McpAuthStore;
+  onResult?: (authStore: McpAuthStore) => void;
 }) {
-  useMcp({
+  const result = useMcp({
     toolRegistry: props.toolRegistry,
     onConnectionError: props.onConnectionError,
+    authStore: props.authStore,
   });
+  props.onResult?.(result.authStore);
   return null;
 }
 
@@ -293,5 +298,46 @@ describe("useMcp", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  describe("authStore", () => {
+    it("returns an internally-created store when none is injected", async () => {
+      vi.mocked(createMcpManager).mockReturnValue(
+        fakeManager({ started: [], failed: [] }, new Map()),
+      );
+      const observed: { store?: McpAuthStore } = {};
+      renderInk(
+        <Harness
+          toolRegistry={createToolRegistry()}
+          onConnectionError={vi.fn()}
+          onResult={(store) => {
+            observed.store = store;
+          }}
+        />,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(observed.store).toBeDefined();
+      expect(typeof observed.store?.push).toBe("function");
+    });
+
+    it("reuses an injected store instead of creating one", async () => {
+      vi.mocked(createMcpManager).mockReturnValue(
+        fakeManager({ started: [], failed: [] }, new Map()),
+      );
+      const injected = createMcpAuthStore();
+      const observed: { store?: McpAuthStore } = {};
+      renderInk(
+        <Harness
+          toolRegistry={createToolRegistry()}
+          onConnectionError={vi.fn()}
+          authStore={injected}
+          onResult={(store) => {
+            observed.store = store;
+          }}
+        />,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(observed.store).toBe(injected);
+    });
   });
 });

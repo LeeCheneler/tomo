@@ -11,6 +11,9 @@ export const GLOBAL_CONFIG_PATH = resolve(homedir(), ".tomo", "config.yaml");
 /** Path to the local config file (.tomo/config.yaml in cwd). */
 export const LOCAL_CONFIG_PATH = resolve(process.cwd(), ".tomo", "config.yaml");
 
+/** Directory holding per-server OAuth state files for HTTP MCP connections. */
+export const MCP_OAUTH_DIR = resolve(homedir(), ".tomo", "mcp-oauth");
+
 /** Default global config YAML written on first run. */
 const DEFAULT_CONFIG_YAML = `activeProvider: null
 activeModel: null

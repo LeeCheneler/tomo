@@ -15,6 +15,7 @@ import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
 import { GLOBAL_CONFIG_PATH } from "../config/file";
 import { useConfig } from "../config/hook";
+import { type McpAuthStore, createMcpAuthStore } from "../mcp/mcp-auth-store";
 import { writeFile } from "../utils/fs";
 import { Chat } from "./chat";
 
@@ -66,14 +67,18 @@ describe("Chat", () => {
   /** Empty skill registry for tests that don't need skills. */
   const emptySkillRegistry = createSkillRegistry();
 
-  /** Renders Chat with a fixed terminal width and optional commandRegistry. */
-  function renderChat(commandRegistry?: CommandRegistry) {
+  /** Renders Chat with a fixed terminal width and optional overrides. */
+  function renderChat(
+    commandRegistry?: CommandRegistry,
+    authStore?: McpAuthStore,
+  ) {
     setColumns(COLUMNS);
     return renderInk(
       <Chat
         commandRegistry={commandRegistry}
         skillRegistry={emptySkillRegistry}
         toolRegistry={emptyToolRegistry}
+        authStore={authStore}
       />,
     );
   }
@@ -2100,6 +2105,39 @@ describe("Chat", () => {
         "Provider or model is no longer configured",
       );
       expect(strandedExecute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("mcp auth modal", () => {
+    it("renders the auth modal when the store has a pending entry", async () => {
+      const authStore = createMcpAuthStore();
+      authStore.push({
+        serverName: "github",
+        authUrl: "https://auth.example.com/authorize?state=abc",
+      });
+      const { lastFrame } = renderChat(undefined, authStore);
+      // Give React a tick to subscribe + render.
+      await new Promise((r) => setTimeout(r, 50));
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Authorize MCP server: github");
+      expect(frame).toContain("https://auth.example.com/authorize?state=abc");
+    });
+
+    it("cancels the pending auth via Esc, settling the store entry", async () => {
+      const authStore = createMcpAuthStore();
+      const handle = authStore.push({
+        serverName: "github",
+        authUrl: "https://auth.example.com/authorize?state=abc",
+      });
+      const caught = handle.pending.catch((err) => err);
+      const { stdin } = renderChat(undefined, authStore);
+      await new Promise((r) => setTimeout(r, 50));
+      await stdin.write(keys.escape);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(authStore.peek()).toBeNull();
+      const err = await caught;
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toMatch(/authorization cancelled/);
     });
   });
 

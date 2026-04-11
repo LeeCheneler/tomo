@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   configSchema,
   mcpConnectionSchema,
+  mcpHttpAuthSchema,
   mcpSchema,
   permissionsSchema,
   providerSchema,
@@ -215,6 +216,103 @@ describe("mcpConnectionSchema", () => {
 
   it("rejects stdio connection without command", () => {
     expect(() => mcpConnectionSchema.parse({ transport: "stdio" })).toThrow();
+  });
+
+  it("parses an http connection with an empty auth block", () => {
+    const result = mcpConnectionSchema.parse({
+      transport: "http",
+      url: "https://mcp.example.com/mcp",
+      auth: {},
+    });
+    if (result.transport === "http") {
+      expect(result.auth).toEqual({});
+    }
+  });
+
+  it("parses an http connection with a pre-registered clientId", () => {
+    const result = mcpConnectionSchema.parse({
+      transport: "http",
+      url: "https://mcp.example.com/mcp",
+      auth: { clientId: "tomo-client" },
+    });
+    if (result.transport === "http") {
+      expect(result.auth?.clientId).toBe("tomo-client");
+      expect(result.auth?.clientSecret).toBeUndefined();
+    }
+  });
+
+  it("parses an http connection with clientId, clientSecret and scope", () => {
+    const result = mcpConnectionSchema.parse({
+      transport: "http",
+      url: "https://mcp.example.com/mcp",
+      auth: {
+        clientId: "tomo-client",
+        clientSecret: "s3cret",
+        scope: "read write",
+      },
+    });
+    if (result.transport === "http") {
+      expect(result.auth).toEqual({
+        clientId: "tomo-client",
+        clientSecret: "s3cret",
+        scope: "read write",
+      });
+    }
+  });
+
+  it("parses an http connection with both headers and auth", () => {
+    const result = mcpConnectionSchema.parse({
+      transport: "http",
+      url: "https://mcp.example.com/mcp",
+      headers: { "User-Agent": "tomo" },
+      auth: { clientId: "tomo-client" },
+    });
+    if (result.transport === "http") {
+      expect(result.headers).toEqual({ "User-Agent": "tomo" });
+      expect(result.auth?.clientId).toBe("tomo-client");
+    }
+  });
+
+  it("rejects an http connection with clientSecret but no clientId", () => {
+    expect(() =>
+      mcpConnectionSchema.parse({
+        transport: "http",
+        url: "https://mcp.example.com/mcp",
+        auth: { clientSecret: "s3cret" },
+      }),
+    ).toThrow(/clientSecret requires clientId/);
+  });
+});
+
+describe("mcpHttpAuthSchema", () => {
+  it("parses an empty auth block", () => {
+    expect(mcpHttpAuthSchema.parse({})).toEqual({});
+  });
+
+  it("parses scope without clientId", () => {
+    const result = mcpHttpAuthSchema.parse({ scope: "read" });
+    expect(result.scope).toBe("read");
+    expect(result.clientId).toBeUndefined();
+  });
+
+  it("rejects an empty clientId string", () => {
+    expect(() => mcpHttpAuthSchema.parse({ clientId: "" })).toThrow();
+  });
+
+  it("rejects an empty clientSecret string", () => {
+    expect(() =>
+      mcpHttpAuthSchema.parse({ clientId: "x", clientSecret: "" }),
+    ).toThrow();
+  });
+
+  it("rejects an empty scope string", () => {
+    expect(() => mcpHttpAuthSchema.parse({ scope: "" })).toThrow();
+  });
+
+  it("rejects clientSecret without clientId", () => {
+    expect(() => mcpHttpAuthSchema.parse({ clientSecret: "s3cret" })).toThrow(
+      /clientSecret requires clientId/,
+    );
   });
 });
 

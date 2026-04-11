@@ -1,13 +1,30 @@
 import { type ChildProcess, spawn } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import type { McpClient } from "./client";
 import {
+  buildUiAwareOnRedirect,
   createHttpMcpClient,
   createMcpClient,
   createStdioMcpClient,
   flattenContent,
 } from "./client";
+import { createMcpAuthStore } from "./mcp-auth-store";
+
+vi.mock("../utils/open-url", () => ({
+  openUrl: vi.fn(async () => {}),
+}));
 
 const STDIO_MOCK = resolve(__dirname, "../../mock-mcps/stdio.mjs");
 const HTTP_MOCK = resolve(__dirname, "../../mock-mcps/http.mjs");
@@ -128,6 +145,7 @@ describe("flattenContent", () => {
 describe("createHttpMcpClient", () => {
   let server: ChildProcess | null = null;
   let client: McpClient | null = null;
+  let authDataDir: string;
 
   beforeAll(async () => {
     server = spawn("node", [HTTP_MOCK], {
@@ -162,18 +180,30 @@ describe("createHttpMcpClient", () => {
     }
   });
 
+  beforeEach(() => {
+    // Isolate each test's persisted OAuth state (including the bound
+    // loopback port) so they don't leak across runs or into ~/.tomo.
+    authDataDir = mkdtempSync(resolve(tmpdir(), "tomo-mcp-client-"));
+  });
+
   afterEach(async () => {
     if (client) {
       await client.disconnect();
       client = null;
     }
+    rmSync(authDataDir, { recursive: true, force: true });
   });
 
   /** Connects an http client to the mock server. */
   async function connectMock(
     headers?: Record<string, string>,
   ): Promise<McpClient> {
-    const c = createHttpMcpClient({ url: HTTP_URL, headers });
+    const c = await createHttpMcpClient({
+      serverName: "mock",
+      url: HTTP_URL,
+      headers,
+      authDataDir,
+    });
     await c.connect();
     return c;
   }
@@ -226,25 +256,212 @@ describe("createHttpMcpClient", () => {
     await c.disconnect();
     await expect(c.disconnect()).resolves.not.toThrow();
   });
+
+  it("listTools throws when called before connect", async () => {
+    const c = await createHttpMcpClient({
+      serverName: "mock-not-connected",
+      url: HTTP_URL,
+      authDataDir,
+    });
+    try {
+      await expect(c.listTools()).rejects.toThrow(/not connected/);
+    } finally {
+      await c.disconnect();
+    }
+  });
+
+  it("callTool throws when called before connect", async () => {
+    const c = await createHttpMcpClient({
+      serverName: "mock-not-connected",
+      url: HTTP_URL,
+      authDataDir,
+    });
+    try {
+      await expect(c.callTool("x", {})).rejects.toThrow(/not connected/);
+    } finally {
+      await c.disconnect();
+    }
+  });
+
+  it("accepts an authUi store without changing non-auth behaviour", async () => {
+    const store = createMcpAuthStore();
+    const c = await createHttpMcpClient({
+      serverName: "mock",
+      url: HTTP_URL,
+      authDataDir,
+      authUi: store,
+    });
+    try {
+      await c.connect();
+      const tools = await c.listTools();
+      expect(tools.length).toBeGreaterThan(0);
+      // The mock server never issues a 401 so the store is never pushed to.
+      expect(store.peek()).toBeNull();
+    } finally {
+      await c.disconnect();
+    }
+  });
+});
+
+describe("buildUiAwareOnRedirect", () => {
+  /** Builds a fake `HttpAuthFlow` whose `beginFlow` is a spy. */
+  function fakeFlow() {
+    return { beginFlow: vi.fn() };
+  }
+
+  /** Builds a fake `LoopbackCatcher` whose `waitForCode` returns a controllable promise. */
+  function fakeCatcher(
+    impl: (opts: {
+      expectedState: string;
+      signal: AbortSignal;
+    }) => Promise<string>,
+  ) {
+    return { waitForCode: vi.fn(impl) };
+  }
+
+  it("registers the loopback wait against the auth store entry as a race", async () => {
+    const flow = fakeFlow();
+    const catcher = fakeCatcher(async () => "loopback-code");
+    const store = createMcpAuthStore();
+
+    const onRedirect = buildUiAwareOnRedirect(flow, catcher, store, "github");
+
+    await onRedirect(
+      new URL("https://auth.example.com/authorize?state=xyz&client_id=foo"),
+    );
+
+    // beginFlow should have been called once with an abort and a code promise.
+    expect(flow.beginFlow).toHaveBeenCalledTimes(1);
+    const beginArgs = flow.beginFlow.mock.calls[0];
+    expect(beginArgs?.[0]).toBeInstanceOf(AbortController);
+    await expect(beginArgs?.[1]).resolves.toBe("loopback-code");
+
+    // The store entry was pushed and dismissed once the race settled.
+    expect(store.size()).toBe(0);
+  });
+
+  it("passes the URL state and signal through to the catcher", async () => {
+    const flow = fakeFlow();
+    const catcher = fakeCatcher(
+      async () => new Promise<string>(() => {}), // never resolves
+    );
+    const store = createMcpAuthStore();
+
+    const onRedirect = buildUiAwareOnRedirect(flow, catcher, store, "github");
+
+    await onRedirect(new URL("https://auth.example.com/authorize?state=xyz"));
+
+    expect(catcher.waitForCode).toHaveBeenCalledTimes(1);
+    const args = catcher.waitForCode.mock.calls[0]?.[0];
+    expect(args?.expectedState).toBe("xyz");
+    expect(args?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("defaults the state to empty string when the URL has no state param", async () => {
+    const flow = fakeFlow();
+    const catcher = fakeCatcher(async () => new Promise<string>(() => {}));
+    const store = createMcpAuthStore();
+
+    const onRedirect = buildUiAwareOnRedirect(flow, catcher, store, "github");
+
+    await onRedirect(new URL("https://auth.example.com/authorize"));
+    expect(catcher.waitForCode.mock.calls[0]?.[0]?.expectedState).toBe("");
+  });
+
+  it("opens the authorization URL via openUrl", async () => {
+    const { openUrl } = await import("../utils/open-url");
+    const openSpy = vi.mocked(openUrl);
+    openSpy.mockClear();
+
+    const flow = fakeFlow();
+    const catcher = fakeCatcher(async () => new Promise<string>(() => {}));
+    const store = createMcpAuthStore();
+
+    const onRedirect = buildUiAwareOnRedirect(flow, catcher, store, "github");
+
+    await onRedirect(new URL("https://auth.example.com/authorize?state=s"));
+    expect(openSpy).toHaveBeenCalledWith(
+      "https://auth.example.com/authorize?state=s",
+    );
+  });
+
+  it("dismisses the store entry after the race settles via loopback", async () => {
+    const flow = fakeFlow();
+    const catcher = fakeCatcher(async () => "loopback-code");
+    const store = createMcpAuthStore();
+
+    const onRedirect = buildUiAwareOnRedirect(flow, catcher, store, "github");
+
+    await onRedirect(new URL("https://auth.example.com/authorize?state=s"));
+
+    // Wait one microtask for the .then handler to run.
+    await new Promise<void>((r) => setImmediate(r));
+    expect(store.size()).toBe(0);
+  });
+
+  it("dismisses the store entry after the race settles via UI cancel", async () => {
+    const flow = fakeFlow();
+    const catcher = fakeCatcher(
+      async () => new Promise<string>(() => {}), // never resolves
+    );
+    const store = createMcpAuthStore();
+
+    const onRedirect = buildUiAwareOnRedirect(flow, catcher, store, "github");
+
+    await onRedirect(new URL("https://auth.example.com/authorize?state=s"));
+
+    // Cancel via the store — race rejects, dismiss handler runs.
+    const entry = store.peek();
+    expect(entry).not.toBeNull();
+    if (entry) store.cancel(entry.id);
+
+    // Race rejects with McpAuthCancelledError; we passed it to flow.beginFlow.
+    const racedPromise = flow.beginFlow.mock.calls[0]?.[1];
+    await expect(racedPromise).rejects.toThrow(/authorization cancelled/);
+
+    // After the race settles, the dismiss handler runs (idempotent here
+    // since cancel already removed the entry).
+    await new Promise<void>((r) => setImmediate(r));
+    expect(store.size()).toBe(0);
+  });
 });
 
 describe("createMcpClient", () => {
-  it("builds a stdio client from a stdio connection", () => {
-    const client = createMcpClient({
-      transport: "stdio",
-      command: "node",
-      args: [],
-      enabled: true,
-    });
+  let authDataDir: string;
+
+  beforeEach(() => {
+    authDataDir = mkdtempSync(resolve(tmpdir(), "tomo-mcp-dispatch-"));
+  });
+
+  afterEach(() => {
+    rmSync(authDataDir, { recursive: true, force: true });
+  });
+
+  it("builds a stdio client from a stdio connection", async () => {
+    const client = await createMcpClient(
+      "mock",
+      {
+        transport: "stdio",
+        command: "node",
+        args: [],
+        enabled: true,
+      },
+      { authDataDir },
+    );
     expect(client).toBeDefined();
   });
 
-  it("builds an http client from an http connection", () => {
-    const client = createMcpClient({
-      transport: "http",
-      url: "https://example.com/mcp",
-      enabled: true,
-    });
-    expect(client).toBeDefined();
+  it("builds an http client from an http connection", async () => {
+    const http = await createMcpClient(
+      "dispatch-http",
+      {
+        transport: "http",
+        url: "https://example.com/mcp",
+        enabled: true,
+      },
+      { authDataDir },
+    );
+    expect(http).toBeDefined();
+    await http.disconnect();
   });
 });

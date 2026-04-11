@@ -2,8 +2,11 @@ import type { McpConnection } from "../config/schema";
 import type { McpClient, McpToolDefinition } from "./client";
 import { createMcpClient } from "./client";
 
-/** Factory that creates an MCP client for a given connection. */
-export type McpClientFactory = (connection: McpConnection) => McpClient;
+/** Factory that creates an MCP client for a given named connection. */
+export type McpClientFactory = (
+  name: string,
+  connection: McpConnection,
+) => Promise<McpClient>;
 
 /** Result of starting a single MCP server. */
 export interface StartResult {
@@ -51,7 +54,7 @@ export function createMcpManager(
     name: string,
     connection: McpConnection,
   ): Promise<StartResult> {
-    const client = clientFactory(connection);
+    const client = await clientFactory(name, connection);
     try {
       await client.connect();
       const tools = await client.listTools();
