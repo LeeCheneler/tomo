@@ -375,6 +375,10 @@ function useChat(props: UseChatProps) {
 
   /** Handles submitted input — dispatches commands, skills, or creates user messages. */
   async function handleMessage(message: string, images: ImageAttachment[]) {
+    // Clear any stale `initialValue` left on mode by a history recall or
+    // draft restore; otherwise it would re-hydrate the input if a prompt
+    // overlay (ask/confirm) unmounted ChatInput and it then remounted.
+    setMode({ kind: "input" });
     const commandRegistry = props.commandRegistry ?? createCommandRegistry();
     if (isCommand(message)) {
       const context = buildCommandContext();

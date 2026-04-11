@@ -1546,6 +1546,116 @@ describe("Chat", () => {
       expect(requestCount).toBe(2);
     });
 
+    it("clears the chat input after an ask prompt resolves when the sent message was recalled from history", async () => {
+      // Regression for a bug where `mode.initialValue` — set by a history
+      // recall — was never cleared on submit, so when a subsequent ask prompt
+      // unmounted ChatInput and it then remounted, the previously-sent
+      // message would re-populate the input.
+      let requestCount = 0;
+
+      mswServer.use(
+        http.post("http://localhost:11434/v1/chat/completions", async () => {
+          requestCount++;
+          if (requestCount === 1) {
+            // First send: seed history with a plain content response.
+            return new HttpResponse(
+              sseBody([{ choices: [{ delta: { content: "ok1" } }] }]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          }
+          if (requestCount === 2) {
+            // Second send (the recalled message): return an ask tool call.
+            return new HttpResponse(
+              sseBody([
+                {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_1",
+                            function: {
+                              name: "ask_tool",
+                              arguments: '{"question":"Pick","options":["A"]}',
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ]),
+              { headers: { "Content-Type": "text/event-stream" } },
+            );
+          }
+          // Final turn after the ask tool resolves.
+          return new HttpResponse(
+            sseBody([{ choices: [{ delta: { content: "done" } }] }]),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }),
+      );
+
+      const toolRegistry = createToolRegistry();
+      toolRegistry.register({
+        name: "ask_tool",
+        displayName: "Ask",
+        description: "Asks a question",
+        parameters: { type: "object", properties: {}, required: [] },
+        argsSchema: z.object({
+          question: z.string(),
+          options: z.array(z.string()).optional(),
+        }),
+        formatCall: () => "",
+        execute: async (args, context) => {
+          const parsed = args as { question: string; options?: string[] };
+          const answer = await context.ask(parsed.question, parsed.options);
+          return ok(answer ?? "cancelled");
+        },
+      });
+
+      setColumns(COLUMNS);
+      const { stdin, lastFrame } = renderInk(
+        <Chat skillRegistry={emptySkillRegistry} toolRegistry={toolRegistry} />,
+        {
+          global: {
+            providers: [PROVIDER],
+            activeProvider: PROVIDER.name,
+            activeModel: "llama3",
+          },
+        },
+      );
+
+      // Seed history with a message.
+      await stdin.write("recallme");
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Recall it via history: up → history mode, enter → select entry,
+      // which sets mode.initialValue = "recallme" on the chat.
+      await stdin.write(keys.up);
+      await stdin.write(keys.enter);
+
+      // Submit the recalled message again.
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Ask prompt should now be visible and ChatInput should be unmounted.
+      expect(lastFrame()).toContain("Pick");
+
+      // Answer it — this dismisses the ask prompt and remounts ChatInput.
+      await stdin.write(keys.enter);
+      await new Promise((r) => setTimeout(r, 200));
+
+      // The chat input area is at the bottom of the frame. In the buggy
+      // state, the input would show "❯ recallme"; in the fixed state, it is
+      // empty. "recallme" still appears twice in the chat history above.
+      const frame = lastFrame() ?? "";
+      const inputArea = frame.split("\n").slice(-6).join("\n");
+      expect(inputArea).not.toContain("recallme");
+    });
+
     it("shows confirm prompt and proceeds on approval", async () => {
       let requestCount = 0;
 
