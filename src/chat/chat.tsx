@@ -10,6 +10,7 @@ import {
 import { isCommand } from "../commands/is-command";
 import type { ImageAttachment } from "../images/clipboard";
 import { McpAuthModal } from "../mcp/mcp-auth-modal";
+import type { McpAuthStore } from "../mcp/mcp-auth-store";
 import { useMcp } from "../mcp/use-mcp";
 import { isSkill, parseSkillInput } from "../skills/utils";
 import type { SkillRegistry } from "../skills/registry";
@@ -75,6 +76,8 @@ interface UseChatProps {
   commandRegistry?: CommandRegistry;
   skillRegistry: SkillRegistry;
   toolRegistry: ToolRegistry;
+  /** Optional pre-built MCP auth store — injected by tests so they can push entries that the rendered modal subscribes to. */
+  authStore?: McpAuthStore;
 }
 
 /** Manages mode switching between input, history, and takeover screens. */
@@ -149,6 +152,7 @@ function useChat(props: UseChatProps) {
   const { authStore } = useMcp({
     toolRegistry: props.toolRegistry,
     onConnectionError: handleMcpConnectionError,
+    authStore: props.authStore,
   });
 
   /** Handles an invoke result — either enters takeover mode or appends an inline message. */
@@ -569,6 +573,8 @@ interface ChatProps {
   commandRegistry?: CommandRegistry;
   skillRegistry: SkillRegistry;
   toolRegistry: ToolRegistry;
+  /** Optional pre-built MCP auth store — injected by tests. */
+  authStore?: McpAuthStore;
 }
 
 /** Chat router — renders ChatInput, MessageHistory, or takeover content based on mode. */
@@ -601,6 +607,7 @@ export function Chat(props: ChatProps) {
     commandRegistry: props.commandRegistry,
     skillRegistry: props.skillRegistry,
     toolRegistry: props.toolRegistry,
+    authStore: props.authStore,
   });
 
   const pendingAuth = useSyncExternalStore(

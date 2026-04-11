@@ -78,10 +78,21 @@ export function createLoopbackCatcher(
           return new Promise<string>((resolve, reject) => {
             const timeoutMs = waitOpts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
+            // Identity-guarded cleanup: only clears the outer `dispatch`
+            // slot if it still points at *this* wait's handler, so a
+            // settling stale wait cannot clobber a newer wait that has
+            // since installed its own dispatch. `myDispatch` is assigned
+            // below after the early-abort guard; the null-check here
+            // makes cleanup() a no-op for the dispatch slot until then.
+            let myDispatch:
+              | ((url: URL) => { status: number; body: string })
+              | null = null;
             const cleanup = () => {
               clearTimeout(timer);
               waitOpts.signal.removeEventListener("abort", onAbort);
-              dispatch = null;
+              if (myDispatch !== null && dispatch === myDispatch) {
+                dispatch = null;
+              }
             };
 
             const onAbort = () => {
@@ -101,7 +112,7 @@ export function createLoopbackCatcher(
             }
             waitOpts.signal.addEventListener("abort", onAbort, { once: true });
 
-            dispatch = (url) => {
+            myDispatch = (url: URL) => {
               cleanup();
               const error = url.searchParams.get("error");
               if (error) {
@@ -127,6 +138,7 @@ export function createLoopbackCatcher(
                 body: "Signed in. You can close this tab and return to tomo.",
               };
             };
+            dispatch = myDispatch;
           });
         },
         close() {

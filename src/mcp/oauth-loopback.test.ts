@@ -210,6 +210,46 @@ describe("createLoopbackCatcher", () => {
     });
   });
 
+  describe("concurrent waits", () => {
+    it("a settling stale wait does not clobber a newer wait's dispatch", async () => {
+      // Regression: cleanup() used to unconditionally null the outer
+      // `dispatch` slot, so if a stale first wait settled (via abort or
+      // timeout) after a second wait installed its handler, the second
+      // wait's dispatch was clobbered and its callback returned 409.
+      const catcher = await start();
+
+      // Start + abort a first wait so its cleanup runs *after* the
+      // second wait is registered below.
+      const firstAbort = new AbortController();
+      const firstPending = catcher.waitForCode({
+        expectedState: "first",
+        signal: firstAbort.signal,
+      });
+      // Attach the rejection handler before triggering it.
+      const firstAssertion = expect(firstPending).rejects.toThrow(/aborted/);
+
+      // Register a second wait. At this point the outer dispatch slot
+      // should be the second wait's handler.
+      const secondAbort = new AbortController();
+      const secondPending = catcher.waitForCode({
+        expectedState: "second",
+        signal: secondAbort.signal,
+      });
+
+      // Now tear down the first wait. Its cleanup must NOT clear the
+      // outer dispatch slot — it no longer owns it.
+      firstAbort.abort();
+      await firstAssertion;
+
+      // The second wait's callback must still be routed.
+      const response = await fetch(
+        `${catcher.redirectUri}?code=the-code&state=second`,
+      );
+      expect(response.status).toBe(200);
+      await expect(secondPending).resolves.toBe("the-code");
+    });
+  });
+
   describe("close", () => {
     it("close is idempotent", async () => {
       const catcher = await start();

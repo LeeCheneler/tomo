@@ -15,6 +15,7 @@ import { keys } from "../test-utils/keys";
 import { setupMsw, http, HttpResponse } from "../test-utils/msw";
 import { GLOBAL_CONFIG_PATH } from "../config/file";
 import { useConfig } from "../config/hook";
+import { type McpAuthStore, createMcpAuthStore } from "../mcp/mcp-auth-store";
 import { writeFile } from "../utils/fs";
 import { Chat } from "./chat";
 
@@ -37,31 +38,6 @@ vi.mock("./open-pager", () => ({
   openPager: vi.fn(),
 }));
 
-// Share a single McpAuthStore instance across all useMcp calls in the test
-// so the tests can push/inspect entries via the same reference the Chat
-// component subscribes to.
-vi.mock("../mcp/mcp-auth-store", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../mcp/mcp-auth-store")>();
-  let shared: ReturnType<typeof actual.createMcpAuthStore> | null = null;
-  return {
-    ...actual,
-    createMcpAuthStore: () => {
-      if (!shared) shared = actual.createMcpAuthStore();
-      return shared;
-    },
-    /** Test-only hook to reset the shared instance between tests. */
-    __resetAuthStoreForTests: () => {
-      shared = null;
-    },
-  };
-});
-
-const { createMcpAuthStore, __resetAuthStoreForTests } = (await import(
-  "../mcp/mcp-auth-store"
-)) as typeof import("../mcp/mcp-auth-store") & {
-  __resetAuthStoreForTests: () => void;
-};
-
 const { openPager } = await import("./open-pager");
 
 const COLUMNS = 40;
@@ -83,7 +59,6 @@ const ollamaShowHandler = http.post("http://localhost:11434/api/show", () =>
 describe("Chat", () => {
   afterEach(() => {
     setColumns(undefined);
-    __resetAuthStoreForTests();
   });
 
   /** Empty tool registry for tests that don't need tools. */
@@ -92,14 +67,18 @@ describe("Chat", () => {
   /** Empty skill registry for tests that don't need skills. */
   const emptySkillRegistry = createSkillRegistry();
 
-  /** Renders Chat with a fixed terminal width and optional commandRegistry. */
-  function renderChat(commandRegistry?: CommandRegistry) {
+  /** Renders Chat with a fixed terminal width and optional overrides. */
+  function renderChat(
+    commandRegistry?: CommandRegistry,
+    authStore?: McpAuthStore,
+  ) {
     setColumns(COLUMNS);
     return renderInk(
       <Chat
         commandRegistry={commandRegistry}
         skillRegistry={emptySkillRegistry}
         toolRegistry={emptyToolRegistry}
+        authStore={authStore}
       />,
     );
   }
@@ -2136,7 +2115,7 @@ describe("Chat", () => {
         serverName: "github",
         authUrl: "https://auth.example.com/authorize?state=abc",
       });
-      const { lastFrame } = renderChat();
+      const { lastFrame } = renderChat(undefined, authStore);
       // Give React a tick to subscribe + render.
       await new Promise((r) => setTimeout(r, 50));
       const frame = lastFrame() ?? "";
@@ -2151,7 +2130,7 @@ describe("Chat", () => {
         authUrl: "https://auth.example.com/authorize?state=abc",
       });
       const caught = handle.pending.catch((err) => err);
-      const { stdin } = renderChat();
+      const { stdin } = renderChat(undefined, authStore);
       await new Promise((r) => setTimeout(r, 50));
       await stdin.write(keys.escape);
       await new Promise((r) => setTimeout(r, 50));

@@ -112,22 +112,31 @@ describe("createHttpAuthFlow", () => {
     });
 
     it("aborts the previously-registered flow when a second onRedirect arrives", async () => {
-      const flow = createHttpAuthFlow(makeInputs());
+      // Capture each onRedirect's AbortSignal so we can assert the first
+      // was aborted by the second call — otherwise a stale loopback
+      // waiter would race the new dispatch.
+      const capturedSignals: AbortSignal[] = [];
+      const flow = createHttpAuthFlow(
+        makeInputs({
+          waitForCode: async (opts) => {
+            capturedSignals.push(opts.signal);
+            return "code";
+          },
+        }),
+      );
       await flow.onRedirect(
         new URL("https://auth.example.com/authorize?state=first"),
       );
-      const firstPending = flow.retryContext.pendingCode();
       await flow.onRedirect(
         new URL("https://auth.example.com/authorize?state=second"),
       );
-      // The first pending promise is replaced; abortIfActive should now
-      // only abort the second flow.
+      expect(capturedSignals).toHaveLength(2);
+      expect(capturedSignals[0]?.aborted).toBe(true);
+      expect(capturedSignals[1]?.aborted).toBe(false);
+
       flow.abortIfActive();
-      // First pending is still a (stale) resolved promise from the fake
-      // — we just assert that the second flow tracks correctly by
-      // resetting and checking the state is now clean.
+      expect(capturedSignals[1]?.aborted).toBe(true);
       expect(flow.retryContext.pendingCode()).toBeNull();
-      expect(firstPending).not.toBeNull();
     });
   });
 
@@ -148,6 +157,25 @@ describe("createHttpAuthFlow", () => {
       flow.abortIfActive();
       expect(abort.signal.aborted).toBe(true);
       expect(flow.retryContext.pendingCode()).toBeNull();
+    });
+
+    it("aborts a previous onRedirect flow when beginFlow supersedes it", async () => {
+      const capturedSignals: AbortSignal[] = [];
+      const flow = createHttpAuthFlow(
+        makeInputs({
+          waitForCode: async (opts) => {
+            capturedSignals.push(opts.signal);
+            return "code";
+          },
+        }),
+      );
+      await flow.onRedirect(
+        new URL("https://auth.example.com/authorize?state=s"),
+      );
+      const abort = new AbortController();
+      flow.beginFlow(abort, Promise.resolve("direct-code"));
+      expect(capturedSignals[0]?.aborted).toBe(true);
+      expect(abort.signal.aborted).toBe(false);
     });
   });
 

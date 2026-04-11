@@ -12,6 +12,12 @@ export interface UseMcpProps {
   toolRegistry: ToolRegistry;
   /** Called once per server that fails to connect, with the server name and error message. */
   onConnectionError: (serverName: string, error: string) => void;
+  /**
+   * Optional pre-built auth store. When omitted, one is created internally
+   * and persisted across effect runs via a ref. Injected primarily for
+   * tests that need a handle on the same store the chat UI subscribes to.
+   */
+  authStore?: McpAuthStore;
 }
 
 /** Return value of useMcp. */
@@ -43,10 +49,12 @@ export function useMcp(props: UseMcpProps): UseMcpResult {
   toolRegistryRef.current = props.toolRegistry;
 
   // The auth store lives across effect runs — re-mounting it would orphan
-  // any in-progress modals the chat UI is already subscribed to.
+  // any in-progress modals the chat UI is already subscribed to. Tests can
+  // inject their own store via props; otherwise we lazy-init one in a ref
+  // on first render and pin it for the rest of the hook's lifetime.
   const authStoreRef = useRef<McpAuthStore | null>(null);
   if (authStoreRef.current === null) {
-    authStoreRef.current = createMcpAuthStore();
+    authStoreRef.current = props.authStore ?? createMcpAuthStore();
   }
   const authStore = authStoreRef.current;
 

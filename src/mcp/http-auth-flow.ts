@@ -66,6 +66,9 @@ export function createHttpAuthFlow(inputs: HttpAuthFlowInputs): HttpAuthFlow {
     },
 
     async onRedirect(authorizationUrl: URL) {
+      // A new flow supersedes any in-flight one — abort it so the old
+      // loopback waiter stops and does not race the new dispatch.
+      if (abort) abort.abort();
       const expectedState = authorizationUrl.searchParams.get("state") ?? "";
       const controller = new AbortController();
       abort = controller;
@@ -77,6 +80,8 @@ export function createHttpAuthFlow(inputs: HttpAuthFlowInputs): HttpAuthFlow {
     },
 
     beginFlow(controller, codePromise) {
+      // Same supersede rule for the UI-aware path.
+      if (abort && abort !== controller) abort.abort();
       abort = controller;
       code = codePromise;
     },
