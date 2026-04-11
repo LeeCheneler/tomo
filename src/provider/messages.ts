@@ -1,4 +1,5 @@
 import type { ChatMessage as DisplayMessage } from "../chat/message";
+import { formatToolResultForLlm } from "../tools/tool-result-format";
 import { stripAnsi } from "../utils/strip-ansi";
 import type { ChatMessage as ProviderMessage, ToolCall } from "./client";
 
@@ -69,7 +70,7 @@ export function buildProviderMessages(
     if (msg.role === "tool-result") {
       result.push({
         role: "tool",
-        content: msg.output,
+        content: formatToolResultForLlm(msg.output, msg.status, msg.format),
         tool_call_id: msg.toolCallId,
       });
     }
