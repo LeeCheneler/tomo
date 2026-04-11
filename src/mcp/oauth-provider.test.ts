@@ -88,6 +88,28 @@ describe("createMcpOAuthProvider", () => {
     });
   });
 
+  describe("state", () => {
+    it("returns a non-empty value so the SDK always embeds state in the auth URL", () => {
+      const provider = createMcpOAuthProvider({
+        serverName: "github",
+        dataDir: dir,
+        redirectUri: REDIRECT_URI,
+        onRedirect: vi.fn(),
+      });
+      expect(provider.state().length).toBeGreaterThan(0);
+    });
+
+    it("returns a fresh value on each call", () => {
+      const provider = createMcpOAuthProvider({
+        serverName: "github",
+        dataDir: dir,
+        redirectUri: REDIRECT_URI,
+        onRedirect: vi.fn(),
+      });
+      expect(provider.state()).not.toBe(provider.state());
+    });
+  });
+
   describe("clientInformation", () => {
     it("returns undefined when no config and no persisted state (SDK triggers DCR)", () => {
       const provider = createMcpOAuthProvider({

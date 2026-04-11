@@ -64,6 +64,16 @@ describe("oauth-storage", () => {
       expect(readOAuthState(dir, "github")).toEqual(state);
     });
 
+    it("round-trips a server name that contains URL separators", () => {
+      // Regression: a user configured the MCP connection with the full
+      // server URL as its key (e.g. "https://mcp.atlassian.com/v1/mcp").
+      // Slashes and colons must not produce a nested path whose parent
+      // directories do not exist.
+      const urlishName = "https://mcp.atlassian.com/v1/mcp";
+      writeOAuthState(dir, urlishName, { codeVerifier: "v" });
+      expect(readOAuthState(dir, urlishName).codeVerifier).toBe("v");
+    });
+
     it("preserves unknown fields on nested SDK objects via loose parsing", () => {
       const raw = {
         tokens: {

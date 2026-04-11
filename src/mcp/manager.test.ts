@@ -128,7 +128,7 @@ describe("createMcpManager", () => {
       callTool: vi.fn(async () => ({ text: "", isError: false })),
       disconnect: vi.fn(async () => {}),
     };
-    manager = createMcpManager(() => fakeClient);
+    manager = createMcpManager(async () => fakeClient);
     const result = await manager.startAll({
       stringy: mockStdioConnection(),
     });

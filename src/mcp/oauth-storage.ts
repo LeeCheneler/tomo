@@ -56,9 +56,21 @@ export interface McpOAuthState {
   redirectPort?: number;
 }
 
+/**
+ * Converts an arbitrary MCP server name into a filesystem-safe stem so it
+ * can be used as a filename. Any character outside `[a-zA-Z0-9._-]` is
+ * replaced with `_` — this covers URL separators (`/`, `:`), whitespace,
+ * and everything else that would break a single-segment file path. Two
+ * server names that differ only in unsafe characters can collide, which
+ * is an acceptable trade-off for keeping the filenames human-readable.
+ */
+function toSafeFileName(serverName: string): string {
+  return serverName.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
 /** Returns the absolute path of the state file for the given server. */
 function stateFilePath(dir: string, serverName: string): string {
-  return resolve(dir, `${serverName}.json`);
+  return resolve(dir, `${toSafeFileName(serverName)}.json`);
 }
 
 /** Reads persisted OAuth state for a server. Returns an empty state for a missing, unreadable, or malformed file. */

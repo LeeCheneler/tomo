@@ -1,6 +1,16 @@
 import { type ChildProcess, spawn } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import type { McpClient } from "./client";
 import {
   createHttpMcpClient,
@@ -128,6 +138,7 @@ describe("flattenContent", () => {
 describe("createHttpMcpClient", () => {
   let server: ChildProcess | null = null;
   let client: McpClient | null = null;
+  let authDataDir: string;
 
   beforeAll(async () => {
     server = spawn("node", [HTTP_MOCK], {
@@ -162,18 +173,30 @@ describe("createHttpMcpClient", () => {
     }
   });
 
+  beforeEach(() => {
+    // Isolate each test's persisted OAuth state (including the bound
+    // loopback port) so they don't leak across runs or into ~/.tomo.
+    authDataDir = mkdtempSync(resolve(tmpdir(), "tomo-mcp-client-"));
+  });
+
   afterEach(async () => {
     if (client) {
       await client.disconnect();
       client = null;
     }
+    rmSync(authDataDir, { recursive: true, force: true });
   });
 
   /** Connects an http client to the mock server. */
   async function connectMock(
     headers?: Record<string, string>,
   ): Promise<McpClient> {
-    const c = createHttpMcpClient({ url: HTTP_URL, headers });
+    const c = await createHttpMcpClient({
+      serverName: "mock",
+      url: HTTP_URL,
+      headers,
+      authDataDir,
+    });
     await c.connect();
     return c;
   }
@@ -226,25 +249,70 @@ describe("createHttpMcpClient", () => {
     await c.disconnect();
     await expect(c.disconnect()).resolves.not.toThrow();
   });
+
+  it("listTools throws when called before connect", async () => {
+    const c = await createHttpMcpClient({
+      serverName: "mock-not-connected",
+      url: HTTP_URL,
+      authDataDir,
+    });
+    try {
+      await expect(c.listTools()).rejects.toThrow(/not connected/);
+    } finally {
+      await c.disconnect();
+    }
+  });
+
+  it("callTool throws when called before connect", async () => {
+    const c = await createHttpMcpClient({
+      serverName: "mock-not-connected",
+      url: HTTP_URL,
+      authDataDir,
+    });
+    try {
+      await expect(c.callTool("x", {})).rejects.toThrow(/not connected/);
+    } finally {
+      await c.disconnect();
+    }
+  });
 });
 
 describe("createMcpClient", () => {
-  it("builds a stdio client from a stdio connection", () => {
-    const client = createMcpClient({
-      transport: "stdio",
-      command: "node",
-      args: [],
-      enabled: true,
-    });
+  let authDataDir: string;
+
+  beforeEach(() => {
+    authDataDir = mkdtempSync(resolve(tmpdir(), "tomo-mcp-dispatch-"));
+  });
+
+  afterEach(() => {
+    rmSync(authDataDir, { recursive: true, force: true });
+  });
+
+  it("builds a stdio client from a stdio connection", async () => {
+    const client = await createMcpClient(
+      "mock",
+      {
+        transport: "stdio",
+        command: "node",
+        args: [],
+        enabled: true,
+      },
+      { authDataDir },
+    );
     expect(client).toBeDefined();
   });
 
-  it("builds an http client from an http connection", () => {
-    const client = createMcpClient({
-      transport: "http",
-      url: "https://example.com/mcp",
-      enabled: true,
-    });
-    expect(client).toBeDefined();
+  it("builds an http client from an http connection", async () => {
+    const http = await createMcpClient(
+      "dispatch-http",
+      {
+        transport: "http",
+        url: "https://example.com/mcp",
+        enabled: true,
+      },
+      { authDataDir },
+    );
+    expect(http).toBeDefined();
+    await http.disconnect();
   });
 });

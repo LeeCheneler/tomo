@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   OAuthClientProvider,
   OAuthDiscoveryState,
@@ -31,6 +32,7 @@ export interface McpOAuthConfig {
 export interface McpOAuthProvider extends OAuthClientProvider {
   get redirectUrl(): string;
   get clientMetadata(): OAuthClientMetadata;
+  state(): string;
   clientInformation(): OAuthClientInformationMixed | undefined;
   saveClientInformation(info: OAuthClientInformationMixed): void;
   tokens(): OAuthTokens | undefined;
@@ -125,6 +127,16 @@ export function createMcpOAuthProvider(
 
     get clientMetadata(): OAuthClientMetadata {
       return clientMetadata;
+    },
+
+    state(): string {
+      // A fresh CSRF-protection value per authorization attempt. The SDK
+      // calls this once per auth flow and embeds the return value in the
+      // authorization URL. Authorization servers that do not receive a
+      // `state` parameter will not echo one on the callback, so we must
+      // always provide one or the loopback's state validation rejects
+      // every callback.
+      return randomUUID();
     },
 
     clientInformation(): OAuthClientInformationMixed | undefined {
